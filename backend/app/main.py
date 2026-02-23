@@ -1,12 +1,26 @@
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
 from app.validator import validate_schema
+import logging 
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(levelname)s: %(message)s"
+)
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    if settings.source_db_url:
+        await validate_schema()
+    yield
 
 app = FastAPI(
     title="IH-QC Analytics",
     version="0.1.0",
     docs_url="/docs" if settings.environment == "development" else None,
+    lifespan=lifespan,
 )
 
 app.add_middleware(
@@ -16,11 +30,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-@app.on_event("startup")
-async def startup():
-    if settings.source_db_url:
-        await validate_schema()
 
 @app.get("/health")
 async def health():

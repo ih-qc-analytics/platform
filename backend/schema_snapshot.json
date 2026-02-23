@@ -1,0 +1,1157 @@
+{
+  "cart": {
+    "columns": [
+      {
+        "name": "id",
+        "type": "INTEGER",
+        "nullable": false
+      },
+      {
+        "name": "saleType",
+        "type": "VARCHAR(255) COLLATE \"utf8_unicode_ci\"",
+        "nullable": false
+      },
+      {
+        "name": "billingStatus",
+        "type": "VARCHAR(255) COLLATE \"utf8_unicode_ci\"",
+        "nullable": false
+      },
+      {
+        "name": "createdAt",
+        "type": "DATETIME",
+        "nullable": false
+      },
+      {
+        "name": "deletedAt",
+        "type": "DATETIME",
+        "nullable": true
+      },
+      {
+        "name": "sellerLeadId",
+        "type": "INTEGER",
+        "nullable": true
+      },
+      {
+        "name": "generalDiscount",
+        "type": "INTEGER",
+        "nullable": false
+      },
+      {
+        "name": "proration",
+        "type": "INTEGER",
+        "nullable": false
+      },
+      {
+        "name": "subTotal",
+        "type": "INTEGER",
+        "nullable": false
+      },
+      {
+        "name": "total",
+        "type": "INTEGER",
+        "nullable": false
+      },
+      {
+        "name": "originId",
+        "type": "INTEGER",
+        "nullable": true
+      },
+      {
+        "name": "cost",
+        "type": "INTEGER",
+        "nullable": false
+      },
+      {
+        "name": "updatedAt",
+        "type": "DATETIME",
+        "nullable": false
+      },
+      {
+        "name": "bookCommission",
+        "type": "FLOAT",
+        "nullable": true
+      },
+      {
+        "name": "examCommission",
+        "type": "FLOAT",
+        "nullable": true
+      },
+      {
+        "name": "projectId",
+        "type": "INTEGER",
+        "nullable": true
+      }
+    ],
+    "foreign_keys": [
+      {
+        "name": "FK_3051c47ec38e742fec1fbced83b",
+        "constrained_columns": [
+          "sellerLeadId"
+        ],
+        "referred_schema": null,
+        "referred_table": "seller_lead",
+        "referred_columns": [
+          "id"
+        ],
+        "options": {}
+      },
+      {
+        "name": "FK_4c7a5fd3a05ad3ee5462703bab1",
+        "constrained_columns": [
+          "originId"
+        ],
+        "referred_schema": null,
+        "referred_table": "cart",
+        "referred_columns": [
+          "id"
+        ],
+        "options": {}
+      }
+    ],
+    "primary_key": [
+      "id"
+    ]
+  },
+  "cart_product": {
+    "columns": [
+      {
+        "name": "id",
+        "type": "INTEGER",
+        "nullable": false
+      },
+      {
+        "name": "quantity",
+        "type": "INTEGER",
+        "nullable": false
+      },
+      {
+        "name": "discount",
+        "type": "INTEGER",
+        "nullable": false
+      },
+      {
+        "name": "cost",
+        "type": "INTEGER",
+        "nullable": false
+      },
+      {
+        "name": "dueDate",
+        "type": "DATETIME",
+        "nullable": false
+      },
+      {
+        "name": "testDate",
+        "type": "DATE",
+        "nullable": false
+      },
+      {
+        "name": "createdAt",
+        "type": "DATETIME",
+        "nullable": false
+      },
+      {
+        "name": "cartId",
+        "type": "INTEGER",
+        "nullable": true
+      },
+      {
+        "name": "productId",
+        "type": "INTEGER",
+        "nullable": true
+      },
+      {
+        "name": "gradeLevelId",
+        "type": "INTEGER",
+        "nullable": true
+      },
+      {
+        "name": "taxes",
+        "type": "INTEGER",
+        "nullable": false
+      },
+      {
+        "name": "subTotal",
+        "type": "INTEGER",
+        "nullable": false
+      },
+      {
+        "name": "total",
+        "type": "INTEGER",
+        "nullable": false
+      },
+      {
+        "name": "deliveryDate",
+        "type": "DATETIME",
+        "nullable": false
+      },
+      {
+        "name": "examId",
+        "type": "INTEGER",
+        "nullable": true
+      },
+      {
+        "name": "endDate",
+        "type": "DATE",
+        "nullable": false
+      },
+      {
+        "name": "scholarship",
+        "type": "FLOAT",
+        "nullable": true
+      },
+      {
+        "name": "deletedAt",
+        "type": "DATETIME",
+        "nullable": true
+      },
+      {
+        "name": "closeDate",
+        "type": "DATE",
+        "nullable": true
+      },
+      {
+        "name": "asesorCloseDate",
+        "type": "DATE",
+        "nullable": true
+      },
+      {
+        "name": "comercialCloseDate",
+        "type": "DATE",
+        "nullable": true
+      },
+      {
+        "name": "financeCloseDate",
+        "type": "DATE",
+        "nullable": true
+      },
+      {
+        "name": "examsCloseDate",
+        "type": "DATE",
+        "nullable": true
+      },
+      {
+        "name": "originId",
+        "type": "INTEGER",
+        "nullable": true
+      },
+      {
+        "name": "payrollId",
+        "type": "INTEGER",
+        "nullable": true
+      }
+    ],
+    "foreign_keys": [
+      {
+        "name": "FK_139f8024067696fe5a8400ebda2",
+        "constrained_columns": [
+          "cartId"
+        ],
+        "referred_schema": null,
+        "referred_table": "cart",
+        "referred_columns": [
+          "id"
+        ],
+        "options": {}
+      },
+      {
+        "name": "FK_1cb5418f1024b958a9f0c1075d2",
+        "constrained_columns": [
+          "examId"
+        ],
+        "referred_schema": null,
+        "referred_table": "cart_product",
+        "referred_columns": [
+          "id"
+        ],
+        "options": {}
+      },
+      {
+        "name": "FK_4f1b0c66f4e0b4610e14ca42e5c",
+        "constrained_columns": [
+          "productId"
+        ],
+        "referred_schema": null,
+        "referred_table": "product",
+        "referred_columns": [
+          "id"
+        ],
+        "options": {}
+      },
+      {
+        "name": "FK_b068d18ec02c41896ef863ca548",
+        "constrained_columns": [
+          "gradeLevelId"
+        ],
+        "referred_schema": null,
+        "referred_table": "school_grade_level",
+        "referred_columns": [
+          "id"
+        ],
+        "options": {}
+      },
+      {
+        "name": "fk_origin",
+        "constrained_columns": [
+          "originId"
+        ],
+        "referred_schema": null,
+        "referred_table": "cart_product",
+        "referred_columns": [
+          "id"
+        ],
+        "options": {}
+      }
+    ],
+    "primary_key": [
+      "id"
+    ]
+  },
+  "payment": {
+    "columns": [
+      {
+        "name": "id",
+        "type": "INTEGER",
+        "nullable": false
+      },
+      {
+        "name": "quantity",
+        "type": "INTEGER",
+        "nullable": false
+      },
+      {
+        "name": "status",
+        "type": "VARCHAR(255) COLLATE \"utf8_unicode_ci\"",
+        "nullable": false
+      },
+      {
+        "name": "createdAt",
+        "type": "DATETIME",
+        "nullable": false
+      },
+      {
+        "name": "updatedAt",
+        "type": "DATETIME",
+        "nullable": false
+      },
+      {
+        "name": "cartId",
+        "type": "INTEGER",
+        "nullable": true
+      },
+      {
+        "name": "billingId",
+        "type": "INTEGER",
+        "nullable": true
+      },
+      {
+        "name": "use",
+        "type": "VARCHAR(255) COLLATE \"utf8_unicode_ci\"",
+        "nullable": false
+      },
+      {
+        "name": "comments",
+        "type": "TEXT COLLATE \"utf8_unicode_ci\"",
+        "nullable": false
+      },
+      {
+        "name": "billingStatus",
+        "type": "VARCHAR(255) COLLATE \"utf8_unicode_ci\"",
+        "nullable": false
+      },
+      {
+        "name": "cartProductId",
+        "type": "INTEGER",
+        "nullable": true
+      },
+      {
+        "name": "studentId",
+        "type": "INTEGER",
+        "nullable": false
+      },
+      {
+        "name": "ref",
+        "type": "VARCHAR(50) COLLATE \"utf8_unicode_ci\"",
+        "nullable": true
+      },
+      {
+        "name": "method",
+        "type": "VARCHAR(200) COLLATE \"utf8_unicode_ci\"",
+        "nullable": true
+      },
+      {
+        "name": "paymentDate",
+        "type": "DATE",
+        "nullable": true
+      },
+      {
+        "name": "fileName",
+        "type": "VARCHAR(300) COLLATE \"utf8_unicode_ci\"",
+        "nullable": true
+      },
+      {
+        "name": "userComments",
+        "type": "TEXT COLLATE \"utf8_unicode_ci\"",
+        "nullable": true
+      },
+      {
+        "name": "parentId",
+        "type": "INTEGER",
+        "nullable": true
+      },
+      {
+        "name": "payMethod",
+        "type": "VARCHAR(200) COLLATE \"utf8_unicode_ci\"",
+        "nullable": true
+      }
+    ],
+    "foreign_keys": [
+      {
+        "name": "FK_6f5b708b8fd618ea78a9f10ccfe",
+        "constrained_columns": [
+          "cartId"
+        ],
+        "referred_schema": null,
+        "referred_table": "cart",
+        "referred_columns": [
+          "id"
+        ],
+        "options": {}
+      },
+      {
+        "name": "FK_ad507e459fc8a8957c088eb19f4",
+        "constrained_columns": [
+          "cartProductId"
+        ],
+        "referred_schema": null,
+        "referred_table": "cart_product",
+        "referred_columns": [
+          "id"
+        ],
+        "options": {}
+      },
+      {
+        "name": "FK_c6a8429e1f6ab34c94d68f578f9",
+        "constrained_columns": [
+          "billingId"
+        ],
+        "referred_schema": null,
+        "referred_table": "lead_billing",
+        "referred_columns": [
+          "id"
+        ],
+        "options": {}
+      },
+      {
+        "name": "FK_payment_parent",
+        "constrained_columns": [
+          "parentId"
+        ],
+        "referred_schema": null,
+        "referred_table": "payment",
+        "referred_columns": [
+          "id"
+        ],
+        "options": {
+          "ondelete": "SET NULL"
+        }
+      }
+    ],
+    "primary_key": [
+      "id"
+    ]
+  },
+  "seller": {
+    "columns": [
+      {
+        "name": "id",
+        "type": "INTEGER",
+        "nullable": false
+      },
+      {
+        "name": "name",
+        "type": "VARCHAR(255) COLLATE \"utf8_unicode_ci\"",
+        "nullable": false
+      },
+      {
+        "name": "lastName",
+        "type": "VARCHAR(255) COLLATE \"utf8_unicode_ci\"",
+        "nullable": false
+      }
+    ],
+    "foreign_keys": [],
+    "primary_key": [
+      "id"
+    ]
+  },
+  "seller_lead": {
+    "columns": [
+      {
+        "name": "id",
+        "type": "INTEGER",
+        "nullable": false
+      },
+      {
+        "name": "promotionalStatus",
+        "type": "VARCHAR(255) COLLATE \"utf8_unicode_ci\"",
+        "nullable": false
+      },
+      {
+        "name": "businessStatus",
+        "type": "VARCHAR(255) COLLATE \"utf8_unicode_ci\"",
+        "nullable": false
+      },
+      {
+        "name": "leadId",
+        "type": "INTEGER",
+        "nullable": true
+      },
+      {
+        "name": "sellerId",
+        "type": "INTEGER",
+        "nullable": true
+      },
+      {
+        "name": "campaignId",
+        "type": "INTEGER",
+        "nullable": true
+      },
+      {
+        "name": "deletedAt",
+        "type": "DATETIME",
+        "nullable": true
+      }
+    ],
+    "foreign_keys": [
+      {
+        "name": "FK_07ea602c696e6938281d5243c38",
+        "constrained_columns": [
+          "leadId"
+        ],
+        "referred_schema": null,
+        "referred_table": "lead",
+        "referred_columns": [
+          "id"
+        ],
+        "options": {}
+      },
+      {
+        "name": "FK_baa3af70c7a89a2a80bfc54d17c",
+        "constrained_columns": [
+          "campaignId"
+        ],
+        "referred_schema": null,
+        "referred_table": "campaign",
+        "referred_columns": [
+          "id"
+        ],
+        "options": {}
+      },
+      {
+        "name": "FK_fc174784664c5899b355844b25b",
+        "constrained_columns": [
+          "sellerId"
+        ],
+        "referred_schema": null,
+        "referred_table": "seller",
+        "referred_columns": [
+          "id"
+        ],
+        "options": {}
+      },
+      {
+        "name": "fk_lead_id",
+        "constrained_columns": [
+          "leadId"
+        ],
+        "referred_schema": null,
+        "referred_table": "lead",
+        "referred_columns": [
+          "id"
+        ],
+        "options": {}
+      }
+    ],
+    "primary_key": [
+      "id"
+    ]
+  },
+  "lead": {
+    "columns": [
+      {
+        "name": "id",
+        "type": "INTEGER",
+        "nullable": false
+      },
+      {
+        "name": "name",
+        "type": "VARCHAR(255) COLLATE \"utf8_unicode_ci\"",
+        "nullable": false
+      },
+      {
+        "name": "globalState",
+        "type": "VARCHAR(255) COLLATE \"utf8_unicode_ci\"",
+        "nullable": false
+      },
+      {
+        "name": "zoneId",
+        "type": "INTEGER",
+        "nullable": true
+      },
+      {
+        "name": "cct",
+        "type": "INTEGER",
+        "nullable": false
+      },
+      {
+        "name": "support",
+        "type": "VARCHAR(255) COLLATE \"utf8_unicode_ci\"",
+        "nullable": false
+      },
+      {
+        "name": "site",
+        "type": "VARCHAR(255) COLLATE \"utf8_unicode_ci\"",
+        "nullable": false
+      },
+      {
+        "name": "type",
+        "type": "VARCHAR(255) COLLATE \"utf8_unicode_ci\"",
+        "nullable": false
+      },
+      {
+        "name": "nomenclature",
+        "type": "VARCHAR(255) COLLATE \"utf8_unicode_ci\"",
+        "nullable": false
+      },
+      {
+        "name": "cambridge_user",
+        "type": "CHAR(50) COLLATE \"utf8_unicode_ci\"",
+        "nullable": true
+      },
+      {
+        "name": "writingTest",
+        "type": "VARCHAR(2) COLLATE \"utf8_unicode_ci\"",
+        "nullable": true
+      },
+      {
+        "name": "corporation_id",
+        "type": "INTEGER",
+        "nullable": true
+      },
+      {
+        "name": "alias",
+        "type": "VARCHAR(255) COLLATE \"utf8_unicode_ci\"",
+        "nullable": true
+      },
+      {
+        "name": "flow",
+        "type": "VARCHAR(100) COLLATE \"utf8_unicode_ci\"",
+        "nullable": true
+      },
+      {
+        "name": "campaign",
+        "type": "VARCHAR(200) COLLATE \"utf8_unicode_ci\"",
+        "nullable": false
+      },
+      {
+        "name": "deletedAt",
+        "type": "DATE",
+        "nullable": true
+      },
+      {
+        "name": "projectId",
+        "type": "INTEGER",
+        "nullable": true
+      }
+    ],
+    "foreign_keys": [
+      {
+        "name": "FK_d5e1d990e43b127b29803dd1864",
+        "constrained_columns": [
+          "zoneId"
+        ],
+        "referred_schema": null,
+        "referred_table": "zone",
+        "referred_columns": [
+          "id"
+        ],
+        "options": {}
+      },
+      {
+        "name": "fk_lead_corporation",
+        "constrained_columns": [
+          "corporation_id"
+        ],
+        "referred_schema": null,
+        "referred_table": "corporation",
+        "referred_columns": [
+          "id"
+        ],
+        "options": {}
+      }
+    ],
+    "primary_key": [
+      "id"
+    ]
+  },
+  "lead_address": {
+    "columns": [
+      {
+        "name": "id",
+        "type": "INTEGER",
+        "nullable": false
+      },
+      {
+        "name": "street",
+        "type": "VARCHAR(255) COLLATE \"utf8_unicode_ci\"",
+        "nullable": false
+      },
+      {
+        "name": "extNum",
+        "type": "VARCHAR(255) COLLATE \"utf8_unicode_ci\"",
+        "nullable": false
+      },
+      {
+        "name": "intNum",
+        "type": "VARCHAR(255) COLLATE \"utf8_unicode_ci\"",
+        "nullable": false
+      },
+      {
+        "name": "colony",
+        "type": "VARCHAR(255) COLLATE \"utf8_unicode_ci\"",
+        "nullable": false
+      },
+      {
+        "name": "stateName",
+        "type": "VARCHAR(255) COLLATE \"utf8_unicode_ci\"",
+        "nullable": false
+      },
+      {
+        "name": "city",
+        "type": "VARCHAR(255) COLLATE \"utf8_unicode_ci\"",
+        "nullable": false
+      },
+      {
+        "name": "postalCode",
+        "type": "VARCHAR(255) COLLATE \"utf8_unicode_ci\"",
+        "nullable": false
+      },
+      {
+        "name": "corner1",
+        "type": "VARCHAR(255) COLLATE \"utf8_unicode_ci\"",
+        "nullable": false
+      },
+      {
+        "name": "corner2",
+        "type": "VARCHAR(255) COLLATE \"utf8_unicode_ci\"",
+        "nullable": false
+      },
+      {
+        "name": "comments",
+        "type": "TEXT COLLATE \"utf8_unicode_ci\"",
+        "nullable": false
+      },
+      {
+        "name": "isFavorite",
+        "type": "INTEGER",
+        "nullable": false
+      },
+      {
+        "name": "leadId",
+        "type": "INTEGER",
+        "nullable": true
+      },
+      {
+        "name": "levelId",
+        "type": "INTEGER",
+        "nullable": true
+      },
+      {
+        "name": "lat",
+        "type": "VARCHAR(100) COLLATE \"utf8_unicode_ci\"",
+        "nullable": true
+      },
+      {
+        "name": "lng",
+        "type": "VARCHAR(100) COLLATE \"utf8_unicode_ci\"",
+        "nullable": true
+      },
+      {
+        "name": "deletedAt",
+        "type": "DATE",
+        "nullable": true
+      },
+      {
+        "name": "venueId",
+        "type": "INTEGER",
+        "nullable": true
+      }
+    ],
+    "foreign_keys": [
+      {
+        "name": "FK_72bb603c0dc4386b61120986def",
+        "constrained_columns": [
+          "leadId"
+        ],
+        "referred_schema": null,
+        "referred_table": "lead",
+        "referred_columns": [
+          "id"
+        ],
+        "options": {}
+      },
+      {
+        "name": "FK_lead_address_level",
+        "constrained_columns": [
+          "levelId"
+        ],
+        "referred_schema": null,
+        "referred_table": "school_grade",
+        "referred_columns": [
+          "id"
+        ],
+        "options": {
+          "ondelete": "SET NULL"
+        }
+      }
+    ],
+    "primary_key": [
+      "id"
+    ]
+  },
+  "product": {
+    "columns": [
+      {
+        "name": "id",
+        "type": "INTEGER",
+        "nullable": false
+      },
+      {
+        "name": "name",
+        "type": "VARCHAR(255) COLLATE \"utf8_unicode_ci\"",
+        "nullable": false
+      },
+      {
+        "name": "purchasePrice",
+        "type": "DECIMAL(10, 2)",
+        "nullable": false
+      },
+      {
+        "name": "salePrice",
+        "type": "DECIMAL(10, 2)",
+        "nullable": false
+      },
+      {
+        "name": "productType",
+        "type": "VARCHAR(255) COLLATE \"utf8_unicode_ci\"",
+        "nullable": false
+      },
+      {
+        "name": "isbn",
+        "type": "VARCHAR(255) COLLATE \"utf8_unicode_ci\"",
+        "nullable": false
+      },
+      {
+        "name": "edition",
+        "type": "INTEGER",
+        "nullable": false
+      },
+      {
+        "name": "publishing",
+        "type": "VARCHAR(255) COLLATE \"utf8_unicode_ci\"",
+        "nullable": false
+      },
+      {
+        "name": "presentation",
+        "type": "VARCHAR(255) COLLATE \"utf8_unicode_ci\"",
+        "nullable": false
+      },
+      {
+        "name": "tab",
+        "type": "VARCHAR(255) COLLATE \"utf8_unicode_ci\"",
+        "nullable": false
+      },
+      {
+        "name": "userTarget",
+        "type": "VARCHAR(255) COLLATE \"utf8_unicode_ci\"",
+        "nullable": false
+      },
+      {
+        "name": "schoolLevel",
+        "type": "VARCHAR(255) COLLATE \"utf8_unicode_ci\"",
+        "nullable": false
+      },
+      {
+        "name": "criteria1",
+        "type": "VARCHAR(255) COLLATE \"utf8_unicode_ci\"",
+        "nullable": false
+      },
+      {
+        "name": "criteria2",
+        "type": "VARCHAR(255) COLLATE \"utf8_unicode_ci\"",
+        "nullable": false
+      },
+      {
+        "name": "criteria3",
+        "type": "VARCHAR(255) COLLATE \"utf8_unicode_ci\"",
+        "nullable": false
+      },
+      {
+        "name": "criteria4",
+        "type": "VARCHAR(255) COLLATE \"utf8_unicode_ci\"",
+        "nullable": false
+      },
+      {
+        "name": "stock",
+        "type": "INTEGER",
+        "nullable": false
+      },
+      {
+        "name": "dateType",
+        "type": "VARCHAR(255) COLLATE \"utf8_unicode_ci\"",
+        "nullable": false
+      },
+      {
+        "name": "site",
+        "type": "VARCHAR(255) COLLATE \"utf8_unicode_ci\"",
+        "nullable": false
+      },
+      {
+        "name": "duration",
+        "type": "INTEGER",
+        "nullable": true
+      },
+      {
+        "name": "duration2",
+        "type": "INTEGER",
+        "nullable": true
+      },
+      {
+        "name": "saleUsdPrice",
+        "type": "INTEGER",
+        "nullable": true
+      },
+      {
+        "name": "examId",
+        "type": "INTEGER",
+        "nullable": true
+      }
+    ],
+    "foreign_keys": [
+      {
+        "name": "product_ibfk_1",
+        "constrained_columns": [
+          "examId"
+        ],
+        "referred_schema": null,
+        "referred_table": "exam_cat",
+        "referred_columns": [
+          "id"
+        ],
+        "options": {
+          "ondelete": "CASCADE"
+        }
+      }
+    ],
+    "primary_key": [
+      "id"
+    ]
+  },
+  "exam_cat": {
+    "columns": [
+      {
+        "name": "id",
+        "type": "INTEGER",
+        "nullable": false
+      },
+      {
+        "name": "name",
+        "type": "VARCHAR(255) COLLATE \"utf8_unicode_ci\"",
+        "nullable": false
+      },
+      {
+        "name": "presentation",
+        "type": "VARCHAR(255) COLLATE \"utf8_unicode_ci\"",
+        "nullable": false
+      },
+      {
+        "name": "dateType",
+        "type": "VARCHAR(255) COLLATE \"utf8_unicode_ci\"",
+        "nullable": false
+      },
+      {
+        "name": "duration",
+        "type": "INTEGER",
+        "nullable": true
+      },
+      {
+        "name": "oralDuration",
+        "type": "INTEGER",
+        "nullable": true
+      },
+      {
+        "name": "shortName",
+        "type": "VARCHAR(20) COLLATE \"utf8_unicode_ci\"",
+        "nullable": true
+      },
+      {
+        "name": "readingAndWriting",
+        "type": "INTEGER",
+        "nullable": true
+      },
+      {
+        "name": "reading",
+        "type": "INTEGER",
+        "nullable": true
+      },
+      {
+        "name": "writing",
+        "type": "INTEGER",
+        "nullable": true
+      },
+      {
+        "name": "listening",
+        "type": "INTEGER",
+        "nullable": true
+      },
+      {
+        "name": "speacking",
+        "type": "INTEGER",
+        "nullable": true
+      },
+      {
+        "name": "break1",
+        "type": "INTEGER",
+        "nullable": true
+      },
+      {
+        "name": "break2",
+        "type": "INTEGER",
+        "nullable": true
+      },
+      {
+        "name": "break3",
+        "type": "INTEGER",
+        "nullable": true
+      }
+    ],
+    "foreign_keys": [],
+    "primary_key": [
+      "id"
+    ]
+  },
+  "auth": {
+    "columns": [
+      {
+        "name": "id",
+        "type": "INTEGER",
+        "nullable": false
+      },
+      {
+        "name": "password",
+        "type": "VARCHAR(255) COLLATE \"utf8_unicode_ci\"",
+        "nullable": false
+      },
+      {
+        "name": "user",
+        "type": "VARCHAR(255) COLLATE \"utf8_unicode_ci\"",
+        "nullable": false
+      },
+      {
+        "name": "area",
+        "type": "VARCHAR(255) COLLATE \"utf8_unicode_ci\"",
+        "nullable": false
+      },
+      {
+        "name": "sellerId",
+        "type": "INTEGER",
+        "nullable": true
+      },
+      {
+        "name": "bossId",
+        "type": "INTEGER",
+        "nullable": true
+      },
+      {
+        "name": "site",
+        "type": "VARCHAR(255) COLLATE \"utf8_unicode_ci\"",
+        "nullable": false
+      },
+      {
+        "name": "collageId",
+        "type": "INTEGER",
+        "nullable": true
+      },
+      {
+        "name": "cambridgeUser",
+        "type": "VARCHAR(50) COLLATE \"utf8_unicode_ci\"",
+        "nullable": true
+      },
+      {
+        "name": "zoneId",
+        "type": "INTEGER",
+        "nullable": true
+      }
+    ],
+    "foreign_keys": [
+      {
+        "name": "FK_13ee5b57561fde825d79de46c53",
+        "constrained_columns": [
+          "bossId"
+        ],
+        "referred_schema": null,
+        "referred_table": "auth",
+        "referred_columns": [
+          "id"
+        ],
+        "options": {}
+      },
+      {
+        "name": "FK_60233049a77affc44936f0a77d3",
+        "constrained_columns": [
+          "sellerId"
+        ],
+        "referred_schema": null,
+        "referred_table": "seller",
+        "referred_columns": [
+          "id"
+        ],
+        "options": {}
+      },
+      {
+        "name": "FK_user_zone",
+        "constrained_columns": [
+          "zoneId"
+        ],
+        "referred_schema": null,
+        "referred_table": "zone",
+        "referred_columns": [
+          "id"
+        ],
+        "options": {
+          "ondelete": "SET NULL"
+        }
+      }
+    ],
+    "primary_key": [
+      "id"
+    ]
+  },
+  "zone": {
+    "columns": [
+      {
+        "name": "id",
+        "type": "INTEGER",
+        "nullable": false
+      },
+      {
+        "name": "name",
+        "type": "VARCHAR(255) COLLATE \"utf8_unicode_ci\"",
+        "nullable": false
+      }
+    ],
+    "foreign_keys": [],
+    "primary_key": [
+      "id"
+    ]
+  }
+}

@@ -1,28 +1,17 @@
-from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
-from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from app.config import settings
 
-# asyncpg requires postgresql+asyncpg:// scheme
-db_url = settings.source_db_url.replace("postgresql://", "postgresql+asyncpg://")
+db_string = settings.source_db_url
+if not db_string:
+    raise ValueError("SOURCE_DB_URL not set in .env")
 
-engine = None
+url = db_string.replace("mysql://", "mysql+aiomysql://")
+engine = create_async_engine(url)
 
-if db_url and db_url != "+asyncpg://":
-    engine = create_async_engine(
-        db_url,
-        echo=settings.environment == "development",
-        pool_size=5,
-        max_overflow=10,
-    )
-    SessionLocal = async_sessionmaker(
-        bind=engine,
-        class_=AsyncSession,
-        expire_on_commit=False,
-    )
+SessionLocal = async_sessionmaker(bind=engine, class_=AsyncSession)
 
-class Base(DeclarativeBase):
-    pass
-
+## para generar una session que se puede usar para hacer queries a la base de datos
+## cada sesion generada es independiente
 async def get_db():
     async with SessionLocal() as session:
         yield session
