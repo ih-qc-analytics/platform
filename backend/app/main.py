@@ -3,6 +3,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
 from app.validator import validate_schema
+from app.routers import filters, total_sales
 import logging 
 
 logging.basicConfig(
@@ -34,3 +35,6 @@ app.add_middleware(
 @app.get("/health")
 async def health():
     return {"status": "ok", "environment": settings.environment}
+
+app.include_router(filters.router, prefix="/filters", tags=["filters"])
+app.include_router(total_sales.router, prefix="/reports", tags=["reports"])

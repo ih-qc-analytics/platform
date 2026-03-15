@@ -6,7 +6,12 @@ if not db_string:
     raise ValueError("SOURCE_DB_URL not set in .env")
 
 url = db_string.replace("mysql://", "mysql+aiomysql://")
-engine = create_async_engine(url)
+engine = create_async_engine(
+    url,
+    echo=False,
+    pool_pre_ping=True,       
+    pool_recycle=3600,     
+)
 
 SessionLocal = async_sessionmaker(bind=engine, class_=AsyncSession)
 

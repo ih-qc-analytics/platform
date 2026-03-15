@@ -1,9 +1,9 @@
-function App() {
-  return (
-    <div className="min-h-screen bg-gray-50 p-8">
-      <h1 className="text-2xl font-bold text-gray-900">IH-QC Analytics</h1>
-    </div>
-  )
-}
+import VentasTotales from "./components/reports/VentasTotales"
 
-export default App
+export default function App() {
+    return (
+        <div className="min-h-screen bg-gray-50">
+            <VentasTotales />
+        </div>
+    )
+}
