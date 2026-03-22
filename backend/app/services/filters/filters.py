@@ -6,7 +6,7 @@ from app.schemas.reports import FilterOptionsResponse
 # hay operaciones
 async def getFilters() -> FilterOptionsResponse:
     async with SessionLocal() as session:
-        t = text("""SELECT DISTINCT 'country' as filter_type, site as value FROM lead WHERE site IS NOT NULL
+        t = text("""SELECT DISTINCT 'country' as filter_type, site as value FROM `lead` WHERE site IS NOT NULL
                     UNION ALL
                     SELECT DISTINCT 'zone', name FROM zone WHERE name IS NOT NULL
                     UNION ALL

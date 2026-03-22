@@ -42,7 +42,7 @@ async def run_main_query(session, filters: ReportFilters, where_clause, params) 
             SUM(cp.cost) as total_cost                                                       
         FROM cart c
         JOIN seller_lead sl ON c.sellerLeadId = sl.id
-        JOIN lead l ON sl.leadId = l.id
+        JOIN `lead` l ON sl.leadId = l.id
         LEFT JOIN zone z ON l.zoneId = z.id
         JOIN cart_product cp ON cp.cartId = c.id
         JOIN product p ON cp.productId = p.id
@@ -78,7 +78,7 @@ async def run_trend_query(session, filters: ReportFilters, where_clause, params)
             SUM(cp.total) as revenue
         FROM cart c
         JOIN seller_lead sl ON c.sellerLeadId = sl.id
-        JOIN lead l ON sl.leadId = l.id
+        JOIN `lead` l ON sl.leadId = l.id
         LEFT JOIN zone z ON l.zoneId = z.id
         JOIN cart_product cp ON cp.cartId = c.id
         JOIN product p ON cp.productId = p.id
@@ -97,7 +97,7 @@ async def run_geo_query(session, filters: ReportFilters, where_clause, params) -
             SUM(cp.total) as revenue
         FROM cart c
         JOIN seller_lead sl ON c.sellerLeadId = sl.id
-        JOIN lead l ON sl.leadId = l.id
+        JOIN `lead` l ON sl.leadId = l.id
         LEFT JOIN zone z ON l.zoneId = z.id
         JOIN cart_product cp ON cp.cartId = c.id
         JOIN product p ON cp.productId = p.id
@@ -127,7 +127,7 @@ async def run_prior_year_query(session, filters: ReportFilters) -> float:
         SELECT SUM(cp.total) as prior_revenue
         FROM cart c
         JOIN seller_lead sl ON c.sellerLeadId = sl.id
-        JOIN lead l ON sl.leadId = l.id
+        JOIN `lead` l ON sl.leadId = l.id
         LEFT JOIN zone z ON l.zoneId = z.id
         JOIN cart_product cp ON cp.cartId = c.id
         JOIN product p ON cp.productId = p.id

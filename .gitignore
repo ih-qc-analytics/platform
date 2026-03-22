@@ -1,5 +1,6 @@
 # env
 .env
+.env.test
 *.env
 
 # python
@@ -9,6 +10,7 @@ __pycache__/
 .venv/
 dist/
 *.egg-info/
+.pytest_cache/
 
 # node
 node_modules/

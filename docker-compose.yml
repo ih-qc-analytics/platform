@@ -8,18 +8,20 @@ services:
     env_file:
       - ./backend/.env
     depends_on:
-      - db
+      - mysql
 
-  db:
-    image: postgres:16
+  mysql:
+    image: mysql:8.0
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: analytics
+      MYSQL_ROOT_PASSWORD: testpassword
+      MYSQL_DATABASE: ihqc_test
+      MYSQL_USER: test_user
+      MYSQL_PASSWORD: testpassword
     ports:
-      - "5432:5432"
+      - "3307:3306"
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - ./backend/tests/schema.sql:/docker-entrypoint-initdb.d/schema.sql
+      - mysqldata:/var/lib/mysql
 
 volumes:
-  pgdata:
+  mysqldata:
