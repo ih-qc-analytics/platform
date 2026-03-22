@@ -31,7 +31,7 @@ export default function VentasTotales() {
             />
 
             {isError && (
-                <div className="text-sm text-red-500">Error al cargar los datos. Intente de nuevo.</div>
+                <div className="text-sm text-destructive">Error al cargar los datos. Intente de nuevo.</div>
             )}
 
             {isLoading ? (
@@ -41,49 +41,50 @@ export default function VentasTotales() {
                     <div className="grid grid-cols-3 gap-4">
                         <KpiCard
                             title="Total Clientes"
-                            icon={<Users size={24} />}
+                            icon={<Users size="size-6" />}
                             value={data.total_clients}
                         />
                         <KpiCard
                             title="Total Exámenes"
-                            icon={<FileText size={24} />}
+                            icon={<FileText size="size-6" />}
                             value={data.total_exams}
                         />
                         <KpiCard
                             title="Ingreso por Exámenes"
-                            icon={<DollarSign size={24} />}
+                            icon={<DollarSign size="size-6" />}
                             value={data.exam_revenue}
                             prefix="$"
                         />
                         <KpiCard
                             title="Ingreso por Libros"
-                            icon={<BookOpen size={24} />}
+                            icon={<BookOpen size="size-6" />}
                             value={data.book_revenue}
                             prefix="$"
                         />
                         <KpiCard
                             title="Ingreso por Cursos"
-                            icon={<GraduationCap size={24} />}
+                            icon={<GraduationCap size="size-6" />}
                             value={data.course_revenue}
                             prefix="$"
                         />
                         <KpiCard
                             title="Ingreso Total"
-                            icon={<TrendingUp size={24} />}
+                            icon={<TrendingUp size="size-6" />}
                             value={data.total_revenue}
                             prefix="$"
-                            growth={data.growth_pct || undefined}
+                            growth={data.growth_pct ?? undefined}
                         />
                         <KpiCard
                             title="Margen de Utilidad"
-                            icon={<Percent size={24} />}
-                            value={data.profit_margin.toFixed(1)}
+                            icon={<Percent size="size-6" />}
+                            value={data.profit_margin}
                             suffix="%"
+                            decimals={1}
                         />
                         {data.prior_year_revenue > 0 && (
                             <KpiCard
                                 title="Ingreso Año Anterior"
-                                icon={<Calendar size={24} />}
+                                icon={<Calendar size="size-6" />}
                                 value={data.prior_year_revenue}
                                 prefix="$"
                             />

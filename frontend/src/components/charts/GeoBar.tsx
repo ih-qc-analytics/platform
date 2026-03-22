@@ -2,6 +2,9 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts"
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import type { GeoPoint } from "@/types"
+import { formatRevenue } from "@/lib/utils"
+
+const Y_AXIS_WIDTH = 80
 
 type GeoBarProps = {
     data: GeoPoint[]
@@ -14,11 +17,6 @@ const chartConfig = {
     },
 } satisfies ChartConfig
 
-const formatRevenue = (value: number) => {
-    if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(1)}M`
-    if (value >= 1_000) return `$${(value / 1_000).toFixed(1)}K`
-    return `$${value}`
-}
 
 export default function GeoBar({ data }: GeoBarProps) {
     if (!data.length) return (
@@ -38,8 +36,8 @@ export default function GeoBar({ data }: GeoBarProps) {
                 <ChartContainer config={chartConfig} className="min-h-48 w-full">
                     <BarChart data={data} layout="vertical">
                         <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-                        <XAxis type="number" tickFormatter={formatRevenue} tickLine={false} axisLine={false} tick={{ fontSize: 12 }} />
-                        <YAxis type="category" dataKey="dimension" tickLine={false} axisLine={false} tick={{ fontSize: 12 }} width={80} />
+                        <XAxis type="number" tickFormatter={formatRevenue} tickLine={false} axisLine={false} />
+                        <YAxis type="category" dataKey="dimension" tickLine={false} axisLine={false} width={80} />
                         <ChartTooltip content={<ChartTooltipContent formatter={(val) => formatRevenue(val as number)} />} />
                         <Bar dataKey="revenue" fill="var(--color-revenue)" radius={[0, 4, 4, 0]} />
                     </BarChart>

@@ -2,7 +2,8 @@ import { useState } from "react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useFilterOptions } from "@/hooks/useReports"
 import type { ReportFilters } from "@/types"
-import { Download } from "lucide-react"
+import DateRangePicker from "./DateRangePicker"
+import ExportButtons from "./ExportButtons"
 
 type FilterBarProps = {
     onChange: (filters: ReportFilters) => void
@@ -37,8 +38,14 @@ export default function FilterBar(props: FilterBarProps) {
         props.onChange(updated)
     }
 
-    const handleDateChange = (key: "date_from" | "date_to", value: string) => {
-        const updated = { ...selected, [key]: value || undefined }
+    const handleDateFromChange = (value: string) => {
+        const updated = { ...selected, date_from: value || undefined }
+        setSelected(updated)
+        props.onChange(updated)
+    }
+
+    const handleDateToChange = (value: string) => {
+        const updated = { ...selected, date_to: value || undefined }
         setSelected(updated)
         props.onChange(updated)
     }
@@ -47,29 +54,16 @@ export default function FilterBar(props: FilterBarProps) {
 
     return (
         <div className="flex flex-wrap items-end gap-4 w-full">
-            <div className="flex flex-col gap-1">
-                <label className="text-sm text-muted-foreground">Fecha desde</label>
-                <input
-                    type="date"
-                    value={selected.date_from ?? ""}
-                    onChange={e => handleDateChange("date_from", e.target.value)}
-                    className="border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-                />
-            </div>
-
-            <div className="flex flex-col gap-1">
-                <label className="text-sm text-muted-foreground">Fecha hasta</label>
-                <input
-                    type="date"
-                    value={selected.date_to ?? ""}
-                    onChange={e => handleDateChange("date_to", e.target.value)}
-                    className="border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-                />
-            </div>
+            <DateRangePicker
+                dateFrom={selected.date_from}
+                dateTo={selected.date_to}
+                onDateFromChange={handleDateFromChange}
+                onDateToChange={handleDateToChange}
+            />
 
             {FILTER_CONFIG.map(f => {
                 const opts = cleanOptions(options?.[f.optionsKey] ?? [])
-                const currentValue = (selected as any)[f.key]?.[0] ?? "all"
+                const currentValue = (selected[f.key as keyof ReportFilters] as string[])?.[0] ?? "all"
 
                 return (
                     <div key={f.key} className="flex flex-col gap-1 min-w-32">
@@ -88,23 +82,7 @@ export default function FilterBar(props: FilterBarProps) {
                     </div>
                 )
             })}
-
-            <div className="flex gap-2 ml-auto">
-                <button
-                    onClick={props.onExportPdf}
-                    className="flex items-center gap-2 px-4 py-2 text-sm border rounded-md hover:bg-gray-50"
-                >
-                    <Download size={16} />
-                    Exportar PDF
-                </button>
-                <button
-                    onClick={props.onExportExcel}
-                    className="flex items-center gap-2 px-4 py-2 text-sm border rounded-md hover:bg-gray-50"
-                >
-                    <Download size={16} />
-                    Exportar Excel
-                </button>
-            </div>
+            <ExportButtons onExportPdf={props.onExportPdf} onExportExcel={props.onExportExcel} />
         </div>
     )
 }
