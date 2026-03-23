@@ -41,42 +41,52 @@ export default function VentasTotales() {
                     <div className="grid grid-cols-3 gap-4">
                         <KpiCard
                             title="Total Clientes"
-                            icon={<Users size="size-6" />}
+                            icon={<Users className="size-6" />}
                             value={data.total_clients}
                         />
                         <KpiCard
                             title="Total Exámenes"
-                            icon={<FileText size="size-6" />}
+                            icon={<FileText className="size-6" />}
                             value={data.total_exams}
                         />
                         <KpiCard
                             title="Ingreso por Exámenes"
-                            icon={<DollarSign size="size-6" />}
+                            icon={<DollarSign className="size-6" />}
                             value={data.exam_revenue}
                             prefix="$"
                         />
                         <KpiCard
+                            title="Total Libros"
+                            icon={<BookOpen className="size-6" />}
+                            value={data.total_books}
+                        />
+                        <KpiCard
                             title="Ingreso por Libros"
-                            icon={<BookOpen size="size-6" />}
+                            icon={<BookOpen className="size-6" />}
                             value={data.book_revenue}
                             prefix="$"
                         />
                         <KpiCard
+                            title="Total Cursos"
+                            icon={<GraduationCap className="size-6" />}
+                            value={data.total_courses}
+                        />
+                        <KpiCard
                             title="Ingreso por Cursos"
-                            icon={<GraduationCap size="size-6" />}
+                            icon={<GraduationCap className="size-6" />}
                             value={data.course_revenue}
                             prefix="$"
                         />
                         <KpiCard
                             title="Ingreso Total"
-                            icon={<TrendingUp size="size-6" />}
+                            icon={<TrendingUp className="size-6" />}
                             value={data.total_revenue}
                             prefix="$"
                             growth={data.growth_pct ?? undefined}
                         />
                         <KpiCard
                             title="Margen de Utilidad"
-                            icon={<Percent size="size-6" />}
+                            icon={<Percent className="size-6" />}
                             value={data.profit_margin}
                             suffix="%"
                             decimals={1}
@@ -84,7 +94,7 @@ export default function VentasTotales() {
                         {data.prior_year_revenue > 0 && (
                             <KpiCard
                                 title="Ingreso Año Anterior"
-                                icon={<Calendar size="size-6" />}
+                                icon={<Calendar className="size-6" />}
                                 value={data.prior_year_revenue}
                                 prefix="$"
                             />
