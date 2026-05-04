@@ -1,4 +1,6 @@
-import { Download } from "lucide-react"
+import { FileDown, Sheet } from "lucide-react"
+
+import { Button } from "@/components/ui/button"
 
 type ExportButtonsProps = {
     onExportPdf?: () => void
@@ -8,20 +10,22 @@ type ExportButtonsProps = {
 export default function ExportButtons({ onExportPdf, onExportExcel }: ExportButtonsProps) {
     return (
         <div className="flex gap-2 ml-auto">
-            <button
+            <Button
                 onClick={onExportPdf}
-                className="flex items-center gap-2 px-4 py-2 text-sm border rounded-md hover:bg-accent"
+                variant="outline"
+                className="h-14 rounded-2xl px-5 text-base"
             >
-                <Download className="size-4" />
+                <FileDown className="size-4" />
                 Exportar PDF
-            </button>
-            <button
+            </Button>
+            <Button
                 onClick={onExportExcel}
-                className="flex items-center gap-2 px-4 py-2 text-sm border rounded-md hover:bg-accent"
+                variant="outline"
+                className="h-14 rounded-2xl px-5 text-base"
             >
-                <Download className="size-4" />
+                <Sheet className="size-4" />
                 Exportar Excel
-            </button>
+            </Button>
         </div>
     )
 }

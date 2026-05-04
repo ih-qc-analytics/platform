@@ -18,7 +18,8 @@ seed-ui:
 		SET FOREIGN_KEY_CHECKS=1;"
 	docker exec -i platform-mysql-1 mysql -u test_user -ptestpassword ihqc_test < tests/seeds/ui_dev.sql
 
-run-dev: seed-ui run
+db-down:
+	docker stop platform-mysql-1
 
 install:
 	pip install -r requirements.txt

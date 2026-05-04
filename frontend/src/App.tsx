@@ -1,12 +1,12 @@
 import { Routes, Route, Navigate, useLocation } from "react-router-dom"
 import { SidebarProvider, SidebarInset, SidebarTrigger } from "@/components/ui/sidebar"
 import VentasTotales from "@/components/reports/VentasTotales"
+import PorAsesor from "@/components/reports/PorAsesor"
 import AppSidebar from "./components/layout/AppSideBar"
 
 const TITLES: Record<string, string> = {
     "/ventas-totales":  "Ventas Totales",
     "/por-asesor":      "Resultados por Asesor",
-    "/detalle-asesor":  "Detalle por Asesor",
     "/por-pais":        "Resultado por País",
 }
 
@@ -28,8 +28,8 @@ export default function App() {
                     <Routes>
                         <Route path="/" element={<Navigate to="/ventas-totales" replace />} />
                         <Route path="/ventas-totales" element={<VentasTotales />} />
-                        <Route path="/por-asesor" element={<div className="p-6 text-muted-foreground text-sm">Próximamente — Por Asesor</div>} />
-                        <Route path="/detalle-asesor" element={<div className="p-6 text-muted-foreground text-sm">Próximamente — Detalle por Asesor</div>} />
+                        <Route path="/por-asesor" element={<PorAsesor />} />
+                        <Route path="/detalle-asesor" element={<Navigate to="/por-asesor" replace />} />
                         <Route path="/por-pais" element={<div className="p-6 text-muted-foreground text-sm">Próximamente — Resultado por País</div>} />
                     </Routes>
                 </main>

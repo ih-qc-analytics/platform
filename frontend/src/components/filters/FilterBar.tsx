@@ -1,5 +1,6 @@
 import { useState } from "react"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import GeoFilters from "@/components/filters/GeoFilters"
+import { Input } from "@/components/ui/input"
 import { useFilterOptions } from "@/hooks/useReports"
 import type { ReportFilters } from "@/types"
 import DateRangePicker from "./DateRangePicker"
@@ -10,16 +11,6 @@ type FilterBarProps = {
     onExportPdf?: () => void
     onExportExcel?: () => void
 }
-
-const FILTER_CONFIG = [
-    { label: "País", key: "countries", optionsKey: "countries" },
-    { label: "Sede", key: "zones", optionsKey: "zones" },
-    { label: "Estado", key: "states", optionsKey: "states" },
-    { label: "Ciudad", key: "cities", optionsKey: "cities" },
-] as const
-
-const cleanOptions = (options: string[]): string[] =>
-    [...new Set(options.map(o => o.trim()).filter(o => o.length > 0))]
 
 export default function FilterBar(props: FilterBarProps) {
     const { data: options, isLoading } = useFilterOptions()
@@ -61,27 +52,18 @@ export default function FilterBar(props: FilterBarProps) {
                 onDateToChange={handleDateToChange}
             />
 
-            {FILTER_CONFIG.map(f => {
-                const opts = cleanOptions(options?.[f.optionsKey] ?? [])
-                const currentValue = (selected[f.key as keyof ReportFilters] as string[])?.[0] ?? "all"
-
-                return (
-                    <div key={f.key} className="flex flex-col gap-1 min-w-32">
-                        <label className="text-sm text-muted-foreground">{f.label}</label>
-                        <Select value={currentValue} onValueChange={val => handleSelectChange(f.key, val)}>
-                            <SelectTrigger>
-                                <SelectValue placeholder="Todos" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">Todos</SelectItem>
-                                {opts.map(opt => (
-                                    <SelectItem key={opt} value={opt}>{opt}</SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    </div>
-                )
-            })}
+            <GeoFilters
+                filters={selected}
+                options={options}
+                configs={[
+                    { key: "countries", label: "País" },
+                    { key: "zones", label: "Sede" },
+                    { key: "states", label: "Estado" },
+                    { key: "cities", label: "Ciudad" },
+                ]}
+                triggerClassName="min-w-32"
+                onChange={handleSelectChange}
+            />
             <ExportButtons onExportPdf={props.onExportPdf} onExportExcel={props.onExportExcel} />
         </div>
     )

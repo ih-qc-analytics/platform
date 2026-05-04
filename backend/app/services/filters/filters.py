@@ -1,6 +1,6 @@
 from app.database import SessionLocal
 from sqlalchemy import text
-from app.schemas.reports import FilterOptionsResponse
+from app.schemas.reports import FilterOptionsResponse, SellerOptionsResponse
 
 # obtener los filtros geograficos disponibles en los datos, es decir todas las ciudades/zonas... donde
 # hay operaciones
@@ -25,4 +25,15 @@ async def getFilters() -> FilterOptionsResponse:
                                       states=options["state"], 
                                       cities=options["city"])
 
+
+async def getSellerOptions() -> SellerOptionsResponse:
+    async with SessionLocal() as session:
+        t = text("""
+            SELECT DISTINCT CONCAT(name, ' ', lastName) AS seller_name
+            FROM seller
+            ORDER BY seller_name ASC
+        """)
+        result = await session.execute(t)
+        rows = result.fetchall()
+        return SellerOptionsResponse(sellers=[row.seller_name for row in rows])
 

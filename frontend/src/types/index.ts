@@ -46,3 +46,62 @@ export type FilterOptionsResponse = {
     states: string[]
     cities: string[]
 }
+
+export type SellerOptionsResponse = {
+    sellers: string[]
+}
+
+export type AsesorFilters = {
+    year: number
+    countries?: string[]
+    zones?: string[]
+    states?: string[]
+    cities?: string[]
+    sellers?: string[]
+    limit?: number
+    cursor?: string | null
+}
+
+export type AsesorRow = {
+    seller_id: number
+    seller_name: string
+    exam_breakdown: Record<string, number>
+    ganados: number
+    perdidos: number
+    mantenidos: number
+    total_revenue: number
+}
+
+export type AsesorReportResponse = {
+    rows: AsesorRow[]
+    year: number
+    next_cursor: string | null
+    has_more: boolean
+}
+
+export type ExamBrandDetail = {
+    exams: number
+    schools: number
+    revenue: number
+}
+
+export type BusinessStatusDetail = {
+    schools: number
+    exams: number
+    revenue: number
+}
+
+export type AsesorDetail = {
+    seller_name: string
+    countries: string[]
+    zones: string[]
+    states: string[]
+    cities: string[]
+    total_schools: number
+    total_exams: number
+    total_revenue: number
+    exam_breakdown: Record<string, ExamBrandDetail>
+    ganados: BusinessStatusDetail
+    perdidos: BusinessStatusDetail
+    mantenidos: BusinessStatusDetail
+}

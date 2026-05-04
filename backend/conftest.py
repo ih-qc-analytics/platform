@@ -63,3 +63,25 @@ async def ventas_totales_db(test_engine, session_factory):
     db.engine = test_engine
     yield
     await truncate_all(test_engine)
+
+
+@pytest_asyncio.fixture(loop_scope="session")
+async def ui_dev_db(test_engine, session_factory):
+    await truncate_all(test_engine)
+    await load_seed(test_engine, "ui_dev.sql")
+    import app.database as db
+    db.SessionLocal = session_factory
+    db.engine = test_engine
+    yield
+    await truncate_all(test_engine)
+
+
+@pytest_asyncio.fixture(loop_scope="session")
+async def por_asesor_db(test_engine, session_factory):
+    await truncate_all(test_engine)
+    await load_seed(test_engine, "por_asesor.sql")
+    import app.database as db
+    db.SessionLocal = session_factory
+    db.engine = test_engine
+    yield
+    await truncate_all(test_engine)

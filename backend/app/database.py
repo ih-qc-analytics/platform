@@ -5,6 +5,10 @@ db_string = settings.source_db_url
 if not db_string:
     raise ValueError("SOURCE_DB_URL not set in .env")
 
+print("--- FULL DATABASE URL ---")
+print(f"URL: {db_string}")
+print("--- END DEBUG ---")
+
 url = db_string.replace("mysql://", "mysql+aiomysql://")
 engine = create_async_engine(
     url,

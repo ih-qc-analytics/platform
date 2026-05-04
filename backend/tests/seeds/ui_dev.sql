@@ -67,6 +67,17 @@ INSERT INTO `lead` (id, name, site, zoneId, campaign) VALUES
   (8, 'Colegio Peru B',     'peru',     3, 'ui-test'),
   (9, 'Colegio Peru C',     'peru',     3, 'ui-test');
 
+INSERT INTO lead_address (id, stateName, city, comments, leadId) VALUES
+  (1, 'CDMX', 'Mexico City', '', 1),
+  (2, 'Estado de Mexico', 'Toluca', '', 2),
+  (3, 'Jalisco', 'Guadalajara', '', 3),
+  (4, 'Bogota', 'Bogota', '', 4),
+  (5, 'Antioquia', 'Medellin', '', 5),
+  (6, 'Valle del Cauca', 'Cali', '', 6),
+  (7, 'Lima', 'Lima', '', 7),
+  (8, 'Arequipa', 'Arequipa', '', 8),
+  (9, 'Cusco', 'Cusco', '', 9);
+
 -- ─────────────────────────────────────────────
 -- SELLER_LEAD
 -- ─────────────────────────────────────────────

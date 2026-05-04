@@ -50,3 +50,61 @@ class FilterOptionsResponse(BaseModel):
     states: list[str]
     cities: list[str]
 
+
+class SellerOptionsResponse(BaseModel):
+    sellers: list[str]
+
+
+class AsesorFilters(BaseModel):
+    year: int
+    countries: list[str] = []
+    zones: list[str] = []
+    states: list[str] = []
+    cities: list[str] = []
+    sellers: list[str] = []
+    limit: int = 25
+    cursor: Optional[str] = None
+
+
+class AsesorRow(BaseModel):
+    seller_id: int
+    seller_name: str
+    exam_breakdown: dict[str, int]
+    ganados: int
+    perdidos: int
+    mantenidos: int
+    total_revenue: float
+
+
+class AsesorReportResponse(BaseModel):
+    rows: list[AsesorRow]
+    year: int
+    next_cursor: Optional[str] = None
+    has_more: bool = False
+
+
+class ExamBrandDetail(BaseModel):
+    exams: int
+    schools: int
+    revenue: float
+
+
+class BusinessStatusDetail(BaseModel):
+    schools: int
+    exams: int
+    revenue: float
+
+
+class AsesorDetail(BaseModel):
+    seller_name: str
+    countries: list[str]
+    zones: list[str]
+    states: list[str]
+    cities: list[str]
+    total_schools: int
+    total_exams: int
+    total_revenue: float
+    exam_breakdown: dict[str, ExamBrandDetail]
+    ganados: BusinessStatusDetail
+    perdidos: BusinessStatusDetail
+    mantenidos: BusinessStatusDetail
