@@ -2,9 +2,9 @@ import pytest
 
 from app.schemas.reports import AsesorFilters
 from app.services.por_asesor.por_asesor import (
-    choose_canonical_exam_label,
     getAsesorDetail,
     getAsesorReport,
+    canonical_exam_category,
     normalize_detail_exam_breakdown,
     normalize_summary_exam_breakdowns,
 )
@@ -24,7 +24,14 @@ async def test_por_asesor_summary_returns_expected_rows(ui_dev_db):
     ]
 
     ana = result.rows[0]
-    assert ana.exam_breakdown == {"KET": 18}
+    assert ana.exam_breakdown == {
+        "Cambridge English (Main Suite)": 18,
+        "Cambridge Teaching & Skills": 0,
+        "IELTS": 0,
+        "Michigan (MET)": 0,
+        "TEA (Test of English for Aviation)": 0,
+        "Placement & Otros": 0,
+    }
     assert ana.ganados == 2
     assert ana.perdidos == 0
     assert ana.mantenidos == 1
@@ -45,7 +52,14 @@ async def test_por_asesor_summary_supports_geo_and_seller_filters(ui_dev_db):
     assert len(result.rows) == 1
     row = result.rows[0]
     assert row.seller_name == "Carlos Rodriguez"
-    assert row.exam_breakdown == {"PET": 8}
+    assert row.exam_breakdown == {
+        "Cambridge English (Main Suite)": 8,
+        "Cambridge Teaching & Skills": 0,
+        "IELTS": 0,
+        "Michigan (MET)": 0,
+        "TEA (Test of English for Aviation)": 0,
+        "Placement & Otros": 0,
+    }
     assert row.ganados == 2
     assert row.perdidos == 1
     assert row.total_revenue == 16000.0
@@ -63,7 +77,7 @@ async def test_por_asesor_detail_returns_expected_breakdowns(ui_dev_db):
     assert result.total_schools == 3
     assert result.total_exams == 22
     assert result.total_revenue == 19200.0
-    assert result.exam_breakdown["KET"].model_dump() == {
+    assert result.exam_breakdown["Cambridge English (Main Suite)"].model_dump() == {
         "exams": 18,
         "schools": 3,
         "revenue": 18000.0,
@@ -87,18 +101,23 @@ async def test_por_asesor_detail_respects_filters(ui_dev_db):
     assert result.total_schools == 1
     assert result.total_exams == 8
     assert result.total_revenue == 8000.0
-    assert result.exam_breakdown["PET"].model_dump() == {
+    assert result.exam_breakdown["Cambridge English (Main Suite)"].model_dump() == {
         "exams": 4,
         "schools": 1,
         "revenue": 4800.0,
     }
 
 
-def test_choose_canonical_exam_label_prefers_most_informative_label():
-    assert choose_canonical_exam_label(["A1", "Starters", "A1 starters"]) == "A1 STARTERS"
+def test_canonical_exam_category_maps_similar_labels_to_the_same_bucket():
+    assert canonical_exam_category("A1 starters") == "Cambridge English (Main Suite)"
+    assert canonical_exam_category("IELTS on computer") == "IELTS"
+    assert canonical_exam_category("MET Go!") == "Michigan (MET)"
+    assert canonical_exam_category("TKT Module 1") == "Cambridge Teaching & Skills"
+    assert canonical_exam_category("TEA") == "TEA (Test of English for Aviation)"
+    assert canonical_exam_category("Placement Tests") == "Placement & Otros"
 
 
-def test_normalize_summary_exam_breakdowns_groups_case_spacing_and_word_similarity():
+def test_normalize_summary_exam_breakdowns_groups_by_category():
     normalized = normalize_summary_exam_breakdowns(
         {
             1: {
@@ -106,26 +125,61 @@ def test_normalize_summary_exam_breakdowns_groups_case_spacing_and_word_similari
                 "Starters": 8,
                 "a1   starters": 5,
                 "PET": 7,
+                "IELTS Academic": 4,
+                "MET Go!": 3,
+                "TKT": 2,
+                "TEA": 1,
+                "Placement Tests": 9,
             }
         }
     )
 
-    assert normalized == {1: {"A1 STARTERS": 23, "PET": 7}}
+    assert normalized == {
+        1: {
+            "Cambridge English (Main Suite)": 30,
+            "Cambridge Teaching & Skills": 2,
+            "IELTS": 4,
+            "Michigan (MET)": 3,
+            "TEA (Test of English for Aviation)": 1,
+            "Placement & Otros": 9,
+        }
+    }
 
 
-def test_normalize_detail_exam_breakdown_groups_related_labels():
+def test_normalize_detail_exam_breakdown_groups_related_labels_into_categories():
     normalized = normalize_detail_exam_breakdown(
         {
             "A1": ExamBrandDetail(exams=10, schools=2, revenue=1000.0),
             "Starters": ExamBrandDetail(exams=8, schools=1, revenue=800.0),
             "a1 starters": ExamBrandDetail(exams=5, schools=1, revenue=500.0),
             "PET": ExamBrandDetail(exams=7, schools=2, revenue=700.0),
+            "IELTS Academic": ExamBrandDetail(exams=4, schools=1, revenue=900.0),
+            "MET Go!": ExamBrandDetail(exams=3, schools=1, revenue=300.0),
+            "TKT": ExamBrandDetail(exams=2, schools=1, revenue=200.0),
+            "TEA": ExamBrandDetail(exams=1, schools=1, revenue=100.0),
+            "Placement Tests": ExamBrandDetail(exams=9, schools=2, revenue=450.0),
         }
     )
 
-    assert normalized["A1 STARTERS"].model_dump() == {
-        "exams": 23,
-        "schools": 4,
-        "revenue": 2300.0,
+    assert normalized["Cambridge English (Main Suite)"].model_dump() == {
+        "exams": 30,
+        "schools": 6,
+        "revenue": 3000.0,
     }
-    assert normalized["PET"].model_dump() == {"exams": 7, "schools": 2, "revenue": 700.0}
+    assert normalized["Cambridge Teaching & Skills"].model_dump() == {
+        "exams": 2,
+        "schools": 1,
+        "revenue": 200.0,
+    }
+    assert normalized["IELTS"].model_dump() == {"exams": 4, "schools": 1, "revenue": 900.0}
+    assert normalized["Michigan (MET)"].model_dump() == {"exams": 3, "schools": 1, "revenue": 300.0}
+    assert normalized["TEA (Test of English for Aviation)"].model_dump() == {
+        "exams": 1,
+        "schools": 1,
+        "revenue": 100.0,
+    }
+    assert normalized["Placement & Otros"].model_dump() == {
+        "exams": 9,
+        "schools": 2,
+        "revenue": 450.0,
+    }

@@ -13,8 +13,8 @@ from app.schemas.reports import (
     ExamBrandDetail,
 )
 from app.services.por_asesor.product_grouping import (
-    build_exam_label_groups,
-    choose_canonical_exam_label,
+    EXAM_CATEGORY_ORDER,
+    canonical_exam_category,
 )
 from app.services.por_asesor.repository import (
     execute_repo_query,
@@ -190,14 +190,18 @@ def empty_status() -> BusinessStatusDetail:
     return BusinessStatusDetail(schools=0, exams=0, revenue=0.0)
 
 
+def fill_summary_exam_categories(breakdown: dict[str, int]) -> dict[str, int]:
+    return {category: int(breakdown.get(category, 0) or 0) for category in EXAM_CATEGORY_ORDER}
+
+
 def normalize_summary_exam_breakdowns(exam_breakdowns: dict[int, dict[str, int]]) -> dict[int, dict[str, int]]:
     normalized: dict[int, dict[str, int]] = {}
     for seller_id, breakdown in exam_breakdowns.items():
-        grouped: dict[str, int] = {}
-        for labels in build_exam_label_groups(list(breakdown.keys())):
-            canonical_label = choose_canonical_exam_label(labels)
-            grouped[canonical_label] = sum(breakdown[label] for label in labels)
-        normalized[seller_id] = grouped
+        grouped: dict[str, int] = {category: 0 for category in EXAM_CATEGORY_ORDER}
+        for label, count in breakdown.items():
+            category = canonical_exam_category(label)
+            grouped[category] = grouped.get(category, 0) + int(count or 0)
+        normalized[seller_id] = fill_summary_exam_categories(grouped)
     return normalized
 
 
@@ -205,19 +209,32 @@ def normalize_detail_exam_breakdown(
     breakdown: dict[str, ExamBrandDetail],
     school_id_map: dict[str, set[int]] | None = None,
 ) -> dict[str, ExamBrandDetail]:
-    grouped: dict[str, ExamBrandDetail] = {}
-    for labels in build_exam_label_groups(list(breakdown.keys())):
-        canonical_label = choose_canonical_exam_label(labels)
-        schools = (
-            len(set().union(*(school_id_map.get(label, set()) for label in labels)))
-            if school_id_map is not None
-            else sum(breakdown[label].schools for label in labels)
+    grouped: dict[str, ExamBrandDetail] = {
+        category: ExamBrandDetail(exams=0, schools=0, revenue=0.0)
+        for category in EXAM_CATEGORY_ORDER
+    }
+    schools_by_category: dict[str, set[int]] = {category: set() for category in EXAM_CATEGORY_ORDER}
+
+    for label, detail in breakdown.items():
+        category = canonical_exam_category(label)
+        current = grouped[category]
+        grouped[category] = ExamBrandDetail(
+            exams=current.exams + int(detail.exams or 0),
+            schools=current.schools + int(detail.schools or 0),
+            revenue=current.revenue + float(detail.revenue or 0),
         )
-        grouped[canonical_label] = ExamBrandDetail(
-            exams=sum(breakdown[label].exams for label in labels),
-            schools=schools,
-            revenue=sum(breakdown[label].revenue for label in labels),
-        )
+        if school_id_map is not None:
+            schools_by_category[category].update(school_id_map.get(label, set()))
+
+    if school_id_map is not None:
+        for category in EXAM_CATEGORY_ORDER:
+            current = grouped[category]
+            grouped[category] = ExamBrandDetail(
+                exams=current.exams,
+                schools=len(schools_by_category[category]),
+                revenue=current.revenue,
+            )
+
     return grouped
 
 
@@ -225,23 +242,22 @@ def map_summary_exam_breakdowns(rows) -> dict[int, dict[str, int]]:
     exam_breakdowns: dict[int, dict[str, int]] = {}
     for row in rows:
         seller_breakdown = exam_breakdowns.setdefault(row.seller_id, {})
-        seller_breakdown[row.exam_name] = seller_breakdown.get(row.exam_name, 0) + int(row.exam_count or 0)
+        category = canonical_exam_category(row.exam_name)
+        seller_breakdown[category] = seller_breakdown.get(category, 0) + int(row.exam_count or 0)
     return normalize_summary_exam_breakdowns(exam_breakdowns)
 
 
 def map_detail_exam_breakdown(rows) -> dict[str, ExamBrandDetail]:
-    breakdown = {
-        row.exam_name: ExamBrandDetail(
-            exams=int(row.exams or 0),
-            schools=int(row.schools or 0),
-            revenue=float(row.revenue or 0),
+    breakdown: dict[str, ExamBrandDetail] = {}
+    school_id_map: dict[str, set[int]] = {}
+    for row in rows:
+        category = canonical_exam_category(row.exam_name)
+        breakdown[category] = ExamBrandDetail(
+            exams=breakdown.get(category, ExamBrandDetail(exams=0, schools=0, revenue=0.0)).exams + int(row.exams or 0),
+            schools=breakdown.get(category, ExamBrandDetail(exams=0, schools=0, revenue=0.0)).schools + int(row.schools or 0),
+            revenue=breakdown.get(category, ExamBrandDetail(exams=0, schools=0, revenue=0.0)).revenue + float(row.revenue or 0),
         )
-        for row in rows
-    }
-    school_id_map = {
-        row.exam_name: parse_grouped_ids(row.lead_ids)
-        for row in rows
-    }
+        school_id_map.setdefault(category, set()).update(parse_grouped_ids(row.lead_ids))
     return normalize_detail_exam_breakdown(breakdown, school_id_map)
 
 

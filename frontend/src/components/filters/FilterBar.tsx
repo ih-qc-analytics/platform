@@ -44,27 +44,29 @@ export default function FilterBar(props: FilterBarProps) {
     if (isLoading) return <div className="text-sm text-muted-foreground">Cargando filtros...</div>
 
     return (
-        <div className="flex flex-wrap items-end gap-4 w-full">
-            <DateRangePicker
-                dateFrom={selected.date_from}
-                dateTo={selected.date_to}
-                onDateFromChange={handleDateFromChange}
-                onDateToChange={handleDateToChange}
-            />
+        <div className="overflow-x-auto">
+            <div className="flex flex-nowrap items-end gap-4">
+                <DateRangePicker
+                    dateFrom={selected.date_from}
+                    dateTo={selected.date_to}
+                    onDateFromChange={handleDateFromChange}
+                    onDateToChange={handleDateToChange}
+                />
 
-            <GeoFilters
-                filters={selected}
-                options={options}
-                configs={[
-                    { key: "countries", label: "País" },
-                    { key: "zones", label: "Sede" },
-                    { key: "states", label: "Estado" },
-                    { key: "cities", label: "Ciudad" },
-                ]}
-                triggerClassName="min-w-32"
-                onChange={handleSelectChange}
-            />
-            <ExportButtons onExportPdf={props.onExportPdf} onExportExcel={props.onExportExcel} />
+                <GeoFilters
+                    filters={selected}
+                    options={options}
+                    configs={[
+                        { key: "countries", label: "País" },
+                        { key: "zones", label: "Sede" },
+                        { key: "states", label: "Estado" },
+                        { key: "cities", label: "Ciudad" },
+                    ]}
+                    triggerClassName="min-w-32"
+                    onChange={handleSelectChange}
+                />
+                <ExportButtons onExportPdf={props.onExportPdf} onExportExcel={props.onExportExcel} />
+            </div>
         </div>
     )
 }

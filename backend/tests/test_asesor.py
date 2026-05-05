@@ -1,6 +1,7 @@
 import pytest
 
 from app.schemas.reports import AsesorFilters
+from app.services.por_asesor.product_grouping import EXAM_CATEGORY_ORDER
 from app.services.por_asesor.por_asesor import getAsesorDetail, getAsesorReport
 
 
@@ -12,9 +13,14 @@ CARLOS_REVENUE = 5400.0
 LUCIA_REVENUE = 1200.0
 TOTAL_REVENUE_2025 = 11600.0
 
-ANA_EXAM_BREAKDOWN = {"A1 STARTERS": 5}
-CARLOS_EXAM_BREAKDOWN = {"PET": 4}
-LUCIA_EXAM_BREAKDOWN = {"PET": 1}
+
+def empty_category_breakdown():
+    return {category: 0 for category in EXAM_CATEGORY_ORDER}
+
+
+ANA_EXAM_BREAKDOWN = {**empty_category_breakdown(), "Cambridge English (Main Suite)": 5}
+CARLOS_EXAM_BREAKDOWN = {**empty_category_breakdown(), "Cambridge English (Main Suite)": 4}
+LUCIA_EXAM_BREAKDOWN = {**empty_category_breakdown(), "Cambridge English (Main Suite)": 1}
 
 
 # ─────────────────────────────────────────────
@@ -163,7 +169,7 @@ async def test_detail_returns_expected_aggregates_for_ana(por_asesor_db):
     assert result.total_schools == 2
     assert result.total_exams == 6
     assert result.total_revenue == ANA_REVENUE
-    assert result.exam_breakdown["A1 STARTERS"].model_dump() == {
+    assert result.exam_breakdown["Cambridge English (Main Suite)"].model_dump() == {
         "exams": 5,
         "schools": 2,
         "revenue": 4700.0,
@@ -178,12 +184,10 @@ async def test_detail_returns_expected_status_breakdown_for_carlos(por_asesor_db
     assert result.total_schools == 2
     assert result.total_exams == 5
     assert result.total_revenue == CARLOS_REVENUE
-    assert {name: detail.model_dump() for name, detail in result.exam_breakdown.items()} == {
-        "PET": {
-            "exams": 4,
-            "schools": 2,
-            "revenue": 4800.0,
-        }
+    assert result.exam_breakdown["Cambridge English (Main Suite)"].model_dump() == {
+        "exams": 4,
+        "schools": 2,
+        "revenue": 4800.0,
     }
     assert result.ganados.model_dump() == {"schools": 1, "exams": 1, "revenue": 1200.0}
     assert result.perdidos.model_dump() == {"schools": 1, "exams": 4, "revenue": 4200.0}
@@ -204,7 +208,7 @@ async def test_detail_geo_filters_reduce_results(por_asesor_db):
     assert result.total_schools == 1
     assert result.total_exams == 1
     assert result.total_revenue == 1200.0
-    assert result.exam_breakdown["PET"].model_dump() == {
+    assert result.exam_breakdown["Cambridge English (Main Suite)"].model_dump() == {
         "exams": 1,
         "schools": 1,
         "revenue": 1200.0,
@@ -223,5 +227,5 @@ async def test_detail_for_year_with_no_matching_rows_returns_zeros(por_asesor_db
     assert result.total_schools == 0
     assert result.total_exams == 0
     assert result.total_revenue == 0.0
-    assert result.exam_breakdown == {}
+    assert result.exam_breakdown == empty_category_breakdown()
     assert result.ganados.model_dump() == {"schools": 0, "exams": 0, "revenue": 0.0}

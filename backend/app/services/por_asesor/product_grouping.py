@@ -2,6 +2,82 @@ import unicodedata
 from collections.abc import Iterable, Sequence
 import re
 
+EXAM_CATEGORY_ORDER = [
+    "Cambridge English (Main Suite)",
+    "Cambridge Teaching & Skills",
+    "IELTS",
+    "Michigan (MET)",
+    "TEA (Test of English for Aviation)",
+    "Placement & Otros",
+]
+
+EXAM_CATEGORY_ALIASES = {
+    "Cambridge English (Main Suite)": [
+        "Pre-A1 Starters",
+        "Starters",
+        "A1 Movers",
+        "Movers",
+        "A2 Flyers",
+        "Flyers",
+        "A2 Key (KET)",
+        "KET",
+        "A2 Key for Schools (KETfs)",
+        "KETfs",
+        "B1 Preliminary (PET)",
+        "PET",
+        "B1 Preliminary for Schools (PETfs)",
+        "PETfs",
+        "B2 First (FCE)",
+        "FCE",
+        "B2 First for Schools (FCEfs)",
+        "FCEfs",
+        "C1 Advanced (CAE)",
+        "CAE",
+        "C2 Proficiency (CPE)",
+        "CPE",
+        "A1",
+        "A2",
+        "B1",
+        "B2",
+        "C1",
+        "C2",
+    ],
+    "Cambridge Teaching & Skills": [
+        "Linguaskill",
+        "TKT",
+        "Delta",
+        "CELTA",
+        "CAM",
+        "Cambridge Teaching & Skills",
+    ],
+    "IELTS": [
+        "IELTS Academic",
+        "IELTS General Training",
+        "IELTS on Computer",
+        "IELTS",
+    ],
+    "Michigan (MET)": [
+        "MET",
+        "MET Go!",
+        "Michigan",
+        "Michigan (MET)",
+    ],
+    "TEA (Test of English for Aviation)": [
+        "TEA",
+        "Test of English for Aviation",
+        "TEA (Test of English for Aviation)",
+    ],
+    "Placement & Otros": [
+        "Placement Tests",
+        "CEPT",
+        "YLPT",
+        "IH Level Test",
+        "CEST General",
+        "Placement",
+        "Otros",
+    ],
+}
+
 def normalize_exam_label(value: str) -> str:
     normalized = unicodedata.normalize("NFKD", value)
     ascii_only = normalized.encode("ascii", "ignore").decode("ascii")
@@ -74,3 +150,31 @@ def build_exam_label_groups(labels: Sequence[str]) -> list[list[str]]:
         groups.append(component)
 
     return groups
+
+
+def label_matches_alias(label: str, alias: str) -> bool:
+    label_normalized = normalize_exam_label(label).casefold()
+    alias_normalized = normalize_exam_label(alias).casefold()
+    if label_normalized == alias_normalized:
+        return True
+
+    label_tokens = exam_label_tokens(label)
+    alias_tokens = exam_label_tokens(alias)
+    if not label_tokens or not alias_tokens:
+        return False
+    if label_tokens == alias_tokens:
+        return True
+    if label_tokens.issubset(alias_tokens) or alias_tokens.issubset(label_tokens):
+        return True
+
+    intersection = label_tokens & alias_tokens
+    union = label_tokens | alias_tokens
+    return bool(intersection) and (len(intersection) / len(union) >= 0.5)
+
+
+def canonical_exam_category(label: str) -> str:
+    for category in EXAM_CATEGORY_ORDER:
+        aliases = EXAM_CATEGORY_ALIASES.get(category, [])
+        if any(label_matches_alias(label, alias) for alias in aliases):
+            return category
+    return "Placement & Otros"

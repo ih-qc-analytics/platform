@@ -18,6 +18,7 @@ import {
 import { useAsesorReport, useFilterOptions, useSellerOptions } from "@/hooks/useReports"
 import type { AsesorFilters, AsesorRow } from "@/types"
 import { cn, formatCurrency, formatInteger, formatPercentChange, getPercentChange } from "@/lib/utils"
+import { ASESOR_EXAM_CATEGORIES, TABLE_DISPLAY_GROUPS } from "@/components/reports/asesorCategories"
 
 const PAGE_SIZE = 8
 
@@ -83,23 +84,6 @@ export default function PorAsesor() {
         [comparisonData?.rows],
     )
 
-    const examColumns = useMemo(() => {
-        const totals = new Map<string, number>()
-        for (const row of data?.rows ?? []) {
-            for (const [label, value] of Object.entries(row.exam_breakdown)) {
-                totals.set(label, (totals.get(label) ?? 0) + value)
-            }
-        }
-        for (const row of comparisonData?.rows ?? []) {
-            for (const [label, value] of Object.entries(row.exam_breakdown)) {
-                totals.set(label, (totals.get(label) ?? 0) + value)
-            }
-        }
-        return [...totals.entries()]
-            .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))
-            .map(([label]) => label)
-    }, [comparisonData?.rows, data?.rows])
-
     const rows = data?.rows ?? []
 
     return (
@@ -129,28 +113,29 @@ export default function PorAsesor() {
                         </div>
                     )}
 
-                    {isLoading ? (
-                        <SummaryTableSkeleton />
-                    ) : rows.length === 0 ? (
-                        <div className="px-6 py-10 text-sm text-muted-foreground">No hay resultados para los filtros seleccionados.</div>
-                    ) : (
-                        <>
-                            <Table className="min-w-full">
+                {isLoading ? (
+                    <SummaryTableSkeleton />
+                ) : rows.length === 0 ? (
+                    <div className="px-6 py-10 text-sm text-muted-foreground">No hay resultados para los filtros seleccionados.</div>
+                ) : (
+                    <>
+                            <div className="overflow-x-auto">
+                                <Table className="min-w-max">
                                     <TableHeader>
                                         <TableRow className="hover:bg-transparent">
-                                            <TableHeadCell className="sticky left-0 z-10 min-w-60 bg-card text-left">
+                                            <TableHeadCell className="sticky left-0 z-10 min-w-44 whitespace-nowrap bg-card text-left">
                                                 Asesor
                                             </TableHeadCell>
-                                            {examColumns.map(label => (
-                                                <TableHeadCell key={label} className="min-w-32 text-right">
-                                                    {label}
+                                            {TABLE_DISPLAY_GROUPS.map(group => (
+                                                <TableHeadCell key={group.label} className="min-w-28 whitespace-nowrap text-right">
+                                                    {group.label}
                                                 </TableHeadCell>
                                             ))}
-                                            <TableHeadCell className="min-w-28 text-center">Ganados</TableHeadCell>
-                                            <TableHeadCell className="min-w-28 text-center">Perdidos</TableHeadCell>
-                                            <TableHeadCell className="min-w-32 text-center">Mantenidos</TableHeadCell>
-                                            <TableHeadCell className="min-w-40 text-right">Valor Total</TableHeadCell>
-                                            <TableHeadCell className="w-12" />
+                                            <TableHeadCell className="min-w-24 whitespace-nowrap text-center">Ganados</TableHeadCell>
+                                            <TableHeadCell className="min-w-24 whitespace-nowrap text-center">Perdidos</TableHeadCell>
+                                            <TableHeadCell className="min-w-28 whitespace-nowrap text-center">Mantenidos</TableHeadCell>
+                                            <TableHeadCell className="min-w-36 whitespace-nowrap text-right">Valor Total</TableHeadCell>
+                                            <TableHeadCell className="w-10" />
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
@@ -174,15 +159,27 @@ export default function PorAsesor() {
                                                     <TableBodyCell className="sticky left-0 z-10 bg-card font-semibold text-slate-900 group-hover:bg-muted/30 group-focus-visible:bg-muted/30">
                                                         {row.seller_name}
                                                     </TableBodyCell>
-                                                    {examColumns.map(label => (
-                                                        <TableMetricCell
-                                                            key={`${row.seller_id}-${label}`}
-                                                            value={row.exam_breakdown[label] ?? 0}
-                                                            previousValue={previousRow?.exam_breakdown[label]}
-                                                            align="right"
-                                                            showComparison={showComparison}
-                                                        />
-                                                    ))}
+                                                    {TABLE_DISPLAY_GROUPS.map(group => {
+                                                        const value = group.categories.reduce(
+                                                            (sum, cat) => sum + (row.exam_breakdown[cat] ?? 0),
+                                                            0,
+                                                        )
+                                                        const previousValue = previousRow
+                                                            ? group.categories.reduce(
+                                                                  (sum, cat) => sum + (previousRow.exam_breakdown[cat] ?? 0),
+                                                                  0,
+                                                              )
+                                                            : undefined
+                                                        return (
+                                                            <TableMetricCell
+                                                                key={`${row.seller_id}-${group.label}`}
+                                                                value={value}
+                                                                previousValue={previousValue}
+                                                                align="right"
+                                                                showComparison={showComparison}
+                                                            />
+                                                        )
+                                                    })}
                                                     <TableBadgeCell
                                                         value={row.ganados}
                                                         previousValue={previousRow?.ganados}
@@ -216,7 +213,8 @@ export default function PorAsesor() {
                                             )
                                         })}
                                     </TableBody>
-                            </Table>
+                                </Table>
+                            </div>
 
                             <ReportPagination
                                 page={page}
@@ -260,7 +258,7 @@ function TableHeadCell({
     children?: React.ReactNode
 }) {
     return (
-        <TableHead className={cn("px-6 py-5 text-sm font-semibold uppercase tracking-wide text-slate-700", className)}>
+        <TableHead className={cn("px-3 py-3 text-xs font-semibold uppercase tracking-wide text-slate-700", className)}>
             {children}
         </TableHead>
     )
@@ -273,7 +271,7 @@ function TableBodyCell({
     className?: string
     children: React.ReactNode
 }) {
-    return <TableCell className={cn("px-6 py-5 text-base text-slate-700", className)}>{children}</TableCell>
+    return <TableCell className={cn("px-3 py-3 text-sm text-slate-700", className)}>{children}</TableCell>
 }
 
 function TableMetricCell({
@@ -298,7 +296,7 @@ function TableMetricCell({
     return (
         <TableBodyCell>
             <div className={cn("flex flex-col gap-1", alignmentClassName)}>
-                <span className={cn("text-2xl", emphasize && "font-semibold text-slate-900")}>{format(value)}</span>
+                <span className={cn("text-sm", emphasize && "font-semibold text-slate-900")}>{format(value)}</span>
                 {showComparison && (
                     <ComparisonText value={comparison} />
                 )}
@@ -329,7 +327,7 @@ function TableBadgeCell({
     return (
         <TableBodyCell>
             <div className="flex flex-col items-center gap-2">
-                <Badge variant={badgeVariant} className="min-w-12 px-3 py-1 text-xl font-semibold">
+                <Badge variant={badgeVariant} className="min-w-10 px-2 py-0.5 text-xs font-semibold">
                     {formatInteger(value)}
                 </Badge>
                 {showComparison && <ComparisonText value={comparison} center />}

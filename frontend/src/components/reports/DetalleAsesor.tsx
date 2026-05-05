@@ -4,6 +4,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { useAsesorDetail } from "@/hooks/useReports"
 import type { AsesorFilters, BusinessStatusDetail } from "@/types"
 import { cn, formatCurrency, formatInteger } from "@/lib/utils"
+import { ASESOR_EXAM_CATEGORIES } from "@/components/reports/asesorCategories"
 
 type DetalleAsesorProps = {
     sellerId: number | null
@@ -48,7 +49,6 @@ export default function DetalleAsesor({
 }: DetalleAsesorProps) {
     const { data, isLoading, isError } = useAsesorDetail(sellerId, filters, open)
 
-    const examEntries = Object.entries(data?.exam_breakdown ?? {})
     const statusEntries: Array<{
         title: string
         detail: BusinessStatusDetail
@@ -64,20 +64,20 @@ export default function DetalleAsesor({
     return (
         <Sheet open={open} onOpenChange={onOpenChange}>
             <SheetContent side="right" className="w-full overflow-y-auto p-0 sm:max-w-3xl lg:max-w-5xl">
-                <SheetHeader className="border-b border-border px-7 py-6">
-                    <SheetTitle className="text-4xl font-semibold tracking-tight text-slate-900">
+                <SheetHeader className="border-b border-border px-5 py-4">
+                    <SheetTitle className="text-2xl font-semibold tracking-tight text-slate-900">
                         {data?.seller_name ?? sellerName ?? "Detalle"}
                     </SheetTitle>
                 </SheetHeader>
 
-                <div className="flex flex-col gap-8 px-7 py-8">
+                <div className="flex flex-col gap-5 px-5 py-5">
                     {isLoading ? (
                         <DetalleSkeleton />
                     ) : isError ? (
                         <p className="text-sm text-destructive">No fue posible cargar el detalle.</p>
                     ) : data ? (
                         <>
-                            <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+                            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                                 <SummaryInfoCard label="País" value={joinValues(data.countries)} />
                                 <SummaryInfoCard label="Sede" value={joinValues(data.zones)} />
                                 <SummaryInfoCard label="Estado" value={joinValues(data.states)} />
@@ -87,12 +87,19 @@ export default function DetalleAsesor({
                                 <SummaryInfoCard label="Valor Total" value={formatCurrency(data.total_revenue)} wide />
                             </div>
 
-                            <section className="flex flex-col gap-4">
-                                <h2 className="text-2xl font-semibold uppercase tracking-wide text-slate-700">
-                                    Tipos de exámenes
+                            <section className="flex flex-col gap-3">
+                                <h2 className="text-lg font-semibold uppercase tracking-wide text-slate-700">
+                                    Categorías de exámenes
                                 </h2>
-                                <div className="grid grid-cols-1 gap-5 xl:grid-cols-3">
-                                    {examEntries.map(([label, detail], index) => (
+                                <div className="grid grid-cols-1 gap-3 xl:grid-cols-3">
+                                    {ASESOR_EXAM_CATEGORIES.map((label, index) => {
+                                        const detail = data?.exam_breakdown[label] ?? {
+                                            exams: 0,
+                                            schools: 0,
+                                            revenue: 0,
+                                        }
+
+                                        return (
                                         <BreakdownTile
                                             key={label}
                                             title={label}
@@ -104,15 +111,16 @@ export default function DetalleAsesor({
                                             totalValue={detail.revenue}
                                             tone={(["blue", "purple", "amber"] as const)[index % 3]}
                                         />
-                                    ))}
+                                        )
+                                    })}
                                 </div>
                             </section>
 
-                            <section className="flex flex-col gap-4">
-                                <h2 className="text-2xl font-semibold uppercase tracking-wide text-slate-700">
+                            <section className="flex flex-col gap-3">
+                                <h2 className="text-lg font-semibold uppercase tracking-wide text-slate-700">
                                     Estado de colegios
                                 </h2>
-                                <div className="grid grid-cols-1 gap-5 xl:grid-cols-3">
+                                <div className="grid grid-cols-1 gap-3 xl:grid-cols-3">
                                     {statusEntries.map(({ title, detail, tone }) => (
                                         <BreakdownTile
                                             key={title}
@@ -138,10 +146,10 @@ export default function DetalleAsesor({
 
 function SummaryInfoCard({ label, value, wide = false }: SummaryInfoCardProps) {
     return (
-        <Card className={cn("rounded-3xl shadow-none", wide && "md:col-span-2")}>
-            <CardContent className="flex min-h-36 flex-col justify-between gap-6 p-6">
-                <span className="text-sm font-medium text-slate-500">{label}</span>
-                <span className="text-4xl font-semibold tracking-tight text-slate-900">{value || "-"}</span>
+        <Card className={cn("rounded-2xl shadow-none", wide && "md:col-span-2")}>
+            <CardContent className="flex min-h-20 flex-col justify-between gap-3 p-4">
+                <span className="text-xs font-medium text-slate-500">{label}</span>
+                <span className="text-xl font-semibold tracking-tight text-slate-900">{value || "-"}</span>
             </CardContent>
         </Card>
     )
@@ -158,10 +166,10 @@ function BreakdownTile({
     tone,
 }: BreakdownTileProps) {
     return (
-        <Card className={cn("rounded-3xl shadow-none", tileToneClassNames[tone])}>
-            <CardContent className="flex h-full flex-col gap-8 p-6">
-                <h3 className="text-2xl font-semibold text-slate-900">{title}</h3>
-                <div className="flex flex-col gap-5">
+        <Card className={cn("rounded-2xl shadow-none", tileToneClassNames[tone])}>
+            <CardContent className="flex h-full flex-col gap-4 p-4">
+                <h3 className="text-base font-semibold text-slate-900">{title}</h3>
+                <div className="flex flex-col gap-3">
                     <MetricRow label={firstLabel} value={formatInteger(firstValue)} />
                     <MetricRow label={secondLabel} value={formatInteger(secondValue)} />
                 </div>
@@ -176,8 +184,8 @@ function BreakdownTile({
 function MetricRow({ label, value }: { label: string; value: string }) {
     return (
         <div className="flex items-end justify-between gap-4">
-            <span className="text-sm text-slate-600">{label}:</span>
-            <span className="text-2xl font-semibold text-slate-900">{value}</span>
+            <span className="text-xs text-slate-600">{label}:</span>
+            <span className="text-base font-semibold text-slate-900">{value}</span>
         </div>
     )
 }

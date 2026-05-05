@@ -44,6 +44,7 @@ async def run_main_query(session, filters: ReportFilters, where_clause, params) 
         JOIN seller_lead sl ON c.sellerLeadId = sl.id
         JOIN `lead` l ON sl.leadId = l.id
         LEFT JOIN zone z ON l.zoneId = z.id
+        LEFT JOIN (SELECT DISTINCT leadId, stateName, city FROM lead_address) la ON la.leadId = l.id
         JOIN cart_product cp ON cp.cartId = c.id
         JOIN product p ON cp.productId = p.id
         WHERE {where_clause}
@@ -80,6 +81,7 @@ async def run_trend_query(session, filters: ReportFilters, where_clause, params)
         JOIN seller_lead sl ON c.sellerLeadId = sl.id
         JOIN `lead` l ON sl.leadId = l.id
         LEFT JOIN zone z ON l.zoneId = z.id
+        LEFT JOIN (SELECT DISTINCT leadId, stateName, city FROM lead_address) la ON la.leadId = l.id
         JOIN cart_product cp ON cp.cartId = c.id
         JOIN product p ON cp.productId = p.id
         WHERE {where_clause}
@@ -99,6 +101,7 @@ async def run_geo_query(session, filters: ReportFilters, where_clause, params) -
         JOIN seller_lead sl ON c.sellerLeadId = sl.id
         JOIN `lead` l ON sl.leadId = l.id
         LEFT JOIN zone z ON l.zoneId = z.id
+        LEFT JOIN (SELECT DISTINCT leadId, stateName, city FROM lead_address) la ON la.leadId = l.id
         JOIN cart_product cp ON cp.cartId = c.id
         JOIN product p ON cp.productId = p.id
         WHERE {where_clause}
@@ -129,6 +132,7 @@ async def run_prior_year_query(session, filters: ReportFilters) -> float:
         JOIN seller_lead sl ON c.sellerLeadId = sl.id
         JOIN `lead` l ON sl.leadId = l.id
         LEFT JOIN zone z ON l.zoneId = z.id
+        LEFT JOIN (SELECT DISTINCT leadId, stateName, city FROM lead_address) la ON la.leadId = l.id
         JOIN cart_product cp ON cp.cartId = c.id
         JOIN product p ON cp.productId = p.id
         WHERE {where_clause}
