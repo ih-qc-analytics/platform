@@ -4,6 +4,7 @@ import json
 from sqlalchemy import bindparam, text
 
 from app.database import SessionLocal
+from app.enums import PaymentStatus
 
 
 def encode_cursor(total_revenue: float, seller_name: str, seller_id: int) -> str:
@@ -40,9 +41,6 @@ def build_summary_base_query(where_clause: str) -> str:
         SELECT
             s.id AS seller_id,
             CONCAT(s.name, ' ', s.lastName) AS seller_name,
-            COUNT(DISTINCT CASE WHEN sl.businessStatus = 'ganado' THEN l.id END) AS ganados,
-            COUNT(DISTINCT CASE WHEN sl.businessStatus = 'perdido' THEN l.id END) AS perdidos,
-            COUNT(DISTINCT CASE WHEN sl.businessStatus = 'mantenido' THEN l.id END) AS mantenidos,
             COALESCE(SUM(cp.total), 0) AS total_revenue
         FROM seller s
         JOIN seller_lead sl ON sl.sellerId = s.id
@@ -144,3 +142,78 @@ async def fetch_summary_exam_breakdown_rows_by_seller_ids(
         "seller_ids": seller_ids,
     }
     return await execute_repo_query(query, breakdown_params, [*expanding_keys, "seller_ids"])
+
+
+async def fetch_school_presence_rows(
+    where_clause: str,
+    params: dict,
+    expanding_keys: list[str],
+    year: int,
+):
+    query = f"""
+        SELECT DISTINCT
+            s.id AS seller_id,
+            sl.leadId AS lead_id
+        FROM seller s
+        JOIN seller_lead sl ON sl.sellerId = s.id
+        JOIN `lead` l ON sl.leadId = l.id
+        LEFT JOIN zone z ON l.zoneId = z.id
+        LEFT JOIN (SELECT DISTINCT leadId, stateName, city FROM lead_address) la ON la.leadId = l.id
+        JOIN cart c ON c.sellerLeadId = sl.id
+        WHERE {where_clause}
+          AND YEAR(c.createdAt) = :presence_year
+          AND EXISTS (
+              SELECT 1 FROM payment pay
+              WHERE pay.cartId = c.id
+                AND pay.status = :payment_status_aprobado
+          )
+    """
+    return await execute_repo_query(
+        query,
+        {
+            **params,
+            "presence_year": year,
+            "payment_status_aprobado": PaymentStatus.APROBADO.value,
+        },
+        expanding_keys,
+    )
+
+
+async def fetch_school_metric_rows(
+    where_clause: str,
+    params: dict,
+    expanding_keys: list[str],
+    year: int,
+):
+    query = f"""
+        SELECT
+            s.id AS seller_id,
+            sl.leadId AS lead_id,
+            COALESCE(SUM(cp.quantity), 0) AS exams,
+            COALESCE(SUM(cp.total), 0) AS revenue
+        FROM seller s
+        JOIN seller_lead sl ON sl.sellerId = s.id
+        JOIN `lead` l ON sl.leadId = l.id
+        LEFT JOIN zone z ON l.zoneId = z.id
+        LEFT JOIN (SELECT DISTINCT leadId, stateName, city FROM lead_address) la ON la.leadId = l.id
+        JOIN cart c ON c.sellerLeadId = sl.id
+        JOIN cart_product cp ON cp.cartId = c.id
+        JOIN product p ON cp.productId = p.id
+        WHERE {where_clause}
+          AND YEAR(c.createdAt) = :metrics_year
+          AND EXISTS (
+              SELECT 1 FROM payment pay
+              WHERE pay.cartId = c.id
+                AND pay.status = :payment_status_aprobado
+          )
+        GROUP BY s.id, sl.leadId
+    """
+    return await execute_repo_query(
+        query,
+        {
+            **params,
+            "metrics_year": year,
+            "payment_status_aprobado": PaymentStatus.APROBADO.value,
+        },
+        expanding_keys,
+    )

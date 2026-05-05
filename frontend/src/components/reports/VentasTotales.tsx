@@ -81,6 +81,17 @@ export default function VentasTotales() {
                                     prefix="$"
                                 />
                                 <KpiCard
+                                    title="Otros"
+                                    icon={<FileText className="size-6" />}
+                                    value={(data as typeof data & { total_otros: number }).total_otros}
+                                />
+                                <KpiCard
+                                    title="Ingreso por Otros"
+                                    icon={<DollarSign className="size-6" />}
+                                    value={(data as typeof data & { otros_revenue: number }).otros_revenue}
+                                    prefix="$"
+                                />
+                                <KpiCard
                                     title="Ingreso Total"
                                     icon={<TrendingUp className="size-6" />}
                                     value={data.total_revenue}

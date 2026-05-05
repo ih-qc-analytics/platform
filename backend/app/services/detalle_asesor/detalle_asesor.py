@@ -1,8 +1,10 @@
 from sqlalchemy import bindparam, text
 
 from app.database import SessionLocal
+from app.enums import PaymentStatus, ProductType
 from app.schemas.reports import DetalleFilters, DetalleReportResponse, DetalleRow
 from app.services.por_asesor.product_grouping import EXAM_NAME_ORDER, canonical_exam_name
+from app.services.shared import build_geo_where_clause
 
 
 DETALLE_EXAM_NAME_ORDER = [*EXAM_NAME_ORDER, "Other"]
@@ -13,13 +15,22 @@ def create_empty_exam_counts() -> dict[str, int]:
 
 
 def build_detalle_where(filters: DetalleFilters) -> tuple[str, dict, list[str]]:
-    conditions = [
-        "c.deletedAt IS NULL",
-        "p.productType = 'exam'",
-        "cp.deletedAt IS NULL",
-    ]
-    params: dict = {}
-    expanding_keys: list[str] = []
+    conditions, params, expanding_keys = build_geo_where_clause(filters)
+    conditions.extend(
+        [
+            "cp.deletedAt IS NULL",
+            "p.productType = :product_type_exam",
+            """
+            EXISTS (
+                SELECT 1 FROM payment pay
+                WHERE pay.cartId = c.id
+                  AND pay.status = :payment_status_aprobado
+            )
+            """.strip(),
+        ]
+    )
+    params["product_type_exam"] = ProductType.EXAM.value
+    params["payment_status_aprobado"] = PaymentStatus.APROBADO.value
 
     if filters.cursor is not None:
         conditions.append("cp.id > :cursor")
@@ -30,17 +41,6 @@ def build_detalle_where(filters: DetalleFilters) -> tuple[str, dict, list[str]]:
             "(CONCAT(s.name, ' ', s.lastName) LIKE :search OR l.name LIKE :search)"
         )
         params["search"] = f"%{filters.search}%"
-
-    def add_in(field: str, values: list[str], sql: str) -> None:
-        if values:
-            conditions.append(sql)
-            params[field] = values
-            expanding_keys.append(field)
-
-    add_in("countries", filters.countries, "l.site IN :countries")
-    add_in("zones", filters.zones, "z.name IN :zones")
-    add_in("states", filters.states, "la.stateName IN :states")
-    add_in("cities", filters.cities, "la.city IN :cities")
 
     if filters.date_from:
         conditions.append("c.createdAt >= :date_from")

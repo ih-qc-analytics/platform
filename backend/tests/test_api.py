@@ -20,6 +20,8 @@ MOCK_RESPONSE = TotalSalesResponse(
     book_revenue=900.0,
     total_courses=1,
     course_revenue=500.0,
+    total_otros=0,
+    otros_revenue=0.0,
     total_revenue=7400.0,
     profit_margin=52.7,
     prior_year_revenue=0.0,
@@ -65,6 +67,7 @@ async def test_response_has_required_fields():
     required = {
         "total_clients", "total_exams", "exam_revenue",
         "total_books", "book_revenue", "total_courses", "course_revenue",
+        "total_otros", "otros_revenue",
         "total_revenue", "profit_margin", "prior_year_revenue",
         "trend_points", "geo_points", "product_mix",
     }

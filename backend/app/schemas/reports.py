@@ -46,6 +46,8 @@ class TotalSalesResponse(BaseModel):
     book_revenue: float
     total_courses: int
     course_revenue: float
+    total_otros: int
+    otros_revenue: float
     total_revenue: float
     profit_margin: float
     prior_year_revenue: float

@@ -144,6 +144,15 @@ CREATE TABLE IF NOT EXISTS `cart` (
   CONSTRAINT `FK_cart_seller_lead` FOREIGN KEY (`sellerLeadId`) REFERENCES `seller_lead` (`id`) ON DELETE NO ACTION ON UPDATE NO ACTION
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci;
 
+CREATE TABLE IF NOT EXISTS `payment` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `status` varchar(255) COLLATE utf8_unicode_ci NOT NULL DEFAULT 'Pendiente',
+  `cartId` int(11) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_payment_cart` (`cartId`),
+  CONSTRAINT `FK_payment_cart` FOREIGN KEY (`cartId`) REFERENCES `cart` (`id`) ON DELETE NO ACTION ON UPDATE NO ACTION
+) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci;
+
 CREATE TABLE IF NOT EXISTS `cart_product` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `quantity` int(11) NOT NULL DEFAULT 0,

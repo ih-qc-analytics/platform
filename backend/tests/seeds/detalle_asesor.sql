@@ -79,6 +79,16 @@ INSERT INTO cart (id, sellerLeadId, total, cost, createdAt, deletedAt) VALUES
   (7, 1, 0, 0, '2024-06-10 10:00:00', NULL),
   (8, 1, 0, 0, '2025-01-20 10:00:00', '2025-01-21 10:00:00');
 
+INSERT INTO payment (id, cartId, status) VALUES
+  (1, 1, 'Aprobado'),
+  (2, 2, 'Aprobado'),
+  (3, 3, 'Aprobado'),
+  (4, 4, 'Aprobado'),
+  (5, 5, 'Aprobado'),
+  (6, 6, 'Aprobado'),
+  (7, 7, 'Aprobado'),
+  (8, 8, 'Aprobado');
+
 -- ─────────────────────────────────────────────
 -- CART PRODUCTS
 --

@@ -8,10 +8,10 @@ from app.services.por_asesor.por_asesor import getAsesorDetail, getAsesorReport
 # ─────────────────────────────────────────────
 # KNOWN VALUES FROM SEED (see por_asesor.sql)
 # ─────────────────────────────────────────────
-ANA_REVENUE = 5000.0
-CARLOS_REVENUE = 5400.0
+ANA_REVENUE = 4700.0
+CARLOS_REVENUE = 4800.0
 LUCIA_REVENUE = 1200.0
-TOTAL_REVENUE_2025 = 11600.0
+TOTAL_REVENUE_2025 = 10700.0
 
 
 def empty_category_breakdown():
@@ -67,7 +67,7 @@ async def test_summary_returns_expected_business_status_counts(por_asesor_db):
 
     by_name = {row.seller_name: row for row in result.rows}
     assert (by_name["Ana Garcia"].ganados, by_name["Ana Garcia"].perdidos, by_name["Ana Garcia"].mantenidos) == (1, 0, 1)
-    assert (by_name["Carlos Rodriguez"].ganados, by_name["Carlos Rodriguez"].perdidos, by_name["Carlos Rodriguez"].mantenidos) == (1, 1, 0)
+    assert (by_name["Carlos Rodriguez"].ganados, by_name["Carlos Rodriguez"].perdidos, by_name["Carlos Rodriguez"].mantenidos) == (2, 0, 0)
     assert (by_name["Lucia Rios"].ganados, by_name["Lucia Rios"].perdidos, by_name["Lucia Rios"].mantenidos) == (1, 0, 0)
 
 
@@ -167,7 +167,7 @@ async def test_detail_returns_expected_aggregates_for_ana(por_asesor_db):
     assert result.states == ["CDMX", "Jalisco"]
     assert result.cities == ["Guadalajara", "Mexico City"]
     assert result.total_schools == 2
-    assert result.total_exams == 6
+    assert result.total_exams == 5
     assert result.total_revenue == ANA_REVENUE
     assert result.exam_breakdown["Cambridge English (Main Suite)"].model_dump() == {
         "exams": 5,
@@ -182,16 +182,25 @@ async def test_detail_returns_expected_status_breakdown_for_carlos(por_asesor_db
 
     assert result.seller_name == "Carlos Rodriguez"
     assert result.total_schools == 2
-    assert result.total_exams == 5
+    assert result.total_exams == 4
     assert result.total_revenue == CARLOS_REVENUE
     assert result.exam_breakdown["Cambridge English (Main Suite)"].model_dump() == {
         "exams": 4,
         "schools": 2,
         "revenue": 4800.0,
     }
-    assert result.ganados.model_dump() == {"schools": 1, "exams": 1, "revenue": 1200.0}
-    assert result.perdidos.model_dump() == {"schools": 1, "exams": 4, "revenue": 4200.0}
+    assert result.ganados.model_dump() == {"schools": 2, "exams": 4, "revenue": 4800.0}
+    assert result.perdidos.model_dump() == {"schools": 0, "exams": 0, "revenue": 0.0}
     assert result.mantenidos.model_dump() == {"schools": 0, "exams": 0, "revenue": 0.0}
+
+
+@pytest.mark.asyncio(loop_scope="session")
+async def test_detail_totals_match_ganados_plus_mantenidos(por_asesor_db):
+    for seller_id in (1, 2, 3):
+        result = await getAsesorDetail(seller_id, AsesorFilters(year=2025))
+
+        assert result.total_exams == result.ganados.exams + result.mantenidos.exams
+        assert result.total_revenue == result.ganados.revenue + result.mantenidos.revenue
 
 
 @pytest.mark.asyncio(loop_scope="session")

@@ -1,5 +1,7 @@
 from app.database import SessionLocal
+from app.enums import PaymentStatus, ProductType
 from app.schemas.reports import GeoPoint, ProductMix, ReportFilters, TotalSalesResponse, TrendPoint
+from app.services.shared import build_geo_where_clause
 from sqlalchemy import text
 from datetime import datetime
 
@@ -29,15 +31,23 @@ async def getTotalSalesData(filters: ReportFilters) -> TotalSalesResponse:
 
 
 async def run_main_query(session, filters: ReportFilters, where_clause, params) -> TotalSalesResponse: 
+    query_params = {
+        **params,
+        "product_type_exam": ProductType.EXAM.value,
+        "product_type_book": ProductType.BOOK.value,
+        "product_type_course": ProductType.COURSE.value,
+    }
     query = f"""
         SELECT
             COUNT(DISTINCT l.id) as total_clients,
-            SUM(CASE WHEN p.productType = 'exam' THEN cp.quantity ELSE 0 END) as total_exams,      
-            SUM(CASE WHEN p.productType = 'exam' THEN cp.total ELSE 0 END) as exam_revenue, 
-            SUM(CASE WHEN p.productType = 'book' THEN cp.quantity ELSE 0 END) as total_books,     
-            SUM(CASE WHEN p.productType = 'book' THEN cp.total ELSE 0 END) as book_revenue,        
-            SUM(CASE WHEN p.productType = 'course' THEN cp.quantity ELSE 0 END) as total_courses,
-            SUM(CASE WHEN p.productType = 'course' THEN cp.total ELSE 0 END) as course_revenue,
+            SUM(CASE WHEN p.productType = :product_type_exam THEN cp.quantity ELSE 0 END) as total_exams,      
+            SUM(CASE WHEN p.productType = :product_type_exam THEN cp.total ELSE 0 END) as exam_revenue, 
+            SUM(CASE WHEN p.productType = :product_type_book THEN cp.quantity ELSE 0 END) as total_books,     
+            SUM(CASE WHEN p.productType = :product_type_book THEN cp.total ELSE 0 END) as book_revenue,        
+            SUM(CASE WHEN p.productType = :product_type_course THEN cp.quantity ELSE 0 END) as total_courses,
+            SUM(CASE WHEN p.productType = :product_type_course THEN cp.total ELSE 0 END) as course_revenue,
+            SUM(CASE WHEN p.productType = '' THEN cp.quantity ELSE 0 END) as total_otros,
+            SUM(CASE WHEN p.productType = '' THEN cp.total ELSE 0 END) as otros_revenue,
             SUM(cp.total) as total_revenue,                                   
             SUM(cp.cost) as total_cost                                                       
         FROM cart c
@@ -49,7 +59,7 @@ async def run_main_query(session, filters: ReportFilters, where_clause, params) 
         JOIN product p ON cp.productId = p.id
         WHERE {where_clause}
     """ 
-    result = await session.execute(text(query), params)
+    result = await session.execute(text(query), query_params)
     agg = result.fetchone()
     total_revenue = float(agg.total_revenue or 0)
     total_cost = float(agg.total_cost or 0)
@@ -62,6 +72,8 @@ async def run_main_query(session, filters: ReportFilters, where_clause, params) 
         book_revenue=float(agg.book_revenue or 0),
         total_courses=agg.total_courses or 0,
         course_revenue=float(agg.course_revenue or 0),
+        total_otros=agg.total_otros or 0,
+        otros_revenue=float(agg.otros_revenue or 0),
         total_revenue=total_revenue,
         profit_margin=profit_margin,
         prior_year_revenue=0,
@@ -145,24 +157,17 @@ async def run_prior_year_query(session, filters: ReportFilters) -> float:
 
 
 def build_where_clause(filters: ReportFilters) -> tuple[str, dict]:
-    conditions = ["c.deletedAt IS NULL"]
-    params = {}
-
-    if filters.countries:
-        conditions.append("l.site IN :countries")
-        params["countries"] = tuple(filters.countries)
-
-    if filters.zones:
-        conditions.append("z.name IN :zones")
-        params["zones"] = tuple(filters.zones)
-
-    if filters.states:
-        conditions.append("la.stateName IN :states")
-        params["states"] = tuple(filters.states)
-
-    if filters.cities:
-        conditions.append("la.city IN :cities")
-        params["cities"] = tuple(filters.cities)
+    conditions, params, _ = build_geo_where_clause(filters)
+    conditions.append(
+        """
+        EXISTS (
+            SELECT 1 FROM payment pay
+            WHERE pay.cartId = c.id
+              AND pay.status = :payment_status_aprobado
+        )
+        """.strip()
+    )
+    params["payment_status_aprobado"] = PaymentStatus.APROBADO.value
 
     if filters.date_from:
         conditions.append("c.createdAt >= :date_from")

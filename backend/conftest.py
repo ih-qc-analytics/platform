@@ -44,7 +44,7 @@ async def load_seed(engine, seed_file: str):
 async def truncate_all(engine):
     tables = [
         "cart_product", "cart", "seller_lead",
-        "lead_address", "`lead`", "seller",
+        "payment", "lead_address", "`lead`", "seller",
         "product", "exam_cat", "auth", "zone"
     ]
     async with engine.begin() as conn:

@@ -26,16 +26,16 @@ async def test_por_asesor_summary_returns_expected_rows(ui_dev_db):
     ana = result.rows[0]
     assert ana.exam_breakdown == {
         "Cambridge English (Main Suite)": 18,
-        "Cambridge Teaching & Skills": 0,
-        "IELTS": 0,
+        "Cambridge Teaching & Skills": 1,
+        "IELTS": 1,
         "Michigan (MET)": 0,
         "TEA (Test of English for Aviation)": 0,
-        "Placement & Otros": 0,
+        "Placement & Otros": 2,
     }
     assert ana.ganados == 2
     assert ana.perdidos == 0
     assert ana.mantenidos == 1
-    assert ana.total_revenue == 19200.0
+    assert ana.total_revenue == 22000.0
 
 
 @pytest.mark.asyncio(loop_scope="session")
@@ -53,16 +53,16 @@ async def test_por_asesor_summary_supports_geo_and_seller_filters(ui_dev_db):
     row = result.rows[0]
     assert row.seller_name == "Carlos Rodriguez"
     assert row.exam_breakdown == {
-        "Cambridge English (Main Suite)": 8,
+        "Cambridge English (Main Suite)": 7,
         "Cambridge Teaching & Skills": 0,
         "IELTS": 0,
-        "Michigan (MET)": 0,
-        "TEA (Test of English for Aviation)": 0,
+        "Michigan (MET)": 1,
+        "TEA (Test of English for Aviation)": 1,
         "Placement & Otros": 0,
     }
     assert row.ganados == 2
     assert row.perdidos == 1
-    assert row.total_revenue == 16000.0
+    assert row.total_revenue == 10850.0
 
 
 @pytest.mark.asyncio(loop_scope="session")
@@ -76,15 +76,30 @@ async def test_por_asesor_detail_returns_expected_breakdowns(ui_dev_db):
     assert result.cities == ["Guadalajara", "Mexico City", "Toluca"]
     assert result.total_schools == 3
     assert result.total_exams == 22
-    assert result.total_revenue == 19200.0
+    assert result.total_revenue == 22000.0
     assert result.exam_breakdown["Cambridge English (Main Suite)"].model_dump() == {
         "exams": 18,
         "schools": 3,
         "revenue": 18000.0,
     }
-    assert result.ganados.model_dump() == {"schools": 2, "exams": 16, "revenue": 14600.0}
+    assert result.exam_breakdown["Cambridge Teaching & Skills"].model_dump() == {
+        "exams": 1,
+        "schools": 1,
+        "revenue": 900.0,
+    }
+    assert result.exam_breakdown["IELTS"].model_dump() == {
+        "exams": 1,
+        "schools": 1,
+        "revenue": 1700.0,
+    }
+    assert result.exam_breakdown["Placement & Otros"].model_dump() == {
+        "exams": 2,
+        "schools": 1,
+        "revenue": 1400.0,
+    }
+    assert result.ganados.model_dump() == {"schools": 2, "exams": 16, "revenue": 16600.0}
     assert result.perdidos.model_dump() == {"schools": 0, "exams": 0, "revenue": 0.0}
-    assert result.mantenidos.model_dump() == {"schools": 1, "exams": 6, "revenue": 4600.0}
+    assert result.mantenidos.model_dump() == {"schools": 1, "exams": 6, "revenue": 5400.0}
 
 
 @pytest.mark.asyncio(loop_scope="session")
@@ -99,12 +114,17 @@ async def test_por_asesor_detail_respects_filters(ui_dev_db):
     assert result.states == ["Antioquia"]
     assert result.cities == ["Medellin"]
     assert result.total_schools == 1
-    assert result.total_exams == 8
-    assert result.total_revenue == 8000.0
+    assert result.total_exams == 6
+    assert result.total_revenue == 7350.0
     assert result.exam_breakdown["Cambridge English (Main Suite)"].model_dump() == {
-        "exams": 4,
+        "exams": 5,
         "schools": 1,
-        "revenue": 4800.0,
+        "revenue": 6050.0,
+    }
+    assert result.exam_breakdown["Michigan (MET)"].model_dump() == {
+        "exams": 1,
+        "schools": 1,
+        "revenue": 1300.0,
     }
 
 

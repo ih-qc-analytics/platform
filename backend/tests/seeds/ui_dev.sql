@@ -7,29 +7,55 @@
 --   - Trend line (monthly)
 --   - Geo bar (by country)
 --   - Prior year comparison
+--   - Por asesor category grouping across all report buckets
+--   - Detalle asesor canonical exam columns
+--   - Otros KPI / empty productType handling
 --
--- KNOWN TOTALS (no filters):
---   total_revenue:  96,500
---   total_cost:     44,500
---   profit_margin:  (96500 - 44500) / 96500 * 100 = 53.9%
---   exam_revenue:   72,000
---   book_revenue:   12,500
---   course_revenue: 12,000
---   total_exams:    72
---   total_books:    25  (approx)
---   total_courses:  12
+-- NOTE:
+--   Current backend report queries only count carts with at least one
+--   approved payment, so the totals below reflect APPROVED carts only.
+--
+-- KNOWN TOTALS (no filters, approved payments only):
+--   total_revenue:  64,300
+--   total_cost:     26,950
+--   profit_margin:  (64300 - 26950) / 64300 * 100 = 58.1%
+--   exam_revenue:   57,100
+--   book_revenue:   1,900
+--   course_revenue: 4,800
+--   otros_revenue:  500
+--   total_exams:    49
+--   total_books:    6
+--   total_courses:  6
+--   total_otros:    1
 --   total_clients:  9
 --
--- BY COUNTRY:
---   mexico:   38,500
---   colombia: 33,000
---   peru:     25,000
+-- BY COUNTRY (approved payments only):
+--   mexico:   27,000
+--   colombia: 18,050
+--   peru:     19,250
 --
--- PRIOR YEAR (2024):
---   total_revenue: 39,500
--- CURRENT YEAR (2025):
---   total_revenue: 57,000
--- growth_pct: (57000 - 39500) / 39500 * 100 = 44.3%
+-- PRIOR YEAR APPROVED (2024):
+--   total_revenue: 8,700
+-- CURRENT YEAR APPROVED (2025):
+--   total_revenue: 55,600
+-- growth_pct with full-year 2025 date filter:
+--   (55600 - 8700) / 8700 * 100 = 539.1%
+--
+-- APPROVED MONTHLY REVENUE:
+--   2024-07: 3300
+--   2024-08: 2400
+--   2024-12: 3000
+--   2025-01: 4900
+--   2025-02: 5300
+--   2025-03: 3950
+--   2025-04: 6000
+--   2025-06: 4300
+--   2025-07: 6700
+--   2025-08: 5100
+--   2025-09: 5000
+--   2025-10: 6100
+--   2025-11: 5250
+--   2025-12: 3000
 -- ─────────────────────────────────────────────
 
 -- ─────────────────────────────────────────────
@@ -98,7 +124,15 @@ INSERT INTO seller_lead (id, sellerId, leadId, businessStatus) VALUES
 INSERT INTO exam_cat (id, name, shortName, presentation, dateType) VALUES
   (1, 'KET',   'KET',   'Paper',    'fixed'),
   (2, 'PET',   'PET',   'Computer', 'fixed'),
-  (3, 'FCE',   'FCE',   'Paper',    'fixed');
+  (3, 'FCE',   'FCE',   'Paper',    'fixed'),
+  (4, 'IELTS Academic', 'IELTS', 'Paper', 'fixed'),
+  (5, 'MET Go!', 'MET', 'Computer', 'fixed'),
+  (6, 'TKT', 'TKT', 'Paper', 'fixed'),
+  (7, 'TEA', 'TEA', 'Paper', 'fixed'),
+  (8, 'Placement Tests', 'PT', 'Computer', 'fixed'),
+  (9, 'PETfs', 'PETfs', 'Paper', 'fixed'),
+  (10, 'C1 Advanced (CAE)', 'CAE', 'Paper', 'fixed'),
+  (11, 'Linguaskill', 'LING', 'Computer', 'fixed');
 
 INSERT INTO product (id, name, productType, purchasePrice, salePrice, examId, site) VALUES
   (1, 'KET Exam',        'exam',   400,  1000, 1, 'mexico'),
@@ -107,7 +141,16 @@ INSERT INTO product (id, name, productType, purchasePrice, salePrice, examId, si
   (4, 'Cambridge Book',  'book',   100,  300,  NULL, 'mexico'),
   (5, 'Grammar Book',    'book',   150,  400,  NULL, 'colombia'),
   (6, 'English Course',  'course', 300,  600,  NULL, 'peru'),
-  (7, 'Business Course', 'course', 400,  800,  NULL, 'colombia');
+  (7, 'Business Course', 'course', 400,  800,  NULL, 'colombia'),
+  (8, 'IELTS Exam', 'exam', 800, 1700, 4, 'mexico'),
+  (9, 'MET Go Exam', 'exam', 650, 1300, 5, 'colombia'),
+  (10, 'TKT Exam', 'exam', 450, 900, 6, 'mexico'),
+  (11, 'TEA Exam', 'exam', 550, 1100, 7, 'colombia'),
+  (12, 'Placement Test', 'exam', 300, 700, 8, 'mexico'),
+  (13, 'PETfs Exam', 'exam', 600, 1250, 9, 'colombia'),
+  (14, 'CAE Exam', 'exam', 700, 1600, 10, 'peru'),
+  (15, 'Linguaskill Exam', 'exam', 500, 950, 11, 'peru'),
+  (16, 'Other Fee', '', 0, 500, NULL, 'mexico');
 
 -- ─────────────────────────────────────────────
 -- CARTS
@@ -147,6 +190,32 @@ INSERT INTO cart (id, sellerLeadId, total, cost, createdAt, deletedAt) VALUES
   (22, 2, 0, 0, '2025-10-03 10:00:00', NULL),  -- mexico
   (23, 5, 0, 0, '2025-11-17 10:00:00', NULL),  -- colombia
   (24, 8, 0, 0, '2025-12-20 10:00:00', NULL);  -- peru
+
+INSERT INTO payment (id, cartId, status) VALUES
+  (1, 1, 'Pendiente'),
+  (2, 2, 'Pendiente'),
+  (3, 3, 'Pendiente'),
+  (4, 4, 'Pendiente'),
+  (5, 5, 'Pendiente'),
+  (6, 6, 'Pendiente'),
+  (7, 7, 'Aprobado'),
+  (8, 8, 'Aprobado'),
+  (9, 9, 'Pendiente'),
+  (10, 10, 'Pendiente'),
+  (11, 11, 'Pendiente'),
+  (12, 12, 'Aprobado'),
+  (13, 13, 'Aprobado'),
+  (14, 14, 'Aprobado'),
+  (15, 15, 'Aprobado'),
+  (16, 16, 'Aprobado'),
+  (17, 17, 'Pendiente'),
+  (18, 18, 'Aprobado'),
+  (19, 19, 'Aprobado'),
+  (20, 20, 'Aprobado'),
+  (21, 21, 'Aprobado'),
+  (22, 22, 'Aprobado'),
+  (23, 23, 'Aprobado'),
+  (24, 24, 'Aprobado');
 
 -- ─────────────────────────────────────────────
 -- CART PRODUCTS
@@ -236,4 +305,15 @@ INSERT INTO cart_product (id, cartId, productId, quantity, total, cost) VALUES
   (36, 23, 2, 2, 2400, 1000),
   (37, 23, 7, 2, 1600, 800),
   -- cart 24: peru dec 2025 — 2 FCE exams
-  (38, 24, 3, 2, 3000, 1200);
+  (38, 24, 3, 2, 3000, 1200),
+  -- extra 2025 exam coverage for all reports
+  (39, 13, 10, 1, 900,  450),
+  (40, 16, 12, 2, 1400, 600),
+  (41, 19, 8,  1, 1700, 800),
+  (42, 14, 9,  1, 1300, 650),
+  (43, 20, 11, 1, 1100, 550),
+  (44, 23, 13, 1, 1250, 600),
+  (45, 15, 15, 1, 950,  500),
+  (46, 21, 14, 1, 1600, 700),
+  (47, 18, 9,  1, 1300, 650),
+  (48, 22, 16, 1, 500,  0);
