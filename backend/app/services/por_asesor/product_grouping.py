@@ -1,5 +1,6 @@
 import unicodedata
 from collections.abc import Iterable, Sequence
+from functools import lru_cache
 import re
 
 EXAM_CATEGORY_ORDER = [
@@ -172,9 +173,177 @@ def label_matches_alias(label: str, alias: str) -> bool:
     return bool(intersection) and (len(intersection) / len(union) >= 0.5)
 
 
+@lru_cache(maxsize=256)
 def canonical_exam_category(label: str) -> str:
     for category in EXAM_CATEGORY_ORDER:
         aliases = EXAM_CATEGORY_ALIASES.get(category, [])
         if any(label_matches_alias(label, alias) for alias in aliases):
             return category
     return "Placement & Otros"
+
+
+# ─────────────────────────────────────────────
+# Canonical exam name mapping (Report 3)
+# Maps any raw exam_cat.name to one of 19 specific column names, or "Other".
+#
+# Ordering constraints (label_matches_alias uses a subset rule, so a shorter
+# alias whose tokens are all present in a longer label will match):
+#
+#   • Each base exam (A2 Key, B1 Preliminary, B2 First) is checked BEFORE
+#     its "for Schools" sibling.  The base aliases intentionally include a
+#     distinguishing extra token (e.g. "A2 Key (KET)" has "ket") so that a
+#     "for Schools" label with 0.4 Jaccard similarity does not match them.
+#     The bare descriptive form ("A2 Key", "B1 Preliminary", "B2 First") is
+#     NOT listed as an alias — the parenthesised alias catches it via the
+#     subset rule without leaking to the for-Schools variant.
+#
+#   • MET is checked BEFORE MET Go!.  "MET" alone is not listed as an alias;
+#     "Michigan (MET)" catches it via subset without leaking to "MET Go!".
+# ─────────────────────────────────────────────
+
+EXAM_NAME_ORDER = [
+    "Pre-A1 Starters",
+    "A1 Movers",
+    "A2 Flyers",
+    "A2 Key",               # before A2 Key for Schools
+    "A2 Key for Schools",
+    "B1 Preliminary",       # before B1 Preliminary for Schools
+    "B1 Preliminary for Schools",
+    "B2 First",             # before B2 First for Schools
+    "B2 First for Schools",
+    "C1 Advanced",
+    "C2 Proficiency",
+    "Linguaskill",
+    "TKT",
+    "Delta",
+    "CELTA",
+    "IELTS",
+    "MET",                  # before MET Go!
+    "MET Go!",
+    "TEA",
+]
+
+EXAM_NAME_ALIASES: dict[str, list[str]] = {
+    "Pre-A1 Starters": [
+        "Pre-A1 Starters",
+        "Starters",
+        "YLE Starters",
+        "Pre A1 Starters",
+        "Pre-A1",
+    ],
+    "A1 Movers": [
+        "A1 Movers",
+        "Movers",
+        "YLE Movers",
+    ],
+    "A2 Flyers": [
+        "A2 Flyers",
+        "Flyers",
+        "YLE Flyers",
+    ],
+    # "A2 Key" alone is NOT listed: "A2 Key (KET)" catches it via subset
+    # ({a2,key} ⊆ {a2,key,ket}) without matching the for-Schools variant
+    # (jaccard 2/5 = 0.4 < threshold).
+    "A2 Key": [
+        "KET",
+        "A2 Key (KET)",
+        "Key English Test",
+    ],
+    "A2 Key for Schools": [
+        "KETfs",
+        "Key for Schools",
+        "A2 Key for Schools (KETfs)",
+    ],
+    # "B1 Preliminary" alone is NOT listed: "B1 Preliminary (PET)" catches it.
+    "B1 Preliminary": [
+        "PET",
+        "B1 Preliminary (PET)",
+        "Preliminary English Test",
+    ],
+    "B1 Preliminary for Schools": [
+        "PETfs",
+        "Preliminary for Schools",
+        "B1 Preliminary for Schools (PETfs)",
+    ],
+    # "B2 First" alone is NOT listed: "B2 First (FCE)" catches it.
+    "B2 First": [
+        "FCE",
+        "B2 First (FCE)",
+        "First Certificate",
+        "First Certificate in English",
+    ],
+    "B2 First for Schools": [
+        "FCEfs",
+        "First for Schools",
+        "B2 First for Schools (FCEfs)",
+    ],
+    "C1 Advanced": [
+        "CAE",
+        "C1 Advanced (CAE)",
+        "Certificate in Advanced English",
+        "Advanced",
+    ],
+    "C2 Proficiency": [
+        "CPE",
+        "C2 Proficiency (CPE)",
+        "Certificate of Proficiency in English",
+        "Proficiency",
+    ],
+    "Linguaskill": [
+        "Linguaskill",
+        "Linguaskill Business",
+        "Linguaskill General",
+    ],
+    "TKT": [
+        "TKT",
+        "Teaching Knowledge Test",
+        "TKT Module",
+        "TKT CLIL",
+        "TKT Young Learners",
+        "TKT YL",
+    ],
+    "Delta": [
+        "Delta",
+        "Delta Module",
+    ],
+    "CELTA": [
+        "CELTA",
+    ],
+    "IELTS": [
+        "IELTS",
+        "IELTS Academic",
+        "IELTS General Training",
+        "IELTS General",
+        "IELTS on Computer",
+        "IELTS GT",
+        "IELTS AC",
+        "International English Language Testing System",
+    ],
+    # "MET" alone is NOT listed: "Michigan (MET)" catches it via subset
+    # ({met} ⊆ {michigan,met}) without matching "MET Go!" (jaccard 1/3 < threshold).
+    "MET": [
+        "Michigan",
+        "Michigan (MET)",
+        "Michigan English Test",
+        "Michigan English Test (MET)",
+    ],
+    "MET Go!": [
+        "MET Go!",
+        "MET Go",
+        "Michigan MET Go",
+    ],
+    "TEA": [
+        "TEA",
+        "Test of English for Aviation",
+        "TEA (Test of English for Aviation)",
+    ],
+}
+
+
+@lru_cache(maxsize=256)
+def canonical_exam_name(label: str) -> str:
+    for name in EXAM_NAME_ORDER:
+        aliases = EXAM_NAME_ALIASES.get(name, [])
+        if any(label_matches_alias(label, alias) for alias in aliases):
+            return name
+    return "Other"

@@ -1,6 +1,11 @@
 import { useQuery } from "@tanstack/react-query"
-import { AsesorFilters, ReportFilters } from "@/types"
-import { fetchAsesorDetail, fetchAsesorReport, fetchTotalSalesData } from "@/api/reports"
+import { AsesorFilters, DetalleAsesorFilters, ReportFilters } from "@/types"
+import {
+    fetchAsesorDetail,
+    fetchAsesorReport,
+    fetchDetalleAsesorReport,
+    fetchTotalSalesData,
+} from "@/api/reports"
 import { fetchFilterOptions, fetchSellerOptions } from "@/api/filters"
 
 export const useTotalSalesData = (filters: ReportFilters) =>
@@ -25,6 +30,13 @@ export const useAsesorDetail = (
         queryKey: ["por-asesor-detail", sellerId, JSON.stringify(filters)],
         queryFn: () => fetchAsesorDetail(sellerId as number, filters),
         enabled: enabled && sellerId !== null,
+    })
+
+export const useDetalleAsesorReport = (filters: DetalleAsesorFilters, enabled = true) =>
+    useQuery({
+        queryKey: ["detalle-asesor", JSON.stringify(filters)],
+        queryFn: () => fetchDetalleAsesorReport(filters),
+        enabled,
     })
 
 export const useFilterOptions = () =>

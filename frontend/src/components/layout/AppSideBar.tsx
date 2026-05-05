@@ -1,5 +1,5 @@
 import { NavLink } from "react-router-dom"
-import { BarChart2, Users, Globe } from "lucide-react"
+import { BarChart2, Users, Globe, TableProperties } from "lucide-react"
 import {
     Sidebar,
     SidebarContent,
@@ -12,6 +12,7 @@ import {
 const NAV_ITEMS = [
     { path: "/ventas-totales",  label: "Ventas Totales",        icon: <BarChart2 className="size-4" /> },
     { path: "/por-asesor",      label: "Resultados por Asesor", icon: <Users className="size-4" /> },
+    { path: "/detalle-asesor",  label: "Detalle por Asesor",    icon: <TableProperties className="size-4" /> },
     { path: "/por-pais",        label: "Resultado por País",    icon: <Globe className="size-4" /> },
 ]
 

@@ -3,7 +3,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
 from app.validator import validate_schema
-from app.routers import filters, por_asesor, total_sales
+from app.routers import detalle_asesor, filters, por_asesor, total_sales
 import logging 
 
 logging.basicConfig(
@@ -39,3 +39,4 @@ async def health():
 app.include_router(filters.router, prefix="/filters", tags=["filters"])
 app.include_router(total_sales.router, prefix="/reports", tags=["reports"])
 app.include_router(por_asesor.router, prefix="/reports", tags=["reports"])
+app.include_router(detalle_asesor.router, prefix="/reports", tags=["reports"])

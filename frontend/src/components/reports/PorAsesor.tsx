@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react"
+import { useMemo, useState } from "react"
 import { ChevronRight } from "lucide-react"
 
 import AsesorFilterBar from "@/components/reports/AsesorFilterBar"
@@ -16,9 +16,10 @@ import {
     TableRow,
 } from "@/components/ui/table"
 import { useAsesorReport, useFilterOptions, useSellerOptions } from "@/hooks/useReports"
+import useCursorPagination from "@/hooks/useCursorPagination"
 import type { AsesorFilters, AsesorRow } from "@/types"
 import { cn, formatCurrency, formatInteger, formatPercentChange, getPercentChange } from "@/lib/utils"
-import { ASESOR_EXAM_CATEGORIES, TABLE_DISPLAY_GROUPS } from "@/components/reports/asesorCategories"
+import { TABLE_DISPLAY_GROUPS } from "@/components/reports/asesorCategories"
 
 const PAGE_SIZE = 8
 
@@ -35,20 +36,26 @@ export default function PorAsesor() {
         sellers: [],
     })
     const [showComparison, setShowComparison] = useState(false)
-    const [page, setPage] = useState(0)
-    const [pageCursors, setPageCursors] = useState<Array<string | null>>([null])
     const [selectedRow, setSelectedRow] = useState<AsesorRow | null>(null)
-    const currentCursor = pageCursors[page] ?? null
+    const { page, currentCursor, reset, goPrevious, goNext } = useCursorPagination<string>()
 
     const { data: filterOptions } = useFilterOptions()
     const { data: sellerOptionsResponse } = useSellerOptions()
+    const sellerOptions = useMemo(() => sellerOptionsResponse?.sellers ?? [], [sellerOptionsResponse?.sellers])
+    const normalizedFilters = useMemo(
+        () =>
+            filters.sellers?.[0] && !sellerOptions.includes(filters.sellers[0])
+                ? { ...filters, sellers: [] }
+                : filters,
+        [filters, sellerOptions],
+    )
     const requestFilters = useMemo(
         () => ({
-            ...filters,
+            ...normalizedFilters,
             limit: PAGE_SIZE,
             cursor: currentCursor,
         }),
-        [currentCursor, filters],
+        [currentCursor, normalizedFilters],
     )
     const { data, isLoading, isError } = useAsesorReport(requestFilters)
     const visibleSellerNames = useMemo(
@@ -57,27 +64,14 @@ export default function PorAsesor() {
     )
     const { data: comparisonData } = useAsesorReport(
         {
-            ...filters,
-            year: filters.year - 1,
+            ...normalizedFilters,
+            year: normalizedFilters.year - 1,
             sellers: visibleSellerNames,
             limit: PAGE_SIZE,
             cursor: null,
         },
-        showComparison && filters.year > 0 && visibleSellerNames.length > 0,
+        showComparison && normalizedFilters.year > 0 && visibleSellerNames.length > 0,
     )
-
-    const sellerOptions = sellerOptionsResponse?.sellers ?? []
-
-    useEffect(() => {
-        if (filters.sellers?.[0] && !sellerOptions.includes(filters.sellers[0])) {
-            setFilters(current => ({ ...current, sellers: [] }))
-        }
-    }, [filters.sellers, sellerOptions])
-
-    useEffect(() => {
-        setPage(0)
-        setPageCursors([null])
-    }, [filters, showComparison])
 
     const comparisonRowsBySeller = useMemo(
         () => new Map((comparisonData?.rows ?? []).map(row => [row.seller_id, row])),
@@ -89,13 +83,19 @@ export default function PorAsesor() {
     return (
         <div className="flex flex-col gap-8 p-6">
             <AsesorFilterBar
-                filters={filters}
+                filters={normalizedFilters}
                 options={filterOptions}
                 sellerOptions={sellerOptions}
                 yearOptions={yearOptions}
                 showComparison={showComparison}
-                onFiltersChange={setFilters}
-                onToggleComparison={setShowComparison}
+                onFiltersChange={nextFilters => {
+                    reset()
+                    setFilters(nextFilters)
+                }}
+                onToggleComparison={value => {
+                    reset()
+                    setShowComparison(value)
+                }}
                 onExportPdf={() => console.log("export pdf")}
                 onExportExcel={() => console.log("export excel")}
             />
@@ -103,7 +103,7 @@ export default function PorAsesor() {
             <Card className="rounded-[2rem] shadow-sm">
                 <CardHeader className="pb-2">
                     <CardTitle className="text-4xl font-semibold tracking-tight text-slate-900">
-                        Resultados por Asesor - {filters.year}
+                        Resultados por Asesor - {normalizedFilters.year}
                     </CardTitle>
                 </CardHeader>
                 <CardContent className="p-0">
@@ -220,17 +220,8 @@ export default function PorAsesor() {
                                 page={page}
                                 currentCount={rows.length}
                                 hasMore={data?.has_more ?? false}
-                                onPrevious={() => setPage(current => Math.max(0, current - 1))}
-                                onNext={() => {
-                                    if (!data?.has_more || !data.next_cursor) return
-                                    setPageCursors(current => {
-                                        if (current[page + 1] === data.next_cursor) return current
-                                        const next = current.slice(0, page + 1)
-                                        next.push(data.next_cursor)
-                                        return next
-                                    })
-                                    setPage(current => current + 1)
-                                }}
+                                onPrevious={goPrevious}
+                                onNext={() => goNext(data?.next_cursor)}
                             />
                         </>
                     )}
@@ -244,7 +235,7 @@ export default function PorAsesor() {
                 }}
                 sellerId={selectedRow?.seller_id ?? null}
                 sellerName={selectedRow?.seller_name}
-                filters={filters}
+                filters={normalizedFilters}
             />
         </div>
     )

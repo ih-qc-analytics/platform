@@ -105,3 +105,24 @@ export type AsesorDetail = {
     perdidos: BusinessStatusDetail
     mantenidos: BusinessStatusDetail
 }
+
+export type DetalleAsesorFilters = ReportFilters & {
+    search?: string
+    cursor?: number | null
+    page_size?: number
+}
+
+export type DetalleAsesorRow = {
+    id: number
+    seller_name: string
+    school_name: string
+    exam_date: string
+    exam_counts: Record<string, number>
+    total: number
+}
+
+export type DetalleAsesorReportResponse = {
+    rows: DetalleAsesorRow[]
+    next_cursor: number | null
+    has_more: boolean
+}

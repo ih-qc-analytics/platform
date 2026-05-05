@@ -1,4 +1,12 @@
-import { AsesorDetail, AsesorFilters, AsesorReportResponse, ReportFilters, TotalSalesResponse } from "@/types"
+import {
+    AsesorDetail,
+    AsesorFilters,
+    AsesorReportResponse,
+    DetalleAsesorFilters,
+    DetalleAsesorReportResponse,
+    ReportFilters,
+    TotalSalesResponse,
+} from "@/types"
 import config from "../config"
 
 export const fetchTotalSalesData = async (filters: ReportFilters): Promise<TotalSalesResponse> => {
@@ -26,6 +34,18 @@ export const fetchAsesorDetail = async (
     filters: AsesorFilters,
 ): Promise<AsesorDetail> => {
     const res = await fetch(`${config.apiUrl}/reports/por-asesor/${sellerId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(filters),
+    })
+    if (!res.ok) throw new Error(`Request failed: ${res.status}`)
+    return res.json()
+}
+
+export const fetchDetalleAsesorReport = async (
+    filters: DetalleAsesorFilters,
+): Promise<DetalleAsesorReportResponse> => {
+    const res = await fetch(`${config.apiUrl}/reports/detalle-asesor`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(filters),

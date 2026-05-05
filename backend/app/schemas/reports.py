@@ -1,19 +1,30 @@
 from pydantic import BaseModel
 from typing import Optional
 
-## se usa type string porque no hay un catalogo definido de los valores de pais, zona, estado, ciudad
-class ReportFilters(BaseModel):
-    date_from: Optional[str] = None    # "2025-01-01"
-    date_to: Optional[str] = None      # "2025-12-31"
-    countries: list[str] = []     # "MX"
-    zones: list[str] = []         # "IH-CDMX"
-    states: list[str] = []        # "CDMX"
+
+# ─────────────────────────────────────────────
+# Base filter classes
+# ─────────────────────────────────────────────
+
+class BaseGeoFilters(BaseModel):
+    countries: list[str] = []
+    zones: list[str] = []
+    states: list[str] = []
     cities: list[str] = []
 
 
-class TrendPoint(BaseModel): 
-    month: str 
-    revenue: float 
+class ReportFilters(BaseGeoFilters):
+    date_from: Optional[str] = None    # "2025-01-01"
+    date_to: Optional[str] = None      # "2025-12-31"
+
+
+# ─────────────────────────────────────────────
+# Ventas Totales
+# ─────────────────────────────────────────────
+
+class TrendPoint(BaseModel):
+    month: str
+    revenue: float
 
 
 class ProductMix(BaseModel):
@@ -23,11 +34,11 @@ class ProductMix(BaseModel):
 
 
 class GeoPoint(BaseModel):
-    dimension: str          # nombre de pais o zona 
+    dimension: str
     revenue: float
 
 
-class TotalSalesResponse(BaseModel): 
+class TotalSalesResponse(BaseModel):
     total_clients: int
     total_exams: int
     exam_revenue: float
@@ -36,13 +47,17 @@ class TotalSalesResponse(BaseModel):
     total_courses: int
     course_revenue: float
     total_revenue: float
-    profit_margin: float        # porcentaje
+    profit_margin: float
     prior_year_revenue: float
-    growth_pct: Optional[float] = None        # porcentaje
+    growth_pct: Optional[float] = None
     trend_points: list[TrendPoint]
     geo_points: list[GeoPoint]
     product_mix: Optional[ProductMix] = None
 
+
+# ─────────────────────────────────────────────
+# Filter options
+# ─────────────────────────────────────────────
 
 class FilterOptionsResponse(BaseModel):
     countries: list[str]
@@ -55,12 +70,12 @@ class SellerOptionsResponse(BaseModel):
     sellers: list[str]
 
 
-class AsesorFilters(BaseModel):
+# ─────────────────────────────────────────────
+# Por Asesor
+# ─────────────────────────────────────────────
+
+class AsesorFilters(BaseGeoFilters):
     year: int
-    countries: list[str] = []
-    zones: list[str] = []
-    states: list[str] = []
-    cities: list[str] = []
     sellers: list[str] = []
     limit: int = 25
     cursor: Optional[str] = None
@@ -108,3 +123,28 @@ class AsesorDetail(BaseModel):
     ganados: BusinessStatusDetail
     perdidos: BusinessStatusDetail
     mantenidos: BusinessStatusDetail
+
+
+# ─────────────────────────────────────────────
+# Detalle por Asesor
+# ─────────────────────────────────────────────
+
+class DetalleFilters(ReportFilters):
+    search: Optional[str] = None   # matches seller name OR school name
+    cursor: Optional[int] = None   # last row id for cursor pagination
+    page_size: int = 8
+
+
+class DetalleRow(BaseModel):
+    id: int                        # cart_product.id, used as cursor
+    seller_name: str
+    school_name: str
+    exam_date: str                 # YYYY-MM-DD from cart_product.testDate
+    exam_counts: dict[str, int]    # { "KET": 12, "FCE": 8, ... } keyed by exam_cat.name
+    total: int                     # sum of all exam_counts values
+
+
+class DetalleReportResponse(BaseModel):
+    rows: list[DetalleRow]
+    next_cursor: Optional[int]     # None if no more pages
+    has_more: bool

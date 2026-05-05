@@ -1,12 +1,12 @@
 import { useState } from "react"
 import GeoFilters from "@/components/filters/GeoFilters"
-import { Input } from "@/components/ui/input"
 import { useFilterOptions } from "@/hooks/useReports"
 import type { ReportFilters } from "@/types"
 import DateRangePicker from "./DateRangePicker"
 import ExportButtons from "./ExportButtons"
 
 type FilterBarProps = {
+    value?: ReportFilters
     onChange: (filters: ReportFilters) => void
     onExportPdf?: () => void
     onExportExcel?: () => void
@@ -14,7 +14,7 @@ type FilterBarProps = {
 
 export default function FilterBar(props: FilterBarProps) {
     const { data: options, isLoading } = useFilterOptions()
-    const [selected, setSelected] = useState<ReportFilters>({
+    const [internalSelected, setInternalSelected] = useState<ReportFilters>({
         countries: [],
         zones: [],
         states: [],
@@ -22,23 +22,28 @@ export default function FilterBar(props: FilterBarProps) {
         date_from: undefined,
         date_to: undefined,
     })
+    const selected = props.value ?? internalSelected
+
+    const commitChange = (updated: ReportFilters) => {
+        if (props.value === undefined) {
+            setInternalSelected(updated)
+        }
+        props.onChange(updated)
+    }
 
     const handleSelectChange = (key: string, value: string) => {
         const updated = { ...selected, [key]: value === "all" ? [] : [value] }
-        setSelected(updated)
-        props.onChange(updated)
+        commitChange(updated)
     }
 
     const handleDateFromChange = (value: string) => {
         const updated = { ...selected, date_from: value || undefined }
-        setSelected(updated)
-        props.onChange(updated)
+        commitChange(updated)
     }
 
     const handleDateToChange = (value: string) => {
         const updated = { ...selected, date_to: value || undefined }
-        setSelected(updated)
-        props.onChange(updated)
+        commitChange(updated)
     }
 
     if (isLoading) return <div className="text-sm text-muted-foreground">Cargando filtros...</div>

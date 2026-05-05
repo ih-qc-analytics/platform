@@ -85,3 +85,14 @@ async def por_asesor_db(test_engine, session_factory):
     db.engine = test_engine
     yield
     await truncate_all(test_engine)
+
+
+@pytest_asyncio.fixture(loop_scope="session")
+async def detalle_asesor_db(test_engine, session_factory):
+    await truncate_all(test_engine)
+    await load_seed(test_engine, "detalle_asesor.sql")
+    import app.database as db
+    db.SessionLocal = session_factory
+    db.engine = test_engine
+    yield
+    await truncate_all(test_engine)
