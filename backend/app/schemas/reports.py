@@ -150,3 +150,42 @@ class DetalleReportResponse(BaseModel):
     rows: list[DetalleRow]
     next_cursor: Optional[int]     # None if no more pages
     has_more: bool
+
+
+# ─────────────────────────────────────────────
+# Por País
+# ─────────────────────────────────────────────
+
+class PorPaisFilters(BaseModel):
+    date_from: str
+    date_to: str
+
+
+class PorPaisSummaryRow(BaseModel):
+    country: str
+    total_schools: int
+    cambridge: int
+    ielts: int
+    michigan: int
+    tea: int
+    other: int
+
+
+class PorPaisStatusRow(BaseModel):
+    country: str
+    schools_ganados: int
+    schools_perdidos: int
+    schools_mantenidos: int
+    exams_ganados: int
+    exams_perdidos: int
+    exams_mantenidos: int
+
+
+class PorPaisReportResponse(BaseModel):
+    summary_rows: list[PorPaisSummaryRow]
+    status_rows: list[PorPaisStatusRow]
+
+
+class PorPaisDetailResponse(BaseModel):
+    country: str
+    exam_counts: dict[str, int]

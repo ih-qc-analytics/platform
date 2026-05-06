@@ -1,9 +1,11 @@
 import { useQuery } from "@tanstack/react-query"
-import { AsesorFilters, DetalleAsesorFilters, ReportFilters } from "@/types"
+import { AsesorFilters, DetalleAsesorFilters, PorPaisFilters, ReportFilters } from "@/types"
 import {
     fetchAsesorDetail,
     fetchAsesorReport,
     fetchDetalleAsesorReport,
+    fetchPorPaisDetail,
+    fetchPorPaisReport,
     fetchTotalSalesData,
 } from "@/api/reports"
 import { fetchFilterOptions, fetchSellerOptions } from "@/api/filters"
@@ -37,6 +39,24 @@ export const useDetalleAsesorReport = (filters: DetalleAsesorFilters, enabled = 
         queryKey: ["detalle-asesor", JSON.stringify(filters)],
         queryFn: () => fetchDetalleAsesorReport(filters),
         enabled,
+    })
+
+export const usePorPaisReport = (filters: PorPaisFilters, enabled = true) =>
+    useQuery({
+        queryKey: ["por-pais", JSON.stringify(filters)],
+        queryFn: () => fetchPorPaisReport(filters),
+        enabled,
+    })
+
+export const usePorPaisDetail = (
+    country: string | null,
+    filters: PorPaisFilters,
+    enabled = true,
+) =>
+    useQuery({
+        queryKey: ["por-pais-detail", country, JSON.stringify(filters)],
+        queryFn: () => fetchPorPaisDetail(country as string, filters),
+        enabled: enabled && country !== null,
     })
 
 export const useFilterOptions = () =>

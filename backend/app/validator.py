@@ -15,7 +15,7 @@ def load_schema() -> dict:
 
 
 def get_db_name() -> str:
-    return settings.source_db_url.split("/")[-1]
+    return settings.dbname
 
 ## verifica que las columnas de la base de datos live tienen el mismo nombre, tipo, y null
 ## constraint que las columnas del snapshot que se usan para la fabricacion de reportes

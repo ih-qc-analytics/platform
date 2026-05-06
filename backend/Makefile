@@ -9,6 +9,9 @@ endif
 run:
 	$(UVICORN) app.main:app --reload
 
+run-prod:
+	SOURCE_DB_URL="$$(sed -n "s/^PROD_SOURCE_DB_URL='\(.*\)'/\1/p" .env)" ENVIRONMENT=production $(UVICORN) app.main:app --reload
+
 seed-ui:
 	docker exec -i platform-mysql-1 mysql -u test_user -ptestpassword ihqc_test -e \
 		"SET FOREIGN_KEY_CHECKS=0; \

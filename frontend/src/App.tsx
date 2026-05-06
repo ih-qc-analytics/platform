@@ -3,6 +3,7 @@ import { SidebarProvider, SidebarInset, SidebarTrigger } from "@/components/ui/s
 import VentasTotales from "@/components/reports/VentasTotales"
 import PorAsesor from "@/components/reports/PorAsesor"
 import DetallePorAsesor from "@/components/reports/DetallePorAsesor"
+import PorPais from "@/components/reports/PorPais"
 import AppSidebar from "./components/layout/AppSideBar"
 
 const TITLES: Record<string, string> = {
@@ -32,7 +33,7 @@ export default function App() {
                         <Route path="/ventas-totales" element={<VentasTotales />} />
                         <Route path="/por-asesor" element={<PorAsesor />} />
                         <Route path="/detalle-asesor" element={<DetallePorAsesor />} />
-                        <Route path="/por-pais" element={<div className="p-6 text-muted-foreground text-sm">Próximamente — Resultado por País</div>} />
+                        <Route path="/por-pais" element={<PorPais />} />
                     </Routes>
                 </main>
             </SidebarInset>

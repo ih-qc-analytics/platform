@@ -3,7 +3,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
 from app.validator import validate_schema
-from app.routers import detalle_asesor, filters, por_asesor, total_sales
+from app.routers import detalle_asesor, filters, por_asesor, por_pais, total_sales
 import logging 
 
 logging.basicConfig(
@@ -13,14 +13,15 @@ logging.basicConfig(
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    if settings.source_db_url:
+    if settings.host:
+        print(f"--- Starting app in {settings.env_mode} mode ---")
         await validate_schema()
     yield
 
 app = FastAPI(
     title="IH-QC Analytics",
     version="0.1.0",
-    docs_url="/docs" if settings.environment == "development" else None,
+    docs_url="/docs" if settings.env_mode == "dev" else None,
     lifespan=lifespan,
 )
 
@@ -40,3 +41,4 @@ app.include_router(filters.router, prefix="/filters", tags=["filters"])
 app.include_router(total_sales.router, prefix="/reports", tags=["reports"])
 app.include_router(por_asesor.router, prefix="/reports", tags=["reports"])
 app.include_router(detalle_asesor.router, prefix="/reports", tags=["reports"])
+app.include_router(por_pais.router, prefix="/reports", tags=["reports"])

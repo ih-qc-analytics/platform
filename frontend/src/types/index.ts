@@ -31,6 +31,8 @@ export type TotalSalesResponse = {
     book_revenue: number
     total_courses: number
     course_revenue: number
+    total_otros: number
+    otros_revenue: number
     total_revenue: number
     profit_margin: number
     prior_year_revenue: number
@@ -125,4 +127,39 @@ export type DetalleAsesorReportResponse = {
     rows: DetalleAsesorRow[]
     next_cursor: number | null
     has_more: boolean
+}
+
+export type PorPaisFilters = {
+    date_from: string
+    date_to: string
+}
+
+export type PorPaisSummaryRow = {
+    country: string
+    total_schools: number
+    cambridge: number
+    ielts: number
+    michigan: number
+    tea: number
+    other: number
+}
+
+export type PorPaisStatusRow = {
+    country: string
+    schools_ganados: number
+    schools_perdidos: number
+    schools_mantenidos: number
+    exams_ganados: number
+    exams_perdidos: number
+    exams_mantenidos: number
+}
+
+export type PorPaisReportResponse = {
+    summary_rows: PorPaisSummaryRow[]
+    status_rows: PorPaisStatusRow[]
+}
+
+export type PorPaisDetailResponse = {
+    country: string
+    exam_counts: Record<string, number>
 }
