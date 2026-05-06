@@ -4,7 +4,7 @@ import json
 from sqlalchemy import bindparam, text
 
 from app.database import SessionLocal
-from app.enums import PaymentStatus
+from app.enums import PaymentStatus, ProductType
 
 
 def encode_cursor(total_revenue: float, seller_name: str, seller_id: int) -> str:
@@ -200,6 +200,8 @@ async def fetch_school_metric_rows(
         JOIN cart_product cp ON cp.cartId = c.id
         JOIN product p ON cp.productId = p.id
         WHERE {where_clause}
+          AND cp.deletedAt IS NULL
+          AND p.productType = :product_type_exam
           AND YEAR(c.createdAt) = :metrics_year
           AND EXISTS (
               SELECT 1 FROM payment pay
@@ -214,6 +216,7 @@ async def fetch_school_metric_rows(
             **params,
             "metrics_year": year,
             "payment_status_aprobado": PaymentStatus.APROBADO.value,
+            "product_type_exam": ProductType.EXAM.value,
         },
         expanding_keys,
     )
