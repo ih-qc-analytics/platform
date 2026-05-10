@@ -2,7 +2,7 @@ import asyncio
 from collections import defaultdict
 from datetime import datetime
 
-from app.enums import PaymentStatus, ProductType
+from app.enums import ProductType
 from app.schemas.reports import (
     PorPaisDetailResponse,
     PorPaisFilters,
@@ -10,9 +10,12 @@ from app.schemas.reports import (
     PorPaisStatusRow,
     PorPaisSummaryRow,
 )
+from app.services.utils.report_filters import (
+    build_payment_fact_where_clause,
+    build_student_payment_fact_where_clause,
+)
 from app.services.por_asesor.product_grouping import (
     EXAM_NAME_ORDER,
-    canonical_exam_category,
     canonical_exam_name,
 )
 from app.services.por_pais.repository import (
@@ -25,34 +28,32 @@ from app.services.por_pais.repository import (
 DETALLE_EXAM_NAME_ORDER = [*EXAM_NAME_ORDER, "Other"]
 
 
-def build_por_pais_where_clause(filters: PorPaisFilters) -> tuple[str, dict[str, object], list[str]]:
-    conditions = [
-        "c.deletedAt IS NULL",
-        "sl.deletedAt IS NULL",
-        "l.deletedAt IS NULL",
-        "cp.deletedAt IS NULL",
-        "p.productType = :product_type_exam",
-        """
-        EXISTS (
-            SELECT 1
-            FROM payment pay
-            WHERE pay.cartId = c.id
-              AND pay.status = :payment_status_aprobado
-        )
-        """.strip(),
-        "c.createdAt >= :date_from",
-        "c.createdAt <= :date_to",
-    ]
-    params: dict[str, object] = {
-        "product_type_exam": ProductType.EXAM.value,
-        "payment_status_aprobado": PaymentStatus.APROBADO.value,
-        "date_from": filters.date_from,
-        "date_to": filters.date_to,
-    }
-    return " AND ".join(conditions), params, []
+def summary_bucket_for_exam(label: str) -> str:
+    exam_name = canonical_exam_name(label)
+    if exam_name == "IELTS":
+        return "ielts"
+    if exam_name == "MET":
+        return "michigan"
+    if exam_name == "TEA":
+        return "tea"
+    if exam_name == "Other":
+        return "other"
+    return "cambridge"
 
 
-def rewind_date_range(filters: PorPaisFilters) -> tuple[str, str]:
+def build_por_pais_where_clause(
+    filters: PorPaisFilters,
+) -> tuple[str, dict[str, object], list[str]]:
+    return build_payment_fact_where_clause(filters)
+
+
+def build_por_pais_student_payment_where_clause(
+    filters: PorPaisFilters,
+) -> tuple[str, dict[str, object], list[str]]:
+    return build_student_payment_fact_where_clause(filters, include_exam_product=True)
+
+
+def rewound_date_range(filters: PorPaisFilters) -> tuple[str, str]:
     date_from_obj = datetime.strptime(filters.date_from, "%Y-%m-%d")
     date_to_obj = datetime.strptime(filters.date_to, "%Y-%m-%d")
     return (
@@ -75,22 +76,13 @@ def build_summary_rows(school_rows, exam_rows) -> list[PorPaisSummaryRow]:
     }
 
     for row in exam_rows:
-        category = canonical_exam_category(row.exam_name)
         country_counts = counts_by_country.setdefault(
             row.country,
             {"cambridge": 0, "ielts": 0, "michigan": 0, "tea": 0, "other": 0},
         )
         count = int(row.exam_count or 0)
-        if category in {"Cambridge English (Main Suite)", "Cambridge Teaching & Skills"}:
-            country_counts["cambridge"] += count
-        elif category == "IELTS":
-            country_counts["ielts"] += count
-        elif category == "Michigan (MET)":
-            country_counts["michigan"] += count
-        elif category == "TEA (Test of English for Aviation)":
-            country_counts["tea"] += count
-        else:
-            country_counts["other"] += count
+        bucket = summary_bucket_for_exam(row.exam_name)
+        country_counts[bucket] += count
 
     return [
         PorPaisSummaryRow(
@@ -155,20 +147,25 @@ def build_detail_counts(exam_rows, country: str) -> dict[str, int]:
 
 async def getPorPaisReport(filters: PorPaisFilters) -> PorPaisReportResponse:
     where_clause, params, expanding_keys = build_por_pais_where_clause(filters)
+    breakdown_where_clause, breakdown_params, breakdown_expanding_keys = build_por_pais_student_payment_where_clause(filters)
     summary_school_rows, summary_exam_rows = await asyncio.gather(
         fetch_country_school_rows(where_clause, params, expanding_keys),
-        fetch_country_exam_rows(where_clause, params, expanding_keys),
+        fetch_country_exam_rows(breakdown_where_clause, breakdown_params, breakdown_expanding_keys),
     )
 
-    prior_date_from, prior_date_to = rewind_date_range(filters)
+    prior_date_from, prior_date_to = rewound_date_range(filters)
+
     prior_filters = filters.model_copy(update={"date_from": prior_date_from, "date_to": prior_date_to})
     prior_where_clause, prior_params, prior_expanding_keys = build_por_pais_where_clause(prior_filters)
+    prior_breakdown_where_clause, prior_breakdown_params, prior_breakdown_expanding_keys = build_por_pais_student_payment_where_clause(
+        prior_filters,
+    )
 
     current_presence_rows, prior_presence_rows, current_metric_rows, prior_metric_rows = await asyncio.gather(
         fetch_country_presence_rows(where_clause, params, expanding_keys),
         fetch_country_presence_rows(prior_where_clause, prior_params, prior_expanding_keys),
-        fetch_country_metric_rows(where_clause, params, expanding_keys),
-        fetch_country_metric_rows(prior_where_clause, prior_params, prior_expanding_keys),
+        fetch_country_metric_rows(breakdown_where_clause, breakdown_params, breakdown_expanding_keys),
+        fetch_country_metric_rows(prior_breakdown_where_clause, prior_breakdown_params, prior_breakdown_expanding_keys),
     )
 
     return PorPaisReportResponse(
@@ -178,6 +175,6 @@ async def getPorPaisReport(filters: PorPaisFilters) -> PorPaisReportResponse:
 
 
 async def getPorPaisDetail(country: str, filters: PorPaisFilters) -> PorPaisDetailResponse:
-    where_clause, params, expanding_keys = build_por_pais_where_clause(filters)
+    where_clause, params, expanding_keys = build_por_pais_student_payment_where_clause(filters)
     exam_rows = await fetch_country_exam_rows(where_clause, params, expanding_keys)
     return PorPaisDetailResponse(country=country, exam_counts=build_detail_counts(exam_rows, country))

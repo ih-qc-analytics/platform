@@ -1,180 +1,219 @@
-from app.database import SessionLocal
-from app.enums import PaymentStatus, ProductType
-from app.schemas.reports import GeoPoint, ProductMix, ReportFilters, TotalSalesResponse, TrendPoint
-from app.services.shared import build_geo_where_clause
 from sqlalchemy import text
-from datetime import datetime
+
+from app.database import SessionLocal
+from app.enums import ProductType
+from app.schemas.reports import GeoPoint, ProductMix, ReportFilters, TotalSalesResponse, TrendPoint
+from app.services.utils.date_utils import rewind_date_range_one_year
+from app.services.utils.fact_subqueries import (
+    build_deduped_paid_cart_product_fact_subquery,
+    build_paid_payment_fact_subquery,
+    build_paid_student_allocation_fact_subquery,
+)
+from app.services.utils.report_filters import (
+    build_payment_fact_where_clause,
+    build_student_payment_fact_where_clause,
+)
 
 
-async def getTotalSalesData(filters: ReportFilters) -> TotalSalesResponse: 
-    where_clause, params = build_where_clause(filters)
-    async with SessionLocal() as session: 
-        response = await run_main_query(session, filters, where_clause, params)
-        if response.total_revenue:
-            response.product_mix = ProductMix(
-                exams_pct=round(response.exam_revenue / response.total_revenue * 100, 1),
-                books_pct=round(response.book_revenue / response.total_revenue * 100, 1),
-                courses_pct=round(response.course_revenue / response.total_revenue * 100, 1),
-            )
-        trend = await run_trend_query(session,filters, where_clause, params)
-        geo = await run_geo_query(session,filters, where_clause, params)
-        response.trend_points = trend
-        response.geo_points = geo
-        if filters.date_from and filters.date_to:
-            prev_year_revenue = await run_prior_year_query(session, filters)
-            response.prior_year_revenue = prev_year_revenue
-            if prev_year_revenue > 0:
-                response.growth_pct = (response.total_revenue - prev_year_revenue) / prev_year_revenue * 100
-            
-        return response
+# NOTE:
+# This comparison implementation intentionally keeps two separate fact grains:
+# - payment for total paid cash metrics, trend, geo, and prior-year comparison
+# - student_payments for paid revenue breakdown
+# - deduped cart_product rows for paid unit counts and line cost
+#
+# Assumptions based on clarified business rules:
+# - payment.quantity is the amount to sum for approved payments
+# - paid product attribution is reached through:
+#     payment -> student_payments -> student -> cart_product -> product
+# - cp.quantity represents the number of units sold for that cart-product line
+# - geo filters should avoid one-to-many fanout by using EXISTS for address checks
 
 
+def build_payment_where_clause(filters: ReportFilters) -> tuple[str, dict[str, object]]:
+    where_clause, params, _ = build_payment_fact_where_clause(filters)
+    return where_clause, params
 
-async def run_main_query(session, filters: ReportFilters, where_clause, params) -> TotalSalesResponse: 
+
+def build_student_payment_where_clause(filters: ReportFilters) -> tuple[str, dict[str, object]]:
+    where_clause, params, _ = build_student_payment_fact_where_clause(filters)
+    return where_clause, params
+
+
+async def run_payment_summary_query(
+    session, where_clause: str, params: dict[str, object]
+) -> tuple[int, float]:
+    query = f"""
+        SELECT
+            COUNT(DISTINCT qp.lead_id) AS total_clients,
+            COALESCE(SUM(qp.paid_amount), 0) AS total_revenue
+        FROM ({build_paid_payment_fact_subquery(where_clause)}) qp
+    """
+    row = (await session.execute(text(query), params)).fetchone()
+    return int(row.total_clients or 0), float(row.total_revenue or 0)
+
+
+async def run_breakdown_summary_query(session, where_clause: str, params: dict[str, object]):
+    student_payment_fact = build_paid_student_allocation_fact_subquery(where_clause)
+    paid_cart_product_fact = build_deduped_paid_cart_product_fact_subquery(student_payment_fact)
+    query = f"""
+        SELECT
+            COALESCE(quantity_mix.total_exams, 0) AS total_exams,
+            COALESCE(revenue_mix.exam_revenue, 0) AS exam_revenue,
+            COALESCE(quantity_mix.total_books, 0) AS total_books,
+            COALESCE(revenue_mix.book_revenue, 0) AS book_revenue,
+            COALESCE(quantity_mix.total_courses, 0) AS total_courses,
+            COALESCE(revenue_mix.course_revenue, 0) AS course_revenue,
+            COALESCE(quantity_mix.total_otros, 0) AS total_otros,
+            COALESCE(revenue_mix.otros_revenue, 0) AS otros_revenue,
+            COALESCE(quantity_mix.total_cost, 0) AS total_cost
+        FROM (
+            SELECT
+                SUM(CASE WHEN pcp.product_type = :product_type_exam THEN pcp.cart_product_quantity ELSE 0 END) AS total_exams,
+                SUM(CASE WHEN pcp.product_type = :product_type_book THEN pcp.cart_product_quantity ELSE 0 END) AS total_books,
+                SUM(CASE WHEN pcp.product_type = :product_type_course THEN pcp.cart_product_quantity ELSE 0 END) AS total_courses,
+                SUM(
+                    CASE
+                        WHEN pcp.product_type IS NULL
+                          OR pcp.product_type NOT IN (
+                              :product_type_exam,
+                              :product_type_book,
+                              :product_type_course
+                          )
+                        THEN pcp.cart_product_quantity
+                        ELSE 0
+                    END
+                ) AS total_otros,
+                SUM(pcp.cart_product_cost) AS total_cost
+            FROM ({paid_cart_product_fact}) pcp
+        ) quantity_mix
+        CROSS JOIN (
+            SELECT
+                SUM(CASE WHEN ar.product_type = :product_type_exam THEN ar.allocated_amount ELSE 0 END) AS exam_revenue,
+                SUM(CASE WHEN ar.product_type = :product_type_book THEN ar.allocated_amount ELSE 0 END) AS book_revenue,
+                SUM(CASE WHEN ar.product_type = :product_type_course THEN ar.allocated_amount ELSE 0 END) AS course_revenue,
+                SUM(
+                    CASE
+                        WHEN ar.product_type IS NULL
+                          OR ar.product_type NOT IN (
+                              :product_type_exam,
+                              :product_type_book,
+                              :product_type_course
+                          )
+                        THEN ar.allocated_amount
+                        ELSE 0
+                    END
+                ) AS otros_revenue
+            FROM ({student_payment_fact}) ar
+        ) revenue_mix
+    """
     query_params = {
         **params,
         "product_type_exam": ProductType.EXAM.value,
         "product_type_book": ProductType.BOOK.value,
         "product_type_course": ProductType.COURSE.value,
     }
-    query = f"""
-        SELECT
-            COUNT(DISTINCT l.id) as total_clients,
-            SUM(CASE WHEN p.productType = :product_type_exam THEN cp.quantity ELSE 0 END) as total_exams,      
-            SUM(CASE WHEN p.productType = :product_type_exam THEN cp.total ELSE 0 END) as exam_revenue, 
-            SUM(CASE WHEN p.productType = :product_type_book THEN cp.quantity ELSE 0 END) as total_books,     
-            SUM(CASE WHEN p.productType = :product_type_book THEN cp.total ELSE 0 END) as book_revenue,        
-            SUM(CASE WHEN p.productType = :product_type_course THEN cp.quantity ELSE 0 END) as total_courses,
-            SUM(CASE WHEN p.productType = :product_type_course THEN cp.total ELSE 0 END) as course_revenue,
-            SUM(CASE WHEN p.productType = '' THEN cp.quantity ELSE 0 END) as total_otros,
-            SUM(CASE WHEN p.productType = '' THEN cp.total ELSE 0 END) as otros_revenue,
-            SUM(cp.total) as total_revenue,                                   
-            SUM(cp.cost) as total_cost                                                       
-        FROM cart c
-        JOIN seller_lead sl ON c.sellerLeadId = sl.id
-        JOIN `lead` l ON sl.leadId = l.id
-        LEFT JOIN zone z ON l.zoneId = z.id
-        LEFT JOIN (SELECT DISTINCT leadId, stateName, city FROM lead_address) la ON la.leadId = l.id
-        JOIN cart_product cp ON cp.cartId = c.id
-        JOIN product p ON cp.productId = p.id
-        WHERE {where_clause}
-    """ 
-    result = await session.execute(text(query), query_params)
-    agg = result.fetchone()
-    total_revenue = float(agg.total_revenue or 0)
-    total_cost = float(agg.total_cost or 0)
+    return (await session.execute(text(query), query_params)).fetchone()
+
+
+async def run_main_query(session, filters: ReportFilters) -> TotalSalesResponse:
+    payment_where_clause, payment_params = build_payment_where_clause(filters)
+    breakdown_where_clause, breakdown_params = build_student_payment_where_clause(filters)
+
+    total_clients, total_revenue = await run_payment_summary_query(
+        session, payment_where_clause, payment_params
+    )
+    breakdown = await run_breakdown_summary_query(session, breakdown_where_clause, breakdown_params)
+
+    total_cost = float(breakdown.total_cost or 0)
     profit_margin = ((total_revenue - total_cost) / total_revenue * 100) if total_revenue > 0 else 0
+
     return TotalSalesResponse(
-        total_clients=agg.total_clients or 0,
-        total_exams=agg.total_exams or 0,
-        exam_revenue=float(agg.exam_revenue or 0),
-        total_books=agg.total_books or 0,
-        book_revenue=float(agg.book_revenue or 0),
-        total_courses=agg.total_courses or 0,
-        course_revenue=float(agg.course_revenue or 0),
-        total_otros=agg.total_otros or 0,
-        otros_revenue=float(agg.otros_revenue or 0),
+        total_clients=total_clients,
+        total_exams=int(breakdown.total_exams or 0),
+        exam_revenue=float(breakdown.exam_revenue or 0),
+        total_books=int(breakdown.total_books or 0),
+        book_revenue=float(breakdown.book_revenue or 0),
+        total_courses=int(breakdown.total_courses or 0),
+        course_revenue=float(breakdown.course_revenue or 0),
+        total_otros=int(breakdown.total_otros or 0),
+        otros_revenue=float(breakdown.otros_revenue or 0),
         total_revenue=total_revenue,
         profit_margin=profit_margin,
         prior_year_revenue=0,
         growth_pct=0,
         trend_points=[],
         geo_points=[],
-        product_mix=None
+        product_mix=None,
     )
 
-    
-async def run_trend_query(session, filters: ReportFilters, where_clause, params) -> list[TrendPoint]:
+
+async def run_trend_query(session, where_clause: str, params: dict[str, object]) -> list[TrendPoint]:
     query = f"""
         SELECT
-            DATE_FORMAT(c.createdAt, '%Y-%m') as month,
-            SUM(cp.total) as revenue
-        FROM cart c
-        JOIN seller_lead sl ON c.sellerLeadId = sl.id
-        JOIN `lead` l ON sl.leadId = l.id
-        LEFT JOIN zone z ON l.zoneId = z.id
-        LEFT JOIN (SELECT DISTINCT leadId, stateName, city FROM lead_address) la ON la.leadId = l.id
-        JOIN cart_product cp ON cp.cartId = c.id
-        JOIN product p ON cp.productId = p.id
-        WHERE {where_clause}
+            DATE_FORMAT(qp.payment_day, '%Y-%m') AS month,
+            COALESCE(SUM(qp.paid_amount), 0) AS revenue
+        FROM ({build_paid_payment_fact_subquery(where_clause)}) qp
         GROUP BY month
         ORDER BY month ASC
     """
     result = await session.execute(text(query), params)
-    return [TrendPoint(month=row.month, revenue=float(row.revenue)) for row in result.fetchall()]
+    return [TrendPoint(month=row.month, revenue=float(row.revenue or 0)) for row in result.fetchall()]
 
 
-async def run_geo_query(session, filters: ReportFilters, where_clause, params) -> list[GeoPoint]:
+async def run_geo_query(session, where_clause: str, params: dict[str, object]) -> list[GeoPoint]:
     query = f"""
         SELECT
-            l.site as dimension,
-            SUM(cp.total) as revenue
-        FROM cart c
-        JOIN seller_lead sl ON c.sellerLeadId = sl.id
-        JOIN `lead` l ON sl.leadId = l.id
-        LEFT JOIN zone z ON l.zoneId = z.id
-        LEFT JOIN (SELECT DISTINCT leadId, stateName, city FROM lead_address) la ON la.leadId = l.id
-        JOIN cart_product cp ON cp.cartId = c.id
-        JOIN product p ON cp.productId = p.id
-        WHERE {where_clause}
+            qp.country AS dimension,
+            COALESCE(SUM(qp.paid_amount), 0) AS revenue
+        FROM ({build_paid_payment_fact_subquery(where_clause)}) qp
         GROUP BY dimension
+        ORDER BY dimension ASC
     """
     result = await session.execute(text(query), params)
-    return [GeoPoint(dimension=row.dimension, revenue=float(row.revenue)) for row in result.fetchall()]
+    return [GeoPoint(dimension=row.dimension, revenue=float(row.revenue or 0)) for row in result.fetchall()]
 
 
-def rewind_dates_one_year(filters: ReportFilters) -> None:
+def rewind_dates_one_year(filters: ReportFilters) -> ReportFilters:
     if filters.date_from is None or filters.date_to is None:
-        raise Exception("Cannot rewind non-existent dates")
-    date_from_obj = datetime.strptime(filters.date_from, "%Y-%m-%d")
-    prior_date_from = date_from_obj.replace(year=date_from_obj.year - 1)
-    date_to_obj = datetime.strptime(filters.date_to, "%Y-%m-%d")
-    prior_date_to = date_to_obj.replace(year=date_to_obj.year - 1)
-    filters.date_from = prior_date_from.strftime("%Y-%m-%d")
-    filters.date_to = prior_date_to.strftime("%Y-%m-%d")
+        raise ValueError("Cannot rewind non-existent dates")
+    prior_date_from, prior_date_to = rewind_date_range_one_year(filters.date_from, filters.date_to)
+    return filters.model_copy(
+        update={
+            "date_from": prior_date_from,
+            "date_to": prior_date_to,
+        }
+    )
+
 
 async def run_prior_year_query(session, filters: ReportFilters) -> float:
-    prior_filters = filters.model_copy()
-    rewind_dates_one_year(prior_filters)
-    where_clause, params = build_where_clause(prior_filters)
-    
+    prior_filters = rewind_dates_one_year(filters)
+    where_clause, params = build_payment_where_clause(prior_filters)
     query = f"""
-        SELECT SUM(cp.total) as prior_revenue
-        FROM cart c
-        JOIN seller_lead sl ON c.sellerLeadId = sl.id
-        JOIN `lead` l ON sl.leadId = l.id
-        LEFT JOIN zone z ON l.zoneId = z.id
-        LEFT JOIN (SELECT DISTINCT leadId, stateName, city FROM lead_address) la ON la.leadId = l.id
-        JOIN cart_product cp ON cp.cartId = c.id
-        JOIN product p ON cp.productId = p.id
-        WHERE {where_clause}
+        SELECT COALESCE(SUM(qp.paid_amount), 0) AS prior_revenue
+        FROM ({build_paid_payment_fact_subquery(where_clause)}) qp
     """
-    
-    result = await session.execute(text(query), params)
-    row = result.fetchone()
+    row = (await session.execute(text(query), params)).fetchone()
     return float(row.prior_revenue or 0)
 
 
-
-def build_where_clause(filters: ReportFilters) -> tuple[str, dict]:
-    conditions, params, _ = build_geo_where_clause(filters)
-    conditions.append(
-        """
-        EXISTS (
-            SELECT 1 FROM payment pay
-            WHERE pay.cartId = c.id
-              AND pay.status = :payment_status_aprobado
-        )
-        """.strip()
-    )
-    params["payment_status_aprobado"] = PaymentStatus.APROBADO.value
-
-    if filters.date_from:
-        conditions.append("c.createdAt >= :date_from")
-        params["date_from"] = filters.date_from
-
-    if filters.date_to:
-        conditions.append("c.createdAt <= :date_to")
-        params["date_to"] = filters.date_to
-
-    return " AND ".join(conditions), params
+async def getTotalSalesData(filters: ReportFilters) -> TotalSalesResponse:
+    payment_where_clause, payment_params = build_payment_where_clause(filters)
+    async with SessionLocal() as session:
+        response = await run_main_query(session, filters)
+        if response.total_revenue:
+            response.product_mix = ProductMix(
+                exams_pct=round(response.exam_revenue / response.total_revenue * 100, 1),
+                books_pct=round(response.book_revenue / response.total_revenue * 100, 1),
+                courses_pct=round(response.course_revenue / response.total_revenue * 100, 1),
+            )
+        response.trend_points = await run_trend_query(session, payment_where_clause, payment_params)
+        response.geo_points = await run_geo_query(session, payment_where_clause, payment_params)
+        if filters.date_from and filters.date_to:
+            response.prior_year_revenue = await run_prior_year_query(session, filters)
+            if response.prior_year_revenue > 0:
+                response.growth_pct = (
+                    (response.total_revenue - response.prior_year_revenue)
+                    / response.prior_year_revenue
+                    * 100
+                )
+        return response

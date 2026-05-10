@@ -1,4 +1,8 @@
-from app.enums import PaymentStatus, ProductType
+from app.services.utils.fact_subqueries import (
+    build_deduped_paid_cart_product_fact_subquery,
+    build_paid_payment_fact_subquery,
+    build_paid_student_allocation_fact_subquery,
+)
 from app.services.por_asesor.repository import execute_repo_query
 
 
@@ -7,20 +11,14 @@ async def fetch_country_school_rows(
     params: dict,
     expanding_keys: list[str],
 ):
+    paid_payment_fact = build_paid_payment_fact_subquery(where_clause)
     query = f"""
         SELECT
-            l.site AS country,
-            COUNT(DISTINCT l.id) AS total_schools
-        FROM seller_lead sl
-        JOIN `lead` l ON sl.leadId = l.id
-        LEFT JOIN zone z ON l.zoneId = z.id
-        LEFT JOIN (SELECT DISTINCT leadId, stateName, city FROM lead_address) la ON la.leadId = l.id
-        JOIN cart c ON c.sellerLeadId = sl.id
-        JOIN cart_product cp ON cp.cartId = c.id
-        JOIN product p ON p.id = cp.productId
-        WHERE {where_clause}
-        GROUP BY l.site
-        ORDER BY l.site ASC
+            qpay.country,
+            COUNT(DISTINCT qpay.lead_id) AS total_schools
+        FROM ({paid_payment_fact}) qpay
+        GROUP BY qpay.country
+        ORDER BY qpay.country ASC
     """
     return await execute_repo_query(query, params, expanding_keys)
 
@@ -30,22 +28,23 @@ async def fetch_country_exam_rows(
     params: dict,
     expanding_keys: list[str],
 ):
+    paid_allocation_fact = build_paid_student_allocation_fact_subquery(where_clause)
+    paid_cart_product_fact = build_deduped_paid_cart_product_fact_subquery(paid_allocation_fact)
     query = f"""
         SELECT
-            l.site AS country,
-            ec.name AS exam_name,
-            COALESCE(SUM(cp.quantity), 0) AS exam_count
-        FROM seller_lead sl
-        JOIN `lead` l ON sl.leadId = l.id
-        LEFT JOIN zone z ON l.zoneId = z.id
-        LEFT JOIN (SELECT DISTINCT leadId, stateName, city FROM lead_address) la ON la.leadId = l.id
-        JOIN cart c ON c.sellerLeadId = sl.id
-        JOIN cart_product cp ON cp.cartId = c.id
-        JOIN product p ON p.id = cp.productId
-        JOIN exam_cat ec ON ec.id = p.examId
-        WHERE {where_clause}
-        GROUP BY l.site, ec.name
-        ORDER BY l.site ASC, ec.name ASC
+            paid_cart_products.country,
+            paid_cart_products.exam_name,
+            COALESCE(SUM(paid_cart_products.exam_count), 0) AS exam_count
+        FROM (
+            SELECT DISTINCT
+                pcp.cart_product_id,
+                pcp.country,
+                pcp.exam_name,
+                pcp.cart_product_quantity AS exam_count
+            FROM ({paid_cart_product_fact}) pcp
+        ) paid_cart_products
+        GROUP BY paid_cart_products.country, paid_cart_products.exam_name
+        ORDER BY paid_cart_products.country ASC, paid_cart_products.exam_name ASC
     """
     return await execute_repo_query(query, params, expanding_keys)
 
@@ -55,31 +54,15 @@ async def fetch_country_presence_rows(
     params: dict,
     expanding_keys: list[str],
 ):
+    paid_payment_fact = build_paid_payment_fact_subquery(where_clause)
     query = f"""
         SELECT DISTINCT
-            l.site AS country,
-            l.id AS lead_id
-        FROM seller_lead sl
-        JOIN `lead` l ON sl.leadId = l.id
-        LEFT JOIN zone z ON l.zoneId = z.id
-        LEFT JOIN (SELECT DISTINCT leadId, stateName, city FROM lead_address) la ON la.leadId = l.id
-        JOIN cart c ON c.sellerLeadId = sl.id
-        JOIN cart_product cp ON cp.cartId = c.id
-        JOIN product p ON p.id = cp.productId
-        WHERE {where_clause}
-          AND EXISTS (
-              SELECT 1
-              FROM payment pay
-              WHERE pay.cartId = c.id
-                AND pay.status = :payment_status_aprobado
-          )
-        ORDER BY l.site ASC, l.id ASC
+            qpay.country,
+            qpay.lead_id
+        FROM ({paid_payment_fact}) qpay
+        ORDER BY qpay.country ASC, qpay.lead_id ASC
     """
-    query_params = {
-        **params,
-        "payment_status_aprobado": PaymentStatus.APROBADO.value,
-    }
-    return await execute_repo_query(query, query_params, expanding_keys)
+    return await execute_repo_query(query, dict(params), expanding_keys)
 
 
 async def fetch_country_metric_rows(
@@ -87,33 +70,22 @@ async def fetch_country_metric_rows(
     params: dict,
     expanding_keys: list[str],
 ):
+    paid_allocation_fact = build_paid_student_allocation_fact_subquery(where_clause)
+    paid_cart_product_fact = build_deduped_paid_cart_product_fact_subquery(paid_allocation_fact)
     query = f"""
         SELECT
-            l.site AS country,
-            l.id AS lead_id,
-            COALESCE(SUM(cp.quantity), 0) AS exams
-        FROM seller_lead sl
-        JOIN `lead` l ON sl.leadId = l.id
-        LEFT JOIN zone z ON l.zoneId = z.id
-        LEFT JOIN (SELECT DISTINCT leadId, stateName, city FROM lead_address) la ON la.leadId = l.id
-        JOIN cart c ON c.sellerLeadId = sl.id
-        JOIN cart_product cp ON cp.cartId = c.id
-        JOIN product p ON p.id = cp.productId
-        WHERE {where_clause}
-          AND cp.deletedAt IS NULL
-          AND p.productType = :product_type_exam
-          AND EXISTS (
-              SELECT 1
-              FROM payment pay
-              WHERE pay.cartId = c.id
-                AND pay.status = :payment_status_aprobado
-          )
-        GROUP BY l.site, l.id
-        ORDER BY l.site ASC, l.id ASC
+            paid_cart_products.country,
+            paid_cart_products.lead_id,
+            COALESCE(SUM(paid_cart_products.exam_count), 0) AS exams
+        FROM (
+            SELECT DISTINCT
+                pcp.cart_product_id,
+                pcp.country,
+                pcp.lead_id,
+                pcp.cart_product_quantity AS exam_count
+            FROM ({paid_cart_product_fact}) pcp
+        ) paid_cart_products
+        GROUP BY paid_cart_products.country, paid_cart_products.lead_id
+        ORDER BY paid_cart_products.country ASC, paid_cart_products.lead_id ASC
     """
-    query_params = {
-        **params,
-        "payment_status_aprobado": PaymentStatus.APROBADO.value,
-        "product_type_exam": ProductType.EXAM.value,
-    }
-    return await execute_repo_query(query, query_params, expanding_keys)
+    return await execute_repo_query(query, dict(params), expanding_keys)

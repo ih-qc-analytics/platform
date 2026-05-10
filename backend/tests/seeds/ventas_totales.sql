@@ -21,6 +21,13 @@ INSERT INTO `lead` (id, name, site, zoneId, campaign) VALUES
   (2, 'Colegio Colombia A',  'colombia', 2, 'test'),
   (3, 'Colegio Mexico B',    'mexico',   1, 'test');  -- second mexico school
 
+INSERT INTO lead_address (id, stateName, city, comments, leadId, deletedAt) VALUES
+  (1, 'CDMX', 'Mexico City', '', 1, NULL),
+  (2, 'Jalisco', 'Guadalajara', '', 1, NULL),
+  (3, 'Bogota', 'Bogota', '', 2, NULL),
+  (4, 'Nuevo Leon', 'Monterrey', '', 3, NULL),
+  (5, 'CDMX', 'Mexico City', '', 1, '2025-01-01');
+
 -- ─────────────────────────────────────────────
 -- SELLER_LEAD
 -- all three businessStatus values represented
@@ -60,6 +67,7 @@ INSERT INTO cart (id, sellerLeadId, total, cost, createdAt, deletedAt) VALUES
 
 INSERT INTO payment (id, cartId, status) VALUES
   (1, 1, 'Aprobado'),
+  (7, 1, 'Aprobado'),
   (2, 2, 'Aprobado'),
   (3, 3, 'Aprobado'),
   (4, 4, 'Aprobado'),
@@ -117,16 +125,18 @@ INSERT INTO payment (id, cartId, status) VALUES
 -- DATE RANGE 2025-01-01 to 2025-01-31:
 --   revenue: 2300 (only cart 1)
 -- ─────────────────────────────────────────────
-INSERT INTO cart_product (id, cartId, productId, quantity, total, cost) VALUES
+INSERT INTO cart_product (id, cartId, productId, quantity, total, cost, deletedAt) VALUES
   -- cart 1: lead 1, mexico jan
-  (1, 1, 1, 2, 2000, 1000),
-  (2, 1, 2, 1, 300,  100),
+  (1, 1, 1, 2, 2000, 1000, NULL),
+  (2, 1, 2, 1, 300,  100, NULL),
   -- cart 2: lead 2, colombia feb
-  (3, 2, 1, 3, 3000, 1500),
-  (4, 2, 3, 1, 500,  200),
+  (3, 2, 1, 3, 3000, 1500, NULL),
+  (4, 2, 3, 1, 500,  200, NULL),
   -- cart 3: lead 3, mexico mar
-  (5, 3, 1, 1, 1000, 500),
+  (5, 3, 1, 1, 1000, 500, NULL),
   -- cart 4: lead 1, mexico dec 2024
-  (6, 4, 2, 2, 600,  200),
+  (6, 4, 2, 2, 600,  200, NULL),
   -- cart 5: deleted (should NOT appear)
-  (7, 5, 1, 1, 1000, 500);
+  (7, 5, 1, 1, 1000, 500, NULL),
+  -- deleted line item on an approved cart: must NOT appear
+  (8, 1, 1, 1, 1000, 500, '2025-01-16 10:00:00');

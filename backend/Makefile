@@ -1,16 +1,11 @@
 PYTEST   = .venv/bin/pytest
 UVICORN  = .venv/bin/uvicorn
 
-ifneq (,$(wildcard .env))
-  include .env
-  export
-endif
-
 run:
-	$(UVICORN) app.main:app --reload
+	$(UVICORN) app.main:app --host 0.0.0.0 --port 8000 --reload
 
 run-prod:
-	SOURCE_DB_URL="$$(sed -n "s/^PROD_SOURCE_DB_URL='\(.*\)'/\1/p" .env)" ENVIRONMENT=production $(UVICORN) app.main:app --reload
+	ENVIRONMENT=prod $(UVICORN) app.main:app --host 0.0.0.0 --port 8000 --reload
 
 seed-ui:
 	docker exec -i platform-mysql-1 mysql -u test_user -ptestpassword ihqc_test -e \

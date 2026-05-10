@@ -121,7 +121,7 @@ class AsesorDetail(BaseModel):
     total_schools: int
     total_exams: int
     total_revenue: float
-    exam_breakdown: dict[str, ExamBrandDetail]
+    exam_breakdown: dict[str, ExamBrandDetail | int]
     ganados: BusinessStatusDetail
     perdidos: BusinessStatusDetail
     mantenidos: BusinessStatusDetail

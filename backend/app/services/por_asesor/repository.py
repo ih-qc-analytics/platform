@@ -4,7 +4,16 @@ import json
 from sqlalchemy import bindparam, text
 
 from app.database import SessionLocal
-from app.enums import PaymentStatus, ProductType
+from app.enums import ProductType
+from app.services.utils.fact_subqueries import (
+    build_deduped_paid_cart_product_fact_subquery,
+    build_paid_student_allocation_fact_subquery,
+)
+from app.services.utils.report_filters import (
+    build_payment_fact_where_clause,
+    build_student_payment_fact_where_clause,
+    payment_date_expr,
+)
 
 
 def encode_cursor(total_revenue: float, seller_name: str, seller_id: int) -> str:
@@ -36,19 +45,42 @@ async def execute_repo_query(query: str, params: dict, expanding_keys: list[str]
         return result.fetchall()
 
 
+def build_payment_where_clause(filters, include_sellers: bool = False) -> tuple[str, dict, list[str]]:
+    where_clause, params, expanding_keys = build_payment_fact_where_clause(filters, year=filters.year)
+    conditions = [where_clause]
+    if include_sellers and filters.sellers:
+        conditions.append("CONCAT(s.name, ' ', s.lastName) IN :sellers")
+        params["sellers"] = list(filters.sellers)
+        expanding_keys.append("sellers")
+    return " AND ".join(conditions), params, expanding_keys
+
+
+def build_student_payment_where_clause(filters, include_sellers: bool = False) -> tuple[str, dict, list[str]]:
+    where_clause, params, expanding_keys = build_student_payment_fact_where_clause(
+        filters,
+        year=filters.year,
+        include_exam_product=True,
+    )
+    conditions = [where_clause]
+    if include_sellers and filters.sellers:
+        conditions.append("CONCAT(s.name, ' ', s.lastName) IN :sellers")
+        params["sellers"] = list(filters.sellers)
+        expanding_keys.append("sellers")
+    return " AND ".join(conditions), params, expanding_keys
+
+
 def build_summary_base_query(where_clause: str) -> str:
     return f"""
         SELECT
             s.id AS seller_id,
             CONCAT(s.name, ' ', s.lastName) AS seller_name,
-            COALESCE(SUM(cp.total), 0) AS total_revenue
+            COALESCE(SUM(pay.quantity), 0) AS total_revenue
         FROM seller s
         JOIN seller_lead sl ON sl.sellerId = s.id
         JOIN `lead` l ON sl.leadId = l.id
         LEFT JOIN zone z ON l.zoneId = z.id
         JOIN cart c ON c.sellerLeadId = sl.id
-        JOIN cart_product cp ON cp.cartId = c.id
-        JOIN product p ON cp.productId = p.id
+        JOIN payment pay ON pay.cartId = c.id
         WHERE {where_clause}
         GROUP BY s.id, s.name, s.lastName
     """
@@ -120,22 +152,23 @@ async def fetch_summary_exam_breakdown_rows_by_seller_ids(
     if not seller_ids:
         return []
 
+    paid_allocation_fact = build_paid_student_allocation_fact_subquery(where_clause)
+    paid_cart_product_fact = build_deduped_paid_cart_product_fact_subquery(paid_allocation_fact)
     query = f"""
         SELECT
-            s.id AS seller_id,
-            ec.name AS exam_name,
-            COALESCE(SUM(cp.quantity), 0) AS exam_count
-        FROM seller s
-        JOIN seller_lead sl ON sl.sellerId = s.id
-        JOIN `lead` l ON sl.leadId = l.id
-        LEFT JOIN zone z ON l.zoneId = z.id
-        JOIN cart c ON c.sellerLeadId = sl.id
-        JOIN cart_product cp ON cp.cartId = c.id
-        JOIN product p ON cp.productId = p.id
-        JOIN exam_cat ec ON p.examId = ec.id
-        WHERE {where_clause}
-          AND s.id IN :seller_ids
-        GROUP BY s.id, ec.name
+            paid_cart_products.seller_id,
+            paid_cart_products.exam_name,
+            COALESCE(SUM(paid_cart_products.exam_count), 0) AS exam_count
+        FROM (
+            SELECT DISTINCT
+                pcp.seller_id,
+                pcp.cart_product_id,
+                pcp.exam_name,
+                pcp.cart_product_quantity AS exam_count
+            FROM ({paid_cart_product_fact}) pcp
+            WHERE pcp.seller_id IN :seller_ids
+        ) paid_cart_products
+        GROUP BY paid_cart_products.seller_id, paid_cart_products.exam_name
     """
     breakdown_params = {
         **params,
@@ -158,22 +191,16 @@ async def fetch_school_presence_rows(
         JOIN seller_lead sl ON sl.sellerId = s.id
         JOIN `lead` l ON sl.leadId = l.id
         LEFT JOIN zone z ON l.zoneId = z.id
-        LEFT JOIN (SELECT DISTINCT leadId, stateName, city FROM lead_address) la ON la.leadId = l.id
         JOIN cart c ON c.sellerLeadId = sl.id
+        JOIN payment pay ON pay.cartId = c.id
         WHERE {where_clause}
-          AND YEAR(c.createdAt) = :presence_year
-          AND EXISTS (
-              SELECT 1 FROM payment pay
-              WHERE pay.cartId = c.id
-                AND pay.status = :payment_status_aprobado
-          )
+          AND YEAR({payment_date_expr()}) = :presence_year
     """
     return await execute_repo_query(
         query,
         {
             **params,
             "presence_year": year,
-            "payment_status_aprobado": PaymentStatus.APROBADO.value,
         },
         expanding_keys,
     )
@@ -185,38 +212,41 @@ async def fetch_school_metric_rows(
     expanding_keys: list[str],
     year: int,
 ):
+    paid_allocation_fact = build_paid_student_allocation_fact_subquery(where_clause)
+    paid_cart_product_fact = build_deduped_paid_cart_product_fact_subquery(paid_allocation_fact)
     query = f"""
         SELECT
-            s.id AS seller_id,
-            sl.leadId AS lead_id,
-            COALESCE(SUM(cp.quantity), 0) AS exams,
-            COALESCE(SUM(cp.total), 0) AS revenue
-        FROM seller s
-        JOIN seller_lead sl ON sl.sellerId = s.id
-        JOIN `lead` l ON sl.leadId = l.id
-        LEFT JOIN zone z ON l.zoneId = z.id
-        LEFT JOIN (SELECT DISTINCT leadId, stateName, city FROM lead_address) la ON la.leadId = l.id
-        JOIN cart c ON c.sellerLeadId = sl.id
-        JOIN cart_product cp ON cp.cartId = c.id
-        JOIN product p ON cp.productId = p.id
-        WHERE {where_clause}
-          AND cp.deletedAt IS NULL
-          AND p.productType = :product_type_exam
-          AND YEAR(c.createdAt) = :metrics_year
-          AND EXISTS (
-              SELECT 1 FROM payment pay
-              WHERE pay.cartId = c.id
-                AND pay.status = :payment_status_aprobado
-          )
-        GROUP BY s.id, sl.leadId
+            paid_cart_products.seller_id,
+            paid_cart_products.lead_id,
+            COALESCE(SUM(paid_cart_products.exam_count), 0) AS exams,
+            COALESCE(MAX(allocated_revenue.revenue), 0) AS revenue
+        FROM (
+            SELECT DISTINCT
+                pcp.seller_id,
+                pcp.lead_id,
+                pcp.cart_product_id,
+                pcp.cart_product_quantity AS exam_count
+            FROM ({paid_cart_product_fact}) pcp
+            WHERE YEAR(pcp.payment_day) = :metrics_year
+        ) paid_cart_products
+        LEFT JOIN (
+            SELECT
+                qsp.seller_id,
+                qsp.lead_id,
+                COALESCE(SUM(qsp.allocated_amount), 0) AS revenue
+            FROM ({paid_allocation_fact}) qsp
+            WHERE YEAR(qsp.payment_day) = :metrics_year
+            GROUP BY qsp.seller_id, qsp.lead_id
+        ) allocated_revenue
+          ON allocated_revenue.seller_id = paid_cart_products.seller_id
+         AND allocated_revenue.lead_id = paid_cart_products.lead_id
+        GROUP BY paid_cart_products.seller_id, paid_cart_products.lead_id
     """
     return await execute_repo_query(
         query,
         {
             **params,
             "metrics_year": year,
-            "payment_status_aprobado": PaymentStatus.APROBADO.value,
-            "product_type_exam": ProductType.EXAM.value,
         },
         expanding_keys,
     )

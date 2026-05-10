@@ -1,10 +1,15 @@
 from sqlalchemy import bindparam, text
 
 from app.database import SessionLocal
-from app.enums import PaymentStatus, ProductType
 from app.schemas.reports import DetalleFilters, DetalleReportResponse, DetalleRow
 from app.services.por_asesor.product_grouping import EXAM_NAME_ORDER, canonical_exam_name
-from app.services.shared import build_geo_where_clause
+from app.services.utils.fact_subqueries import (
+    build_deduped_paid_cart_product_fact_subquery,
+    build_paid_student_allocation_fact_subquery,
+)
+from app.services.utils.report_filters import (
+    build_student_payment_fact_where_clause,
+)
 
 
 DETALLE_EXAM_NAME_ORDER = [*EXAM_NAME_ORDER, "Other"]
@@ -15,22 +20,11 @@ def create_empty_exam_counts() -> dict[str, int]:
 
 
 def build_detalle_where(filters: DetalleFilters) -> tuple[str, dict, list[str]]:
-    conditions, params, expanding_keys = build_geo_where_clause(filters)
-    conditions.extend(
-        [
-            "cp.deletedAt IS NULL",
-            "p.productType = :product_type_exam",
-            """
-            EXISTS (
-                SELECT 1 FROM payment pay
-                WHERE pay.cartId = c.id
-                  AND pay.status = :payment_status_aprobado
-            )
-            """.strip(),
-        ]
+    where_clause, params, expanding_keys = build_student_payment_fact_where_clause(
+        filters,
+        include_exam_product=True,
     )
-    params["product_type_exam"] = ProductType.EXAM.value
-    params["payment_status_aprobado"] = PaymentStatus.APROBADO.value
+    conditions = [where_clause]
 
     if filters.cursor is not None:
         conditions.append("cp.id > :cursor")
@@ -42,40 +36,25 @@ def build_detalle_where(filters: DetalleFilters) -> tuple[str, dict, list[str]]:
         )
         params["search"] = f"%{filters.search}%"
 
-    if filters.date_from:
-        conditions.append("c.createdAt >= :date_from")
-        params["date_from"] = filters.date_from
-
-    if filters.date_to:
-        conditions.append("c.createdAt <= :date_to")
-        params["date_to"] = filters.date_to
-
     return " AND ".join(conditions), params, expanding_keys
 
 
 async def getDetalleData(filters: DetalleFilters) -> DetalleReportResponse:
     where_clause, params, expanding_keys = build_detalle_where(filters)
     params["page_size"] = filters.page_size + 1
+    paid_allocation_fact = build_paid_student_allocation_fact_subquery(where_clause)
+    paid_cart_product_fact = build_deduped_paid_cart_product_fact_subquery(paid_allocation_fact)
 
     query = f"""
-        SELECT
-            cp.id,
-            CONCAT(s.name, ' ', s.lastName) AS seller_name,
-            l.name AS school_name,
-            cp.testDate AS exam_date,
-            ec.name AS exam_name,
-            cp.quantity
-        FROM cart c
-        JOIN seller_lead sl ON c.sellerLeadId = sl.id
-        JOIN seller s ON sl.sellerId = s.id
-        JOIN `lead` l ON sl.leadId = l.id
-        LEFT JOIN zone z ON l.zoneId = z.id
-        LEFT JOIN (SELECT DISTINCT leadId, stateName, city FROM lead_address) la ON la.leadId = l.id
-        JOIN cart_product cp ON cp.cartId = c.id
-        JOIN product p ON cp.productId = p.id
-        LEFT JOIN exam_cat ec ON p.examId = ec.id
-        WHERE {where_clause}
-        ORDER BY cp.id ASC
+        SELECT DISTINCT
+            pcp.cart_product_id AS id,
+            pcp.seller_name,
+            pcp.school_name,
+            pcp.exam_date,
+            pcp.exam_name,
+            pcp.cart_product_quantity AS quantity
+        FROM ({paid_cart_product_fact}) pcp
+        ORDER BY pcp.cart_product_id ASC
         LIMIT :page_size
     """
 
@@ -87,7 +66,7 @@ async def getDetalleData(filters: DetalleFilters) -> DetalleReportResponse:
         result = await session.execute(stmt, params)
         raw_rows = result.fetchall()
 
-    # Pivot: one DetalleRow per cp.id, aggregating exam counts
+    # One DetalleRow per paid cart-product line.
     grouped: dict[int, dict] = {}
     order: list[int] = []
     for row in raw_rows:

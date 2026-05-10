@@ -1,10 +1,11 @@
 import asyncio
 from collections import defaultdict
+from types import SimpleNamespace
 
 from fastapi import HTTPException
 from sqlalchemy import text
 
-from app.enums import PaymentStatus, ProductType
+from app.enums import PaymentStatus
 from app.schemas.reports import (
     AsesorDetail,
     AsesorFilters,
@@ -18,44 +19,18 @@ from app.services.por_asesor.product_grouping import (
     canonical_exam_category,
 )
 from app.services.por_asesor.repository import (
+    build_payment_where_clause,
+    build_student_payment_where_clause,
     execute_repo_query,
     fetch_school_metric_rows,
     fetch_school_presence_rows,
     fetch_paginated_summary_rows,
     fetch_summary_exam_breakdown_rows_by_seller_ids,
 )
-from app.services.shared import build_geo_where_clause
+from app.services.utils.fact_subqueries import build_paid_student_allocation_fact_subquery
+from app.services.utils.fact_subqueries import build_deduped_paid_cart_product_fact_subquery
+from app.services.utils.report_filters import build_payment_fact_where_clause
 from app.database import SessionLocal
-
-
-def build_common_filters(filters: AsesorFilters, include_sellers: bool = False) -> tuple[str, dict, list[str]]:
-    conditions, params, expanding_keys = build_geo_where_clause(filters)
-    conditions.extend(
-        [
-            "cp.deletedAt IS NULL",
-            "sl.deletedAt IS NULL",
-            "l.deletedAt IS NULL",
-            "YEAR(c.createdAt) = :year",
-            "p.productType = :product_type_exam",
-            """
-            EXISTS (
-                SELECT 1 FROM payment pay
-                WHERE pay.cartId = c.id
-                  AND pay.status = :payment_status_aprobado
-            )
-            """.strip(),
-        ]
-    )
-    params["year"] = filters.year
-    params["product_type_exam"] = ProductType.EXAM.value
-    params["payment_status_aprobado"] = PaymentStatus.APROBADO.value
-    if include_sellers:
-        if filters.sellers:
-            conditions.append("CONCAT(s.name, ' ', s.lastName) IN :sellers")
-            params["sellers"] = list(filters.sellers)
-            expanding_keys.append("sellers")
-
-    return " AND ".join(conditions), params, expanding_keys
 
 
 async def execute_query(query: str, params: dict, expanding_keys: list[str]):
@@ -73,29 +48,49 @@ async def fetch_seller_name(seller_id: int) -> str | None:
 
 
 async def fetch_detail_aggregate_row(
-    where_clause: str,
-    params: dict,
-    expanding_keys: list[str],
+    payment_where_clause: str,
+    payment_params: dict,
+    payment_expanding_keys: list[str],
+    breakdown_where_clause: str,
+    breakdown_params: dict,
+    breakdown_expanding_keys: list[str],
 ):
-    query = f"""
+    payment_query = f"""
         SELECT
             COUNT(DISTINCT l.id) AS total_schools,
-            COALESCE(SUM(cp.quantity), 0) AS total_exams,
-            COALESCE(SUM(cp.total), 0) AS total_revenue
+            COALESCE(SUM(pay.quantity), 0) AS total_revenue
         FROM seller_lead sl
         JOIN `lead` l ON sl.leadId = l.id
         LEFT JOIN zone z ON l.zoneId = z.id
         JOIN cart c ON c.sellerLeadId = sl.id
-        JOIN cart_product cp ON cp.cartId = c.id
-        JOIN product p ON cp.productId = p.id
-        WHERE sl.sellerId = :seller_id AND {where_clause}
+        JOIN payment pay ON pay.cartId = c.id
+        WHERE sl.sellerId = :seller_id AND {payment_where_clause}
     """
-    rows = await execute_query(query, params, expanding_keys)
-    return rows[0] if rows else None
+    paid_allocation_fact = build_paid_student_allocation_fact_subquery(breakdown_where_clause)
+    paid_cart_product_fact = build_deduped_paid_cart_product_fact_subquery(paid_allocation_fact)
+    exams_query = f"""
+        SELECT COALESCE(SUM(paid_cart_products.exam_count), 0) AS total_exams
+        FROM (
+            SELECT DISTINCT
+                pcp.cart_product_id,
+                pcp.cart_product_quantity AS exam_count
+            FROM ({paid_cart_product_fact}) pcp
+            WHERE pcp.seller_id = :seller_id
+        ) paid_cart_products
+    """
+    payment_rows = await execute_query(payment_query, payment_params, payment_expanding_keys)
+    exam_rows = await execute_query(exams_query, breakdown_params, breakdown_expanding_keys)
+    payment_row = payment_rows[0] if payment_rows else None
+    exam_row = exam_rows[0] if exam_rows else None
+    return SimpleNamespace(
+        total_schools=int((payment_row.total_schools if payment_row else 0) or 0),
+        total_revenue=float((payment_row.total_revenue if payment_row else 0) or 0),
+        total_exams=int((exam_row.total_exams if exam_row else 0) or 0),
+    )
 
 
 async def fetch_detail_geo_rows(
-    where_clause: str,
+    payment_where_clause: str,
     params: dict,
     expanding_keys: list[str],
 ):
@@ -110,9 +105,8 @@ async def fetch_detail_geo_rows(
         LEFT JOIN zone z ON l.zoneId = z.id
         LEFT JOIN (SELECT DISTINCT leadId, stateName, city FROM lead_address) la ON la.leadId = l.id
         JOIN cart c ON c.sellerLeadId = sl.id
-        JOIN cart_product cp ON cp.cartId = c.id
-        JOIN product p ON cp.productId = p.id
-        WHERE sl.sellerId = :seller_id AND {where_clause}
+        JOIN payment pay ON pay.cartId = c.id
+        WHERE sl.sellerId = :seller_id AND {payment_where_clause}
     """
     return await execute_query(query, params, expanding_keys)
 
@@ -122,22 +116,33 @@ async def fetch_detail_exam_breakdown_rows(
     params: dict,
     expanding_keys: list[str],
 ):
+    paid_allocation_fact = build_paid_student_allocation_fact_subquery(where_clause)
+    paid_cart_product_fact = build_deduped_paid_cart_product_fact_subquery(paid_allocation_fact)
     query = f"""
         SELECT
-            ec.name AS exam_name,
-            COALESCE(SUM(cp.quantity), 0) AS exams,
-            COUNT(DISTINCT l.id) AS schools,
-            COALESCE(SUM(cp.total), 0) AS revenue,
-            GROUP_CONCAT(DISTINCT l.id ORDER BY l.id SEPARATOR ',') AS lead_ids
-        FROM seller_lead sl
-        JOIN `lead` l ON sl.leadId = l.id
-        LEFT JOIN zone z ON l.zoneId = z.id
-        JOIN cart c ON c.sellerLeadId = sl.id
-        JOIN cart_product cp ON cp.cartId = c.id
-        JOIN product p ON cp.productId = p.id
-        JOIN exam_cat ec ON p.examId = ec.id
-        WHERE sl.sellerId = :seller_id AND {where_clause}
-        GROUP BY ec.name
+            pcp.exam_name,
+            COALESCE(SUM(pcp.exams), 0) AS exams,
+            COUNT(DISTINCT pcp.lead_id) AS schools,
+            COALESCE(MAX(ar.revenue), 0) AS revenue,
+            GROUP_CONCAT(DISTINCT pcp.lead_id ORDER BY pcp.lead_id SEPARATOR ',') AS lead_ids
+        FROM (
+            SELECT DISTINCT
+                pcp.cart_product_id,
+                pcp.exam_name,
+                pcp.cart_product_quantity AS exams,
+                pcp.lead_id
+            FROM ({paid_cart_product_fact}) pcp
+            WHERE pcp.seller_id = :seller_id
+        ) pcp
+        LEFT JOIN (
+            SELECT
+                qsp.exam_name,
+                COALESCE(SUM(qsp.allocated_amount), 0) AS revenue
+            FROM ({paid_allocation_fact}) qsp
+            WHERE qsp.seller_id = :seller_id
+            GROUP BY qsp.exam_name
+        ) ar ON ar.exam_name = pcp.exam_name
+        GROUP BY pcp.exam_name
     """
     return await execute_query(query, params, expanding_keys)
 
@@ -158,6 +163,10 @@ async def fetch_detail_status_rows(
 
 def empty_status() -> BusinessStatusDetail:
     return BusinessStatusDetail(schools=0, exams=0, revenue=0.0)
+
+
+def empty_detail_breakdown() -> dict[str, int]:
+    return {category: 0 for category in EXAM_CATEGORY_ORDER}
 
 
 def fill_summary_exam_categories(breakdown: dict[str, int]) -> dict[str, int]:
@@ -212,8 +221,7 @@ def map_summary_exam_breakdowns(rows) -> dict[int, dict[str, int]]:
     exam_breakdowns: dict[int, dict[str, int]] = {}
     for row in rows:
         seller_breakdown = exam_breakdowns.setdefault(row.seller_id, {})
-        category = canonical_exam_category(row.exam_name)
-        seller_breakdown[category] = seller_breakdown.get(category, 0) + int(row.exam_count or 0)
+        seller_breakdown[row.exam_name] = seller_breakdown.get(row.exam_name, 0) + int(row.exam_count or 0)
     return normalize_summary_exam_breakdowns(exam_breakdowns)
 
 
@@ -221,13 +229,12 @@ def map_detail_exam_breakdown(rows) -> dict[str, ExamBrandDetail]:
     breakdown: dict[str, ExamBrandDetail] = {}
     school_id_map: dict[str, set[int]] = {}
     for row in rows:
-        category = canonical_exam_category(row.exam_name)
-        breakdown[category] = ExamBrandDetail(
-            exams=breakdown.get(category, ExamBrandDetail(exams=0, schools=0, revenue=0.0)).exams + int(row.exams or 0),
-            schools=breakdown.get(category, ExamBrandDetail(exams=0, schools=0, revenue=0.0)).schools + int(row.schools or 0),
-            revenue=breakdown.get(category, ExamBrandDetail(exams=0, schools=0, revenue=0.0)).revenue + float(row.revenue or 0),
+        breakdown[row.exam_name] = ExamBrandDetail(
+            exams=breakdown.get(row.exam_name, ExamBrandDetail(exams=0, schools=0, revenue=0.0)).exams + int(row.exams or 0),
+            schools=breakdown.get(row.exam_name, ExamBrandDetail(exams=0, schools=0, revenue=0.0)).schools + int(row.schools or 0),
+            revenue=breakdown.get(row.exam_name, ExamBrandDetail(exams=0, schools=0, revenue=0.0)).revenue + float(row.revenue or 0),
         )
-        school_id_map.setdefault(category, set()).update(parse_grouped_ids(row.lead_ids))
+        school_id_map.setdefault(row.exam_name, set()).update(parse_grouped_ids(row.lead_ids))
     return normalize_detail_exam_breakdown(breakdown, school_id_map)
 
 
@@ -276,6 +283,13 @@ def build_asesor_detail_response(
     exam_breakdown: dict[str, ExamBrandDetail],
     status_map: dict[str, BusinessStatusDetail],
 ) -> AsesorDetail:
+    has_any_detail_rows = bool(aggregate_row and any(
+        [
+            int((aggregate_row.total_schools if aggregate_row else 0) or 0),
+            int((aggregate_row.total_exams if aggregate_row else 0) or 0),
+            float((aggregate_row.total_revenue if aggregate_row else 0) or 0),
+        ]
+    ))
     return AsesorDetail(
         seller_name=seller_name,
         countries=unique_sorted_values(geo_rows, "country"),
@@ -285,7 +299,7 @@ def build_asesor_detail_response(
         total_schools=int((aggregate_row.total_schools if aggregate_row else 0) or 0),
         total_exams=int((aggregate_row.total_exams if aggregate_row else 0) or 0),
         total_revenue=float((aggregate_row.total_revenue if aggregate_row else 0) or 0),
-        exam_breakdown=exam_breakdown,
+        exam_breakdown=exam_breakdown if has_any_detail_rows else empty_detail_breakdown(),
         ganados=status_map.get("ganado", empty_status()),
         perdidos=status_map.get("perdido", empty_status()),
         mantenidos=status_map.get("mantenido", empty_status()),
@@ -293,19 +307,24 @@ def build_asesor_detail_response(
 
 
 async def getAsesorReport(filters: AsesorFilters) -> AsesorReportResponse:
-    where_clause, params, expanding_keys = build_common_filters(filters, include_sellers=True)
+    payment_where_clause, payment_params, payment_expanding_keys = build_payment_where_clause(
+        filters, include_sellers=True
+    )
     summary_rows, has_more, next_cursor = await fetch_paginated_summary_rows(
-        where_clause,
-        params,
-        expanding_keys,
+        payment_where_clause,
+        payment_params,
+        payment_expanding_keys,
         limit=filters.limit,
         cursor=filters.cursor,
     )
     seller_ids = [int(row.seller_id) for row in summary_rows]
+    breakdown_where_clause, breakdown_params, breakdown_expanding_keys = build_student_payment_where_clause(
+        filters, include_sellers=True
+    )
     breakdown_rows = await fetch_summary_exam_breakdown_rows_by_seller_ids(
-        where_clause,
-        params,
-        expanding_keys,
+        breakdown_where_clause,
+        breakdown_params,
+        breakdown_expanding_keys,
         seller_ids,
     )
     exam_breakdowns = map_summary_exam_breakdowns(breakdown_rows)
@@ -318,12 +337,25 @@ async def getAsesorDetail(seller_id: int, filters: AsesorFilters) -> AsesorDetai
     if seller_name is None:
         raise HTTPException(status_code=404, detail="Seller not found")
 
-    where_clause, params, expanding_keys = build_common_filters(filters)
-    detail_params = {**params, "seller_id": seller_id}
+    payment_where_clause, payment_params, payment_expanding_keys = build_payment_where_clause(filters)
+    breakdown_where_clause, breakdown_params, breakdown_expanding_keys = build_student_payment_where_clause(filters)
+    detail_payment_params = {**payment_params, "seller_id": seller_id}
+    detail_breakdown_params = {**breakdown_params, "seller_id": seller_id}
     aggregate_row, geo_rows, breakdown_rows, status_rows = await asyncio.gather(
-        fetch_detail_aggregate_row(where_clause, detail_params, expanding_keys),
-        fetch_detail_geo_rows(where_clause, detail_params, expanding_keys),
-        fetch_detail_exam_breakdown_rows(where_clause, detail_params, expanding_keys),
+        fetch_detail_aggregate_row(
+            payment_where_clause,
+            detail_payment_params,
+            payment_expanding_keys,
+            breakdown_where_clause,
+            detail_breakdown_params,
+            breakdown_expanding_keys,
+        ),
+        fetch_detail_geo_rows(payment_where_clause, detail_payment_params, payment_expanding_keys),
+        fetch_detail_exam_breakdown_rows(
+            breakdown_where_clause,
+            detail_breakdown_params,
+            breakdown_expanding_keys,
+        ),
         fetch_detail_status_rows(seller_id, filters),
     )
     exam_breakdown = map_detail_exam_breakdown(breakdown_rows)
@@ -332,13 +364,11 @@ async def getAsesorDetail(seller_id: int, filters: AsesorFilters) -> AsesorDetai
 
 
 def build_presence_filters(filters: AsesorFilters, seller_id: int | None = None) -> tuple[str, dict[str, object], list[str]]:
-    conditions, params, expanding_keys = build_geo_where_clause(filters)
-    conditions.extend(
-        [
-            "sl.deletedAt IS NULL",
-            "l.deletedAt IS NULL",
-        ]
+    where_clause, params, expanding_keys = build_payment_fact_where_clause(
+        filters,
+        include_date_range=False,
     )
+    conditions = [where_clause]
     if filters.sellers:
         conditions.append("CONCAT(s.name, ' ', s.lastName) IN :sellers")
         params["sellers"] = list(filters.sellers)

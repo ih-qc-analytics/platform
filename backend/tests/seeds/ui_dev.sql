@@ -1,319 +1,158 @@
--- ─────────────────────────────────────────────
--- UI DEV SEED
--- 3 countries: mexico, colombia, peru
--- 24 carts spread across 2024 and 2025
--- Designed for visual verification of:
---   - KPI cards
---   - Trend line (monthly)
---   - Geo bar (by country)
---   - Prior year comparison
---   - Por asesor category grouping across all report buckets
---   - Detalle asesor canonical exam columns
---   - Otros KPI / empty productType handling
+-- UI DEV seed aligned to the payment + student_payments report model.
 --
--- NOTE:
---   Current backend report queries only count carts with at least one
---   approved payment, so the totals below reflect APPROVED carts only.
---
--- KNOWN TOTALS (no filters, approved payments only):
---   total_revenue:  64,300
---   total_cost:     26,950
---   profit_margin:  (64300 - 26950) / 64300 * 100 = 58.1%
---   exam_revenue:   57,100
---   book_revenue:   1,900
---   course_revenue: 4,800
---   otros_revenue:  500
---   total_exams:    49
---   total_books:    6
---   total_courses:  6
---   total_otros:    1
---   total_clients:  9
---
--- BY COUNTRY (approved payments only):
---   mexico:   27,000
---   colombia: 18,050
---   peru:     19,250
---
--- PRIOR YEAR APPROVED (2024):
---   total_revenue: 8,700
--- CURRENT YEAR APPROVED (2025):
---   total_revenue: 55,600
--- growth_pct with full-year 2025 date filter:
---   (55600 - 8700) / 8700 * 100 = 539.1%
---
--- APPROVED MONTHLY REVENUE:
---   2024-07: 3300
---   2024-08: 2400
---   2024-12: 3000
---   2025-01: 4900
---   2025-02: 5300
---   2025-03: 3950
---   2025-04: 6000
---   2025-06: 4300
---   2025-07: 6700
---   2025-08: 5100
---   2025-09: 5000
---   2025-10: 6100
---   2025-11: 5250
---   2025-12: 3000
--- ─────────────────────────────────────────────
+-- Edge cases intentionally covered:
+-- - approved payments with student allocations
+-- - approved payments without student_payments
+-- - multiple approved payments on one cart
+-- - multiple students allocated to the same cart_product
+-- - multiple addresses on one lead
+-- - pending payments
+-- - deleted carts
+-- - book / course / exam / empty-productType rows
 
--- ─────────────────────────────────────────────
--- ZONES
--- ─────────────────────────────────────────────
 INSERT INTO zone (id, name) VALUES
   (1, 'IH Mexico'),
   (2, 'IH Colombia'),
   (3, 'IH Peru');
 
--- ─────────────────────────────────────────────
--- SELLERS
--- ─────────────────────────────────────────────
 INSERT INTO seller (id, name, lastName) VALUES
-  (1, 'Ana',     'Garcia'),
-  (2, 'Carlos',  'Rodriguez'),
-  (3, 'Lucia',   'Rios'),
-  (4, 'Miguel',  'Torres');
+  (1, 'Ana', 'Garcia'),
+  (2, 'Carlos', 'Rodriguez'),
+  (3, 'Lucia', 'Rios'),
+  (4, 'Miguel', 'Torres');
 
--- ─────────────────────────────────────────────
--- LEADS (schools)
--- 3 per country = 9 total
--- ─────────────────────────────────────────────
 INSERT INTO `lead` (id, name, site, zoneId, campaign) VALUES
-  -- Mexico
-  (1, 'Colegio Mexico A',   'mexico',   1, 'ui-test'),
-  (2, 'Colegio Mexico B',   'mexico',   1, 'ui-test'),
-  (3, 'Colegio Mexico C',   'mexico',   1, 'ui-test'),
-  -- Colombia
-  (4, 'Colegio Colombia A', 'colombia', 2, 'ui-test'),
-  (5, 'Colegio Colombia B', 'colombia', 2, 'ui-test'),
-  (6, 'Colegio Colombia C', 'colombia', 2, 'ui-test'),
-  -- Peru
-  (7, 'Colegio Peru A',     'peru',     3, 'ui-test'),
-  (8, 'Colegio Peru B',     'peru',     3, 'ui-test'),
-  (9, 'Colegio Peru C',     'peru',     3, 'ui-test');
+  (1, 'Colegio Mexico Uno', 'mexico', 1, 'ui-dev'),
+  (2, 'Colegio Mexico Dos', 'mexico', 1, 'ui-dev'),
+  (3, 'Colegio Colombia Uno', 'colombia', 2, 'ui-dev'),
+  (4, 'Colegio Peru Uno', 'peru', 3, 'ui-dev'),
+  (5, 'Colegio Colombia Dos', 'colombia', 2, 'ui-dev'),
+  (6, 'Colegio Mexico Tres', 'mexico', 1, 'ui-dev');
 
-INSERT INTO lead_address (id, stateName, city, comments, leadId) VALUES
-  (1, 'CDMX', 'Mexico City', '', 1),
-  (2, 'Estado de Mexico', 'Toluca', '', 2),
-  (3, 'Jalisco', 'Guadalajara', '', 3),
-  (4, 'Bogota', 'Bogota', '', 4),
-  (5, 'Antioquia', 'Medellin', '', 5),
-  (6, 'Valle del Cauca', 'Cali', '', 6),
-  (7, 'Lima', 'Lima', '', 7),
-  (8, 'Arequipa', 'Arequipa', '', 8),
-  (9, 'Cusco', 'Cusco', '', 9);
+INSERT INTO lead_address (id, leadId, stateName, city, comments, deletedAt) VALUES
+  (1, 1, 'CDMX', 'Mexico City', '', NULL),
+  (2, 2, 'Jalisco', 'Guadalajara', '', NULL),
+  (3, 2, 'CDMX', 'Mexico City', '', NULL),
+  (4, 3, 'Antioquia', 'Medellin', '', NULL),
+  (5, 4, 'Lima', 'Lima', '', NULL),
+  (6, 5, 'Bogota', 'Bogota', '', NULL),
+  (7, 6, 'Puebla', 'Puebla', '', NULL),
+  (8, 1, 'CDMX', 'Mexico City', '', '2025-01-01');
 
--- ─────────────────────────────────────────────
--- SELLER_LEAD
--- ─────────────────────────────────────────────
 INSERT INTO seller_lead (id, sellerId, leadId, businessStatus) VALUES
-  (1, 1, 1, 'ganado'),
+  (1, 1, 1, 'mantenido'),
   (2, 1, 2, 'ganado'),
-  (3, 1, 3, 'mantenido'),
-  (4, 2, 4, 'ganado'),
+  (3, 2, 3, 'mantenido'),
+  (4, 3, 4, 'mantenido'),
   (5, 2, 5, 'ganado'),
-  (6, 2, 6, 'perdido'),
-  (7, 3, 7, 'ganado'),
-  (8, 3, 8, 'mantenido'),
-  (9, 4, 9, 'ganado');
+  (6, 4, 6, 'ganado');
 
--- ─────────────────────────────────────────────
--- EXAM CAT + PRODUCTS
--- ─────────────────────────────────────────────
 INSERT INTO exam_cat (id, name, shortName, presentation, dateType) VALUES
-  (1, 'KET',   'KET',   'Paper',    'fixed'),
-  (2, 'PET',   'PET',   'Computer', 'fixed'),
-  (3, 'FCE',   'FCE',   'Paper',    'fixed'),
+  (1, 'KET', 'KET', 'Paper', 'fixed'),
+  (2, 'PET', 'PET', 'Paper', 'fixed'),
+  (3, 'FCE', 'FCE', 'Paper', 'fixed'),
   (4, 'IELTS Academic', 'IELTS', 'Paper', 'fixed'),
-  (5, 'MET Go!', 'MET', 'Computer', 'fixed'),
+  (5, 'MET', 'MET', 'Computer', 'fixed'),
   (6, 'TKT', 'TKT', 'Paper', 'fixed'),
-  (7, 'TEA', 'TEA', 'Paper', 'fixed'),
-  (8, 'Placement Tests', 'PT', 'Computer', 'fixed'),
-  (9, 'PETfs', 'PETfs', 'Paper', 'fixed'),
-  (10, 'C1 Advanced (CAE)', 'CAE', 'Paper', 'fixed'),
-  (11, 'Linguaskill', 'LING', 'Computer', 'fixed');
+  (7, 'Placement Tests', 'PLACEMENT', 'Computer', 'fixed'),
+  (8, 'TEA', 'TEA', 'Paper', 'fixed');
 
 INSERT INTO product (id, name, productType, purchasePrice, salePrice, examId, site) VALUES
-  (1, 'KET Exam',        'exam',   400,  1000, 1, 'mexico'),
-  (2, 'PET Exam',        'exam',   500,  1200, 2, 'colombia'),
-  (3, 'FCE Exam',        'exam',   600,  1500, 3, 'peru'),
-  (4, 'Cambridge Book',  'book',   100,  300,  NULL, 'mexico'),
-  (5, 'Grammar Book',    'book',   150,  400,  NULL, 'colombia'),
-  (6, 'English Course',  'course', 300,  600,  NULL, 'peru'),
-  (7, 'Business Course', 'course', 400,  800,  NULL, 'colombia'),
-  (8, 'IELTS Exam', 'exam', 800, 1700, 4, 'mexico'),
-  (9, 'MET Go Exam', 'exam', 650, 1300, 5, 'colombia'),
-  (10, 'TKT Exam', 'exam', 450, 900, 6, 'mexico'),
-  (11, 'TEA Exam', 'exam', 550, 1100, 7, 'colombia'),
-  (12, 'Placement Test', 'exam', 300, 700, 8, 'mexico'),
-  (13, 'PETfs Exam', 'exam', 600, 1250, 9, 'colombia'),
-  (14, 'CAE Exam', 'exam', 700, 1600, 10, 'peru'),
-  (15, 'Linguaskill Exam', 'exam', 500, 950, 11, 'peru'),
-  (16, 'Other Fee', '', 0, 500, NULL, 'mexico');
+  (1, 'KET Exam', 'exam', 500, 1000, 1, 'mexico'),
+  (2, 'PET Exam', 'exam', 600, 1200, 2, 'mexico'),
+  (3, 'FCE Exam', 'exam', 700, 1500, 3, 'colombia'),
+  (4, 'IELTS Exam', 'exam', 800, 1700, 4, 'peru'),
+  (5, 'MET Exam', 'exam', 650, 1300, 5, 'colombia'),
+  (6, 'TKT Exam', 'exam', 450, 900, 6, 'mexico'),
+  (7, 'Placement Test', 'exam', 200, 500, 7, 'mexico'),
+  (8, 'Prep Book', 'book', 100, 300, NULL, 'mexico'),
+  (9, 'Prep Course', 'course', 300, 600, NULL, 'colombia'),
+  (10, 'Admin Fee', '', 0, 500, NULL, 'mexico'),
+  (11, 'TEA Exam', 'exam', 550, 1100, 8, 'colombia');
 
--- ─────────────────────────────────────────────
--- CARTS
--- 2024: 12 carts (Q1-Q4, all 3 countries)
--- 2025: 12 carts (Q1-Q4, all 3 countries)
--- ─────────────────────────────────────────────
 INSERT INTO cart (id, sellerLeadId, total, cost, createdAt, deletedAt) VALUES
-  -- 2024 Q1
-  (1,  1, 0, 0, '2024-01-15 10:00:00', NULL),  -- mexico
-  (2,  4, 0, 0, '2024-02-10 10:00:00', NULL),  -- colombia
-  (3,  7, 0, 0, '2024-03-20 10:00:00', NULL),  -- peru
-  -- 2024 Q2
-  (4,  2, 0, 0, '2024-04-05 10:00:00', NULL),  -- mexico
-  (5,  5, 0, 0, '2024-05-12 10:00:00', NULL),  -- colombia
-  (6,  8, 0, 0, '2024-06-18 10:00:00', NULL),  -- peru
-  -- 2024 Q3
-  (7,  3, 0, 0, '2024-07-22 10:00:00', NULL),  -- mexico
-  (8,  6, 0, 0, '2024-08-14 10:00:00', NULL),  -- colombia
-  (9,  9, 0, 0, '2024-09-09 10:00:00', NULL),  -- peru
-  -- 2024 Q4
-  (10, 1, 0, 0, '2024-10-30 10:00:00', NULL),  -- mexico
-  (11, 4, 0, 0, '2024-11-25 10:00:00', NULL),  -- colombia
-  (12, 7, 0, 0, '2024-12-05 10:00:00', NULL),  -- peru
-  -- 2025 Q1
-  (13, 2, 0, 0, '2025-01-10 10:00:00', NULL),  -- mexico
-  (14, 5, 0, 0, '2025-02-14 10:00:00', NULL),  -- colombia
-  (15, 8, 0, 0, '2025-03-20 10:00:00', NULL),  -- peru
-  -- 2025 Q2
-  (16, 3, 0, 0, '2025-04-08 10:00:00', NULL),  -- mexico
-  (17, 6, 0, 0, '2025-05-19 10:00:00', NULL),  -- colombia
-  (18, 9, 0, 0, '2025-06-25 10:00:00', NULL),  -- peru
-  -- 2025 Q3
-  (19, 1, 0, 0, '2025-07-11 10:00:00', NULL),  -- mexico
-  (20, 4, 0, 0, '2025-08-22 10:00:00', NULL),  -- colombia
-  (21, 7, 0, 0, '2025-09-15 10:00:00', NULL),  -- peru
-  -- 2025 Q4
-  (22, 2, 0, 0, '2025-10-03 10:00:00', NULL),  -- mexico
-  (23, 5, 0, 0, '2025-11-17 10:00:00', NULL),  -- colombia
-  (24, 8, 0, 0, '2025-12-20 10:00:00', NULL);  -- peru
+  (1, 1, 1000, 500, '2024-06-15 10:00:00', NULL),
+  (2, 3, 1300, 650, '2024-07-10 10:00:00', NULL),
+  (3, 4, 1700, 800, '2024-09-01 10:00:00', NULL),
+  (4, 1, 2000, 1000, '2025-01-10 10:00:00', NULL),
+  (5, 2, 1500, 700, '2025-02-05 10:00:00', NULL),
+  (6, 1, 900, 450, '2025-03-08 10:00:00', NULL),
+  (7, 3, 3600, 1700, '2025-04-01 10:00:00', NULL),
+  (8, 5, 3500, 1750, '2025-05-10 10:00:00', NULL),
+  (9, 4, 1700, 800, '2025-06-01 10:00:00', NULL),
+  (10, 6, 500, 200, '2025-06-28 10:00:00', NULL),
+  (11, 6, 500, 0, '2025-07-31 10:00:00', NULL),
+  (12, 3, 1500, 700, '2025-09-10 10:00:00', NULL),
+  (13, 4, 888, 444, '2025-10-01 10:00:00', '2025-10-02 10:00:00');
 
-INSERT INTO payment (id, cartId, status) VALUES
-  (1, 1, 'Pendiente'),
-  (2, 2, 'Pendiente'),
-  (3, 3, 'Pendiente'),
-  (4, 4, 'Pendiente'),
-  (5, 5, 'Pendiente'),
-  (6, 6, 'Pendiente'),
-  (7, 7, 'Aprobado'),
-  (8, 8, 'Aprobado'),
-  (9, 9, 'Pendiente'),
-  (10, 10, 'Pendiente'),
-  (11, 11, 'Pendiente'),
-  (12, 12, 'Aprobado'),
-  (13, 13, 'Aprobado'),
-  (14, 14, 'Aprobado'),
-  (15, 15, 'Aprobado'),
-  (16, 16, 'Aprobado'),
-  (17, 17, 'Pendiente'),
-  (18, 18, 'Aprobado'),
-  (19, 19, 'Aprobado'),
-  (20, 20, 'Aprobado'),
-  (21, 21, 'Aprobado'),
-  (22, 22, 'Aprobado'),
-  (23, 23, 'Aprobado'),
-  (24, 24, 'Aprobado');
+INSERT INTO payment (
+  id, quantity, status, createdAt, updatedAt, cartId, `use`, comments, billingStatus,
+  studentId, paymentDate
+) VALUES
+  (1, 1000, 'Aprobado', '2024-06-15 10:00:00', '2024-06-15 10:00:00', 1, '', '', '', 0, '2024-06-20'),
+  (2, 1300, 'Aprobado', '2024-07-10 10:00:00', '2024-07-10 10:00:00', 2, '', '', '', 0, '2024-07-12'),
+  (3, 1700, 'Aprobado', '2024-09-01 10:00:00', '2024-09-01 10:00:00', 3, '', '', '', 0, '2024-09-05'),
+  (4, 2000, 'Aprobado', '2025-01-10 10:00:00', '2025-01-10 10:00:00', 4, '', '', '', 0, '2025-01-15'),
+  (5, 1500, 'Aprobado', '2025-02-05 10:00:00', '2025-02-05 10:00:00', 5, '', '', '', 0, '2025-02-07'),
+  (6, 900, 'Aprobado', '2025-03-08 10:00:00', '2025-03-08 10:00:00', 6, '', '', '', 0, '2025-03-10'),
+  (7, 3600, 'Aprobado', '2025-04-01 10:00:00', '2025-04-01 10:00:00', 7, '', '', '', 0, '2025-04-02'),
+  (8, 3500, 'Aprobado', '2025-05-10 10:00:00', '2025-05-10 10:00:00', 8, '', '', '', 0, '2025-05-12'),
+  (9, 1700, 'Aprobado', '2025-06-01 10:00:00', '2025-06-01 10:00:00', 9, '', '', '', 0, '2025-06-03'),
+  (10, 500, 'Aprobado', '2025-06-28 10:00:00', '2025-06-28 10:00:00', 10, '', '', '', 0, '2025-07-02'),
+  (11, 300, 'Aprobado', '2025-08-01 10:00:00', '2025-08-01 10:00:00', 11, '', '', '', 0, '2025-08-04'),
+  (12, 200, 'Aprobado', '2025-08-02 10:00:00', '2025-08-02 10:00:00', 11, '', '', '', 0, '2025-08-05'),
+  (13, 1500, 'Pendiente', '2025-09-10 10:00:00', '2025-09-10 10:00:00', 12, '', '', '', 0, '2025-09-11'),
+  (14, 888, 'Aprobado', '2025-10-01 10:00:00', '2025-10-01 10:00:00', 13, '', '', '', 0, '2025-10-02');
 
--- ─────────────────────────────────────────────
--- CART PRODUCTS
---
--- Mexico carts (1,4,7,10,13,16,19,22):  exams + books
--- Colombia carts (2,5,8,11,14,17,20,23): exams + courses
--- Peru carts (3,6,9,12,15,18,21,24):    exams only
---
--- 2024 MONTHLY REVENUE:
---   Jan: 3000  Feb: 2400  Mar: 2500
---   Apr: 3500  May: 2400  Jun: 2500
---   Jul: 3500  Aug: 2400  Sep: 2500
---   Oct: 4000  Nov: 4800  Dec: 4000
---   2024 total: 39,500
---
--- 2025 MONTHLY REVENUE:
---   Jan: 4000  Feb: 4800  Mar: 3000
---   Apr: 4500  May: 4800  Jun: 3000
---   Jul: 5000  Aug: 4800  Sep: 3500
---   Oct: 5500  Nov: 4800  Dec: 4000 (dec 2024 prior = 4000)
---   2025 total: 51,700  (NOTE: if filtering 2025-01 to 2025-12)
---
--- COUNTRY TOTALS (all years):
---   mexico:   cart revenue from carts 1,4,7,10,13,16,19,22
---   colombia: cart revenue from carts 2,5,8,11,14,17,20,23
---   peru:     cart revenue from carts 3,6,9,12,15,18,21,24
--- ─────────────────────────────────────────────
-INSERT INTO cart_product (id, cartId, productId, quantity, total, cost) VALUES
-  -- cart 1: mexico jan 2024 — 2 KET exams + 1 book
-  (1,  1,  1, 2, 2000, 800),
-  (2,  1,  4, 1, 300,  100),
-  -- cart 2: colombia feb 2024 — 2 PET exams
-  (3,  2,  2, 2, 2400, 1000),
-  -- cart 3: peru mar 2024 — 1 FCE exam + 1 book
-  (4,  3,  3, 1, 1500, 600),
-  (5,  3,  5, 1, 400,  150),  -- colombia book sold in peru (cross-sell)
-  -- cart 4: mexico apr 2024 — 3 KET exams + 1 book
-  (6,  4,  1, 3, 3000, 1200),
-  (7,  4,  4, 1, 300,  100),
-  -- cart 5: colombia may 2024 — 2 PET exams
-  (8,  5,  2, 2, 2400, 1000),
-  -- cart 6: peru jun 2024 — 1 FCE exam + 1 course
-  (9,  6,  3, 1, 1500, 600),
-  (10, 6,  6, 1, 600,  300),
-  -- cart 7: mexico jul 2024 — 3 KET exams + 1 book
-  (11, 7,  1, 3, 3000, 1200),
-  (12, 7,  4, 1, 300,  100),
-  -- cart 8: colombia aug 2024 — 2 PET exams
-  (13, 8,  2, 2, 2400, 1000),
-  -- cart 9: peru sep 2024 — 1 FCE exam + 1 book
-  (14, 9,  3, 1, 1500, 600),
-  (15, 9,  5, 1, 400,  150),
-  -- cart 10: mexico oct 2024 — 4 KET exams
-  (16, 10, 1, 4, 4000, 1600),
-  -- cart 11: colombia nov 2024 — 2 PET exams + 1 course
-  (17, 11, 2, 2, 2400, 1000),
-  (18, 11, 7, 1, 800,  400),
-  -- cart 12: peru dec 2024 — 2 FCE exams
-  (19, 12, 3, 2, 3000, 1200),
-  -- cart 13: mexico jan 2025 — 4 KET exams
-  (20, 13, 1, 4, 4000, 1600),
-  -- cart 14: colombia feb 2025 — 2 PET exams + 2 courses
-  (21, 14, 2, 2, 2400, 1000),
-  (22, 14, 7, 2, 1600, 800),
-  -- cart 15: peru mar 2025 — 2 FCE exams
-  (23, 15, 3, 2, 3000, 1200),
-  -- cart 16: mexico apr 2025 — 4 KET exams + 1 book
-  (24, 16, 1, 4, 4000, 1600),
-  (25, 16, 4, 2, 600,  200),
-  -- cart 17: colombia may 2025 — 2 PET exams + 2 courses
-  (26, 17, 2, 2, 2400, 1000),
-  (27, 17, 7, 2, 1600, 800),
-  -- cart 18: peru jun 2025 — 2 FCE exams
-  (28, 18, 3, 2, 3000, 1200),
-  -- cart 19: mexico jul 2025 — 5 KET exams
-  (29, 19, 1, 5, 5000, 2000),
-  -- cart 20: colombia aug 2025 — 2 PET exams + 2 courses
-  (30, 20, 2, 2, 2400, 1000),
-  (31, 20, 7, 2, 1600, 800),
-  -- cart 21: peru sep 2025 — 2 FCE exams + 1 book
-  (32, 21, 3, 2, 3000, 1200),
-  (33, 21, 5, 1, 400,  150),
-  -- cart 22: mexico oct 2025 — 5 KET exams + 1 book
-  (34, 22, 1, 5, 5000, 2000),
-  (35, 22, 4, 2, 600,  200),
-  -- cart 23: colombia nov 2025 — 2 PET exams + 2 courses
-  (36, 23, 2, 2, 2400, 1000),
-  (37, 23, 7, 2, 1600, 800),
-  -- cart 24: peru dec 2025 — 2 FCE exams
-  (38, 24, 3, 2, 3000, 1200),
-  -- extra 2025 exam coverage for all reports
-  (39, 13, 10, 1, 900,  450),
-  (40, 16, 12, 2, 1400, 600),
-  (41, 19, 8,  1, 1700, 800),
-  (42, 14, 9,  1, 1300, 650),
-  (43, 20, 11, 1, 1100, 550),
-  (44, 23, 13, 1, 1250, 600),
-  (45, 15, 15, 1, 950,  500),
-  (46, 21, 14, 1, 1600, 700),
-  (47, 18, 9,  1, 1300, 650),
-  (48, 22, 16, 1, 500,  0);
+INSERT INTO cart_product (id, cartId, productId, quantity, total, cost, testDate, deletedAt) VALUES
+  (1, 1, 1, 1, 1000, 500, '2024-06-25', NULL),
+  (2, 2, 5, 1, 1300, 650, '2024-07-20', NULL),
+  (3, 3, 4, 1, 1700, 800, '2024-09-10', NULL),
+  (4, 4, 1, 2, 2000, 1000, '2025-01-20', NULL),
+  (5, 5, 2, 1, 1200, 600, '2025-02-15', NULL),
+  (6, 5, 8, 1, 300, 100, '2025-02-15', NULL),
+  (7, 6, 6, 1, 900, 450, '2025-03-20', NULL),
+  (8, 7, 3, 2, 3000, 1400, '2025-04-15', NULL),
+  (9, 7, 9, 1, 600, 300, '2025-04-15', NULL),
+  (10, 8, 11, 2, 2200, 1100, '2025-05-18', NULL),
+  (11, 8, 5, 1, 1300, 650, '2025-05-18', NULL),
+  (12, 9, 4, 1, 1700, 800, '2025-06-10', NULL),
+  (13, 10, 7, 1, 500, 200, '2025-07-15', NULL),
+  (14, 11, 10, 1, 500, 0, '2025-08-10', NULL),
+  (15, 12, 3, 1, 1500, 700, '2025-09-20', NULL),
+  (16, 13, 1, 1, 888, 444, '2025-10-10', NULL),
+  (17, 5, 2, 1, 1200, 600, '2025-02-16', '2025-02-16 10:00:00');
+
+INSERT INTO student (id, cartProductId) VALUES
+  (1, 1),
+  (2, 2),
+  (3, 3),
+  (4, 4),
+  (5, 4),
+  (6, 5),
+  (7, 6),
+  (8, 7),
+  (9, 8),
+  (10, 8),
+  (11, 9),
+  (12, 10),
+  (13, 11),
+  (14, 12),
+  (15, 13);
+
+INSERT INTO student_payments (student_id, payment_id, amount) VALUES
+  (1, 1, 1000.00),
+  (2, 2, 1300.00),
+  (3, 3, 1700.00),
+  (4, 4, 1000.00),
+  (5, 4, 1000.00),
+  (6, 5, 1200.00),
+  (7, 5, 300.00),
+  (8, 6, 900.00),
+  (9, 7, 1500.00),
+  (10, 7, 1500.00),
+  (11, 7, 600.00),
+  (12, 8, 2200.00),
+  (13, 8, 1300.00),
+  (14, 9, 1700.00),
+  (15, 10, 500.00);

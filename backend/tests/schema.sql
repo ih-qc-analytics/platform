@@ -146,11 +146,45 @@ CREATE TABLE IF NOT EXISTS `cart` (
 
 CREATE TABLE IF NOT EXISTS `payment` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
+  `quantity` int(11) NOT NULL DEFAULT 0,
   `status` varchar(255) COLLATE utf8_unicode_ci NOT NULL DEFAULT 'Pendiente',
+  `createdAt` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  `updatedAt` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
   `cartId` int(11) DEFAULT NULL,
+  `billingId` int(11) DEFAULT NULL,
+  `use` varchar(255) COLLATE utf8_unicode_ci NOT NULL DEFAULT '',
+  `comments` text COLLATE utf8_unicode_ci NOT NULL,
+  `billingStatus` varchar(255) COLLATE utf8_unicode_ci NOT NULL DEFAULT '',
+  `cartProductId` int(11) DEFAULT NULL,
+  `studentId` int(11) NOT NULL DEFAULT 0,
+  `ref` varchar(50) COLLATE utf8_unicode_ci DEFAULT NULL,
+  `method` varchar(200) COLLATE utf8_unicode_ci DEFAULT NULL,
+  `paymentDate` date DEFAULT NULL,
+  `fileName` varchar(300) COLLATE utf8_unicode_ci DEFAULT NULL,
+  `userComments` text COLLATE utf8_unicode_ci,
+  `parentId` int(11) DEFAULT NULL,
+  `payMethod` varchar(200) COLLATE utf8_unicode_ci DEFAULT NULL,
   PRIMARY KEY (`id`),
   KEY `idx_payment_cart` (`cartId`),
   CONSTRAINT `FK_payment_cart` FOREIGN KEY (`cartId`) REFERENCES `cart` (`id`) ON DELETE NO ACTION ON UPDATE NO ACTION
+) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `student` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `cartProductId` int(11) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_student_cart_product` (`cartProductId`),
+  CONSTRAINT `FK_student_cart_product` FOREIGN KEY (`cartProductId`) REFERENCES `cart_product` (`id`) ON DELETE NO ACTION ON UPDATE NO ACTION
+) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `student_payments` (
+  `student_id` int(11) NOT NULL,
+  `payment_id` int(11) NOT NULL,
+  `amount` decimal(10,2) NOT NULL DEFAULT 0.00,
+  PRIMARY KEY (`student_id`, `payment_id`),
+  KEY `idx_student_payments_payment` (`payment_id`),
+  CONSTRAINT `FK_student_payments_student` FOREIGN KEY (`student_id`) REFERENCES `student` (`id`) ON DELETE NO ACTION ON UPDATE NO ACTION,
+  CONSTRAINT `FK_student_payments_payment` FOREIGN KEY (`payment_id`) REFERENCES `payment` (`id`) ON DELETE NO ACTION ON UPDATE NO ACTION
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS `cart_product` (

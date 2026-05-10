@@ -14,6 +14,7 @@ EXAM_CATEGORY_ORDER = [
 
 EXAM_CATEGORY_ALIASES = {
     "Cambridge English (Main Suite)": [
+        "Cambridge English (Main Suite)",
         "Pre-A1 Starters",
         "Starters",
         "A1 Movers",
@@ -44,6 +45,7 @@ EXAM_CATEGORY_ALIASES = {
         "C2",
     ],
     "Cambridge Teaching & Skills": [
+        "Cambridge Teaching & Skills",
         "Linguaskill",
         "TKT",
         "Delta",
@@ -52,23 +54,24 @@ EXAM_CATEGORY_ALIASES = {
         "Cambridge Teaching & Skills",
     ],
     "IELTS": [
+        "IELTS",
         "IELTS Academic",
         "IELTS General Training",
         "IELTS on Computer",
-        "IELTS",
     ],
     "Michigan (MET)": [
+        "Michigan (MET)",
         "MET",
         "MET Go!",
         "Michigan",
-        "Michigan (MET)",
     ],
     "TEA (Test of English for Aviation)": [
+        "TEA (Test of English for Aviation)",
         "TEA",
         "Test of English for Aviation",
-        "TEA (Test of English for Aviation)",
     ],
     "Placement & Otros": [
+        "Placement & Otros",
         "Placement Tests",
         "CEPT",
         "YLPT",
@@ -79,18 +82,20 @@ EXAM_CATEGORY_ALIASES = {
     ],
 }
 
-def normalize_exam_label(value: str) -> str:
+def normalize_exam_label(value: str | None) -> str:
+    if not value:
+        return ""
     normalized = unicodedata.normalize("NFKD", value)
     ascii_only = normalized.encode("ascii", "ignore").decode("ascii")
     return re.sub(r"\s+", " ", ascii_only).strip()
 
 
-def exam_label_tokens(value: str) -> set[str]:
+def exam_label_tokens(value: str | None) -> set[str]:
     normalized = normalize_exam_label(value).casefold()
     return set(re.findall(r"[a-z0-9]+", normalized))
 
 
-def exam_labels_are_similar(left: str, right: str) -> bool:
+def exam_labels_are_similar(left: str | None, right: str | None) -> bool:
     left_normalized = normalize_exam_label(left)
     right_normalized = normalize_exam_label(right)
     if left_normalized.casefold() == right_normalized.casefold():
@@ -153,7 +158,7 @@ def build_exam_label_groups(labels: Sequence[str]) -> list[list[str]]:
     return groups
 
 
-def label_matches_alias(label: str, alias: str) -> bool:
+def label_matches_alias(label: str | None, alias: str | None) -> bool:
     label_normalized = normalize_exam_label(label).casefold()
     alias_normalized = normalize_exam_label(alias).casefold()
     if label_normalized == alias_normalized:
@@ -174,7 +179,7 @@ def label_matches_alias(label: str, alias: str) -> bool:
 
 
 @lru_cache(maxsize=256)
-def canonical_exam_category(label: str) -> str:
+def canonical_exam_category(label: str | None) -> str:
     for category in EXAM_CATEGORY_ORDER:
         aliases = EXAM_CATEGORY_ALIASES.get(category, [])
         if any(label_matches_alias(label, alias) for alias in aliases):
@@ -341,7 +346,7 @@ EXAM_NAME_ALIASES: dict[str, list[str]] = {
 
 
 @lru_cache(maxsize=256)
-def canonical_exam_name(label: str) -> str:
+def canonical_exam_name(label: str | None) -> str:
     for name in EXAM_NAME_ORDER:
         aliases = EXAM_NAME_ALIASES.get(name, [])
         if any(label_matches_alias(label, alias) for alias in aliases):
