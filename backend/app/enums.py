@@ -21,3 +21,35 @@ class ProductType(str, Enum):
     EXAM = "exam"
     BOOK = "book"
     COURSE = "course"
+
+
+class BroadExamCategory(str, Enum):
+    CAMBRIDGE_MAIN = "Cambridge English (Main Suite)"
+    CAMBRIDGE_TEACHING = "Cambridge Teaching & Skills"
+    IELTS = "IELTS"
+    MICHIGAN_MET = "Michigan (MET)"
+    TEA = "TEA (Test of English for Aviation)"
+    OTHER = "Placement & Otros"
+
+
+class SpecificExamCategory(str, Enum):
+    PRE_A1_STARTERS = "Pre-A1 Starters"
+    A1_MOVERS = "A1 Movers"
+    A2_FLYERS = "A2 Flyers"
+    A2_KEY = "A2 Key"
+    A2_KEY_FOR_SCHOOLS = "A2 Key for Schools"
+    B1_PRELIMINARY = "B1 Preliminary"
+    B1_PRELIMINARY_FOR_SCHOOLS = "B1 Preliminary for Schools"
+    B2_FIRST = "B2 First"
+    B2_FIRST_FOR_SCHOOLS = "B2 First for Schools"
+    C1_ADVANCED = "C1 Advanced"
+    C2_PROFICIENCY = "C2 Proficiency"
+    LINGUASKILL = "Linguaskill"
+    TKT = "TKT"
+    DELTA = "Delta"
+    CELTA = "CELTA"
+    IELTS = "IELTS"
+    MET = "MET"
+    MET_GO = "MET Go!"
+    TEA = "TEA"
+    OTHER = "Other"

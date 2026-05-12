@@ -55,9 +55,15 @@ QUERIES = {
         LEFT JOIN payment p ON p.id = sp.payment_id
         WHERE p.id IS NULL;
     """, 
-    "version": 
+    "countries": 
     """ 
-    SELECT VERSION();
+    SELECT site from `lead`
+    GROUP BY site; 
+    """,
+    "countries": 
+    """ 
+    SELECT name from exam_cat
+    GROUP BY name; 
     """
 }
 

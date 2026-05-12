@@ -1,354 +1,180 @@
-import unicodedata
-from collections.abc import Iterable, Sequence
 from functools import lru_cache
-import re
 
-EXAM_CATEGORY_ORDER = [
-    "Cambridge English (Main Suite)",
-    "Cambridge Teaching & Skills",
-    "IELTS",
-    "Michigan (MET)",
-    "TEA (Test of English for Aviation)",
-    "Placement & Otros",
+from app.enums import BroadExamCategory, SpecificExamCategory
+
+EXAM_CATEGORY_ORDER = [category.value for category in BroadExamCategory]
+
+EXAM_NAME_ORDER = [
+    SpecificExamCategory.PRE_A1_STARTERS.value,
+    SpecificExamCategory.A1_MOVERS.value,
+    SpecificExamCategory.A2_FLYERS.value,
+    SpecificExamCategory.A2_KEY.value,
+    SpecificExamCategory.A2_KEY_FOR_SCHOOLS.value,
+    SpecificExamCategory.B1_PRELIMINARY.value,
+    SpecificExamCategory.B1_PRELIMINARY_FOR_SCHOOLS.value,
+    SpecificExamCategory.B2_FIRST.value,
+    SpecificExamCategory.B2_FIRST_FOR_SCHOOLS.value,
+    SpecificExamCategory.C1_ADVANCED.value,
+    SpecificExamCategory.C2_PROFICIENCY.value,
+    SpecificExamCategory.LINGUASKILL.value,
+    SpecificExamCategory.TKT.value,
+    SpecificExamCategory.DELTA.value,
+    SpecificExamCategory.CELTA.value,
+    SpecificExamCategory.IELTS.value,
+    SpecificExamCategory.MET.value,
+    SpecificExamCategory.MET_GO.value,
+    SpecificExamCategory.TEA.value,
 ]
 
-EXAM_CATEGORY_ALIASES = {
-    "Cambridge English (Main Suite)": [
-        "Cambridge English (Main Suite)",
-        "Pre-A1 Starters",
-        "Starters",
-        "A1 Movers",
-        "Movers",
-        "A2 Flyers",
-        "Flyers",
-        "A2 Key (KET)",
-        "KET",
-        "A2 Key for Schools (KETfs)",
-        "KETfs",
-        "B1 Preliminary (PET)",
-        "PET",
-        "B1 Preliminary for Schools (PETfs)",
-        "PETfs",
-        "B2 First (FCE)",
-        "FCE",
-        "B2 First for Schools (FCEfs)",
-        "FCEfs",
-        "C1 Advanced (CAE)",
-        "CAE",
-        "C2 Proficiency (CPE)",
-        "CPE",
-        "A1",
-        "A2",
-        "B1",
-        "B2",
-        "C1",
-        "C2",
-    ],
-    "Cambridge Teaching & Skills": [
-        "Cambridge Teaching & Skills",
-        "Linguaskill",
-        "TKT",
-        "Delta",
-        "CELTA",
-        "CAM",
-        "Cambridge Teaching & Skills",
-    ],
-    "IELTS": [
-        "IELTS",
-        "IELTS Academic",
-        "IELTS General Training",
-        "IELTS on Computer",
-    ],
-    "Michigan (MET)": [
-        "Michigan (MET)",
-        "MET",
-        "MET Go!",
-        "Michigan",
-    ],
-    "TEA (Test of English for Aviation)": [
-        "TEA (Test of English for Aviation)",
-        "TEA",
-        "Test of English for Aviation",
-    ],
-    "Placement & Otros": [
-        "Placement & Otros",
-        "Placement Tests",
-        "CEPT",
-        "YLPT",
-        "IH Level Test",
-        "CEST General",
-        "Placement",
-        "Otros",
-    ],
+RAW_SPECIFIC_EXAM_MAP = {
+    "Pre-A1 Starters Digital": SpecificExamCategory.PRE_A1_STARTERS,
+    "Pre-A1 Starters Papel ": SpecificExamCategory.PRE_A1_STARTERS,
+    "A1 Movers Digital": SpecificExamCategory.A1_MOVERS,
+    "A1 Movers Papel ": SpecificExamCategory.A1_MOVERS,
+    "A2 Flyers Digital": SpecificExamCategory.A2_FLYERS,
+    "A2 Flyers Papel": SpecificExamCategory.A2_FLYERS,
+    "A2 Key Digital": SpecificExamCategory.A2_KEY,
+    "Key English Test 2020": SpecificExamCategory.A2_KEY,
+    "A2 Key for Schools Digital": SpecificExamCategory.A2_KEY_FOR_SCHOOLS,
+    "A2 Key for Schools Pepel": SpecificExamCategory.A2_KEY_FOR_SCHOOLS,
+    "B1 Preliminary Digital": SpecificExamCategory.B1_PRELIMINARY,
+    "Preliminary English Test 2020": SpecificExamCategory.B1_PRELIMINARY,
+    "B1 Preliminary for Schools Digital": SpecificExamCategory.B1_PRELIMINARY_FOR_SCHOOLS,
+    "B1 Preliminary for Schools Papel": SpecificExamCategory.B1_PRELIMINARY_FOR_SCHOOLS,
+    "B2 First Digital": SpecificExamCategory.B2_FIRST,
+    "B2 First Papel": SpecificExamCategory.B2_FIRST,
+    "B2 First for Schools  Digital": SpecificExamCategory.B2_FIRST_FOR_SCHOOLS,
+    "B2 First for Schools Papel": SpecificExamCategory.B2_FIRST_FOR_SCHOOLS,
+    "C1 Advanced  Papel": SpecificExamCategory.C1_ADVANCED,
+    "C1 Advanced Digital": SpecificExamCategory.C1_ADVANCED,
+    "C2 Proficiency Digital": SpecificExamCategory.C2_PROFICIENCY,
+    "C2 Proficiency Papel": SpecificExamCategory.C2_PROFICIENCY,
+    "Linguaskill 1 Skills (Writing)": SpecificExamCategory.LINGUASKILL,
+    "Linguaskill 2 Skill Bundle (Reading and Listening)": SpecificExamCategory.LINGUASKILL,
+    "TKT Content and Language Integrated Learning Papel": SpecificExamCategory.TKT,
+    "TKT Module 1 Papel": SpecificExamCategory.TKT,
+    "TKT Module 2 Papel": SpecificExamCategory.TKT,
+    "TKT Module 3 Papel": SpecificExamCategory.TKT,
+    "TKT Young Learners Papel": SpecificExamCategory.TKT,
+    "Delta Module One": SpecificExamCategory.DELTA,
+    "Delta Module Two": SpecificExamCategory.DELTA,
+    "Delta Module Three Option 1": SpecificExamCategory.DELTA,
+    "Delta Module Three Option 2": SpecificExamCategory.DELTA,
+    "IELTS ACADEMIC ": SpecificExamCategory.IELTS,
+    "IELTS GENERAL TRAINING": SpecificExamCategory.IELTS,
+    "IELTS ON COMPUTER": SpecificExamCategory.IELTS,
+    "MET Digital": SpecificExamCategory.MET,
+    "MET Digital Retake": SpecificExamCategory.MET,
+    "MET Go Digital": SpecificExamCategory.MET_GO,
+    "MET Go! 4 Skills Papel": SpecificExamCategory.MET_GO,
+    "CAMBRIDGE PLACEMENT TEST (CEPT)": SpecificExamCategory.OTHER,
+    "CAMBRIDGE YOUNG LEARNERS PLACEMENT TEST (YLPT)": SpecificExamCategory.OTHER,
+    "CEST GENERAL  1 SKILL (WRITING)": SpecificExamCategory.OTHER,
+    "CEST GENERAL 2 SKILL BUNDLE (LISTENING & READING)": SpecificExamCategory.OTHER,
+    "CEST GENERAL 4 SKILL BUNDLE": SpecificExamCategory.OTHER,
+    "GET 2 SKILLS": SpecificExamCategory.OTHER,
+    "IH LEVEL TEST": SpecificExamCategory.OTHER,
+    # Compatibility aliases still used by tests / callers.
+    "KET": SpecificExamCategory.A2_KEY,
+    "PET": SpecificExamCategory.B1_PRELIMINARY,
+    "FCE": SpecificExamCategory.B2_FIRST,
+    "IELTS Academic": SpecificExamCategory.IELTS,
+    "Placement Tests": SpecificExamCategory.OTHER,
+    "MET Go!": SpecificExamCategory.MET_GO,
+    "TEA": SpecificExamCategory.TEA,
 }
 
-def normalize_exam_label(value: str | None) -> str:
-    if not value:
-        return ""
-    normalized = unicodedata.normalize("NFKD", value)
-    ascii_only = normalized.encode("ascii", "ignore").decode("ascii")
-    return re.sub(r"\s+", " ", ascii_only).strip()
+SPECIFIC_TO_BROAD = {
+    SpecificExamCategory.PRE_A1_STARTERS: BroadExamCategory.CAMBRIDGE_MAIN,
+    SpecificExamCategory.A1_MOVERS: BroadExamCategory.CAMBRIDGE_MAIN,
+    SpecificExamCategory.A2_FLYERS: BroadExamCategory.CAMBRIDGE_MAIN,
+    SpecificExamCategory.A2_KEY: BroadExamCategory.CAMBRIDGE_MAIN,
+    SpecificExamCategory.A2_KEY_FOR_SCHOOLS: BroadExamCategory.CAMBRIDGE_MAIN,
+    SpecificExamCategory.B1_PRELIMINARY: BroadExamCategory.CAMBRIDGE_MAIN,
+    SpecificExamCategory.B1_PRELIMINARY_FOR_SCHOOLS: BroadExamCategory.CAMBRIDGE_MAIN,
+    SpecificExamCategory.B2_FIRST: BroadExamCategory.CAMBRIDGE_MAIN,
+    SpecificExamCategory.B2_FIRST_FOR_SCHOOLS: BroadExamCategory.CAMBRIDGE_MAIN,
+    SpecificExamCategory.C1_ADVANCED: BroadExamCategory.CAMBRIDGE_MAIN,
+    SpecificExamCategory.C2_PROFICIENCY: BroadExamCategory.CAMBRIDGE_MAIN,
+    SpecificExamCategory.LINGUASKILL: BroadExamCategory.CAMBRIDGE_TEACHING,
+    SpecificExamCategory.TKT: BroadExamCategory.CAMBRIDGE_TEACHING,
+    SpecificExamCategory.DELTA: BroadExamCategory.CAMBRIDGE_TEACHING,
+    SpecificExamCategory.CELTA: BroadExamCategory.CAMBRIDGE_TEACHING,
+    SpecificExamCategory.IELTS: BroadExamCategory.IELTS,
+    SpecificExamCategory.MET: BroadExamCategory.MICHIGAN_MET,
+    SpecificExamCategory.MET_GO: BroadExamCategory.MICHIGAN_MET,
+    SpecificExamCategory.TEA: BroadExamCategory.TEA,
+    SpecificExamCategory.OTHER: BroadExamCategory.OTHER,
+}
 
 
-def exam_label_tokens(value: str | None) -> set[str]:
-    normalized = normalize_exam_label(value).casefold()
-    return set(re.findall(r"[a-z0-9]+", normalized))
-
-
-def exam_labels_are_similar(left: str | None, right: str | None) -> bool:
-    left_normalized = normalize_exam_label(left)
-    right_normalized = normalize_exam_label(right)
-    if left_normalized.casefold() == right_normalized.casefold():
-        return True
-
-    left_tokens = exam_label_tokens(left)
-    right_tokens = exam_label_tokens(right)
-    if not left_tokens or not right_tokens:
-        return False
-    if left_tokens == right_tokens:
-        return True
-    if left_tokens.issubset(right_tokens) or right_tokens.issubset(left_tokens):
-        return True
-
-    intersection = left_tokens & right_tokens
-    union = left_tokens | right_tokens
-    return bool(intersection) and (len(intersection) / len(union) >= 0.6)
-
-
-def choose_canonical_exam_label(labels: Iterable[str]) -> str:
-    best_label = sorted(
-        labels,
-        key=lambda label: (
-            -len(exam_label_tokens(label)),
-            -len(normalize_exam_label(label)),
-            normalize_exam_label(label).casefold(),
-        ),
-    )[0]
-    return format_canonical_exam_label(best_label, labels)
-
-
-def format_canonical_exam_label(best_label: str, labels: Iterable[str]) -> str:
-    normalized = normalize_exam_label(best_label)
-    return normalized.upper()
-
-
-def build_exam_label_groups(labels: Sequence[str]) -> list[list[str]]:
-    groups: list[list[str]] = []
-    visited: set[str] = set()
-
-    for label in labels:
-        if label in visited:
-            continue
-        queue = [label]
-        component: list[str] = []
-        visited.add(label)
-
-        while queue:
-            current = queue.pop()
-            component.append(current)
-            for candidate in labels:
-                if candidate in visited:
-                    continue
-                if exam_labels_are_similar(current, candidate):
-                    visited.add(candidate)
-                    queue.append(candidate)
-
-        groups.append(component)
-
-    return groups
-
-
-def label_matches_alias(label: str | None, alias: str | None) -> bool:
-    label_normalized = normalize_exam_label(label).casefold()
-    alias_normalized = normalize_exam_label(alias).casefold()
-    if label_normalized == alias_normalized:
-        return True
-
-    label_tokens = exam_label_tokens(label)
-    alias_tokens = exam_label_tokens(alias)
-    if not label_tokens or not alias_tokens:
-        return False
-    if label_tokens == alias_tokens:
-        return True
-    if label_tokens.issubset(alias_tokens) or alias_tokens.issubset(label_tokens):
-        return True
-
-    intersection = label_tokens & alias_tokens
-    union = label_tokens | alias_tokens
-    return bool(intersection) and (len(intersection) / len(union) >= 0.5)
+def _specific_from_contains(label: str) -> SpecificExamCategory:
+    if "MET Go" in label or "MET Go!" in label:
+        return SpecificExamCategory.MET_GO
+    if "MET" in label:
+        return SpecificExamCategory.MET
+    if "IELTS" in label:
+        return SpecificExamCategory.IELTS
+    if "Linguaskill" in label:
+        return SpecificExamCategory.LINGUASKILL
+    if "TKT" in label:
+        return SpecificExamCategory.TKT
+    if "Delta" in label:
+        return SpecificExamCategory.DELTA
+    if "CELTA" in label:
+        return SpecificExamCategory.CELTA
+    if "TEA" in label:
+        return SpecificExamCategory.TEA
+    if "A2 Key for Schools" in label or "Key for Schools" in label:
+        return SpecificExamCategory.A2_KEY_FOR_SCHOOLS
+    if "A2 Key" in label or "Key English Test" in label:
+        return SpecificExamCategory.A2_KEY
+    if "B1 Preliminary for Schools" in label or "Preliminary for Schools" in label:
+        return SpecificExamCategory.B1_PRELIMINARY_FOR_SCHOOLS
+    if "B1 Preliminary" in label or "Preliminary English Test" in label:
+        return SpecificExamCategory.B1_PRELIMINARY
+    if "B2 First for Schools" in label or "First for Schools" in label:
+        return SpecificExamCategory.B2_FIRST_FOR_SCHOOLS
+    if "B2 First" in label or "First Certificate" in label:
+        return SpecificExamCategory.B2_FIRST
+    if "Pre-A1 Starters" in label or "Starters" in label:
+        return SpecificExamCategory.PRE_A1_STARTERS
+    if "A1 Movers" in label or "Movers" in label:
+        return SpecificExamCategory.A1_MOVERS
+    if "A2 Flyers" in label or "Flyers" in label:
+        return SpecificExamCategory.A2_FLYERS
+    if "C1 Advanced" in label:
+        return SpecificExamCategory.C1_ADVANCED
+    if "C2 Proficiency" in label:
+        return SpecificExamCategory.C2_PROFICIENCY
+    if (
+        "CEPT" in label
+        or "YLPT" in label
+        or "IH LEVEL TEST" in label
+        or "CEST" in label
+        or "GET 2 SKILLS" in label
+    ):
+        return SpecificExamCategory.OTHER
+    return SpecificExamCategory.OTHER
 
 
 @lru_cache(maxsize=256)
-def canonical_exam_category(label: str | None) -> str:
-    for category in EXAM_CATEGORY_ORDER:
-        aliases = EXAM_CATEGORY_ALIASES.get(category, [])
-        if any(label_matches_alias(label, alias) for alias in aliases):
-            return category
-    return "Placement & Otros"
-
-
-# ─────────────────────────────────────────────
-# Canonical exam name mapping (Report 3)
-# Maps any raw exam_cat.name to one of 19 specific column names, or "Other".
-#
-# Ordering constraints (label_matches_alias uses a subset rule, so a shorter
-# alias whose tokens are all present in a longer label will match):
-#
-#   • Each base exam (A2 Key, B1 Preliminary, B2 First) is checked BEFORE
-#     its "for Schools" sibling.  The base aliases intentionally include a
-#     distinguishing extra token (e.g. "A2 Key (KET)" has "ket") so that a
-#     "for Schools" label with 0.4 Jaccard similarity does not match them.
-#     The bare descriptive form ("A2 Key", "B1 Preliminary", "B2 First") is
-#     NOT listed as an alias — the parenthesised alias catches it via the
-#     subset rule without leaking to the for-Schools variant.
-#
-#   • MET is checked BEFORE MET Go!.  "MET" alone is not listed as an alias;
-#     "Michigan (MET)" catches it via subset without leaking to "MET Go!".
-# ─────────────────────────────────────────────
-
-EXAM_NAME_ORDER = [
-    "Pre-A1 Starters",
-    "A1 Movers",
-    "A2 Flyers",
-    "A2 Key",               # before A2 Key for Schools
-    "A2 Key for Schools",
-    "B1 Preliminary",       # before B1 Preliminary for Schools
-    "B1 Preliminary for Schools",
-    "B2 First",             # before B2 First for Schools
-    "B2 First for Schools",
-    "C1 Advanced",
-    "C2 Proficiency",
-    "Linguaskill",
-    "TKT",
-    "Delta",
-    "CELTA",
-    "IELTS",
-    "MET",                  # before MET Go!
-    "MET Go!",
-    "TEA",
-]
-
-EXAM_NAME_ALIASES: dict[str, list[str]] = {
-    "Pre-A1 Starters": [
-        "Pre-A1 Starters",
-        "Starters",
-        "YLE Starters",
-        "Pre A1 Starters",
-        "Pre-A1",
-    ],
-    "A1 Movers": [
-        "A1 Movers",
-        "Movers",
-        "YLE Movers",
-    ],
-    "A2 Flyers": [
-        "A2 Flyers",
-        "Flyers",
-        "YLE Flyers",
-    ],
-    # "A2 Key" alone is NOT listed: "A2 Key (KET)" catches it via subset
-    # ({a2,key} ⊆ {a2,key,ket}) without matching the for-Schools variant
-    # (jaccard 2/5 = 0.4 < threshold).
-    "A2 Key": [
-        "KET",
-        "A2 Key (KET)",
-        "Key English Test",
-    ],
-    "A2 Key for Schools": [
-        "KETfs",
-        "Key for Schools",
-        "A2 Key for Schools (KETfs)",
-    ],
-    # "B1 Preliminary" alone is NOT listed: "B1 Preliminary (PET)" catches it.
-    "B1 Preliminary": [
-        "PET",
-        "B1 Preliminary (PET)",
-        "Preliminary English Test",
-    ],
-    "B1 Preliminary for Schools": [
-        "PETfs",
-        "Preliminary for Schools",
-        "B1 Preliminary for Schools (PETfs)",
-    ],
-    # "B2 First" alone is NOT listed: "B2 First (FCE)" catches it.
-    "B2 First": [
-        "FCE",
-        "B2 First (FCE)",
-        "First Certificate",
-        "First Certificate in English",
-    ],
-    "B2 First for Schools": [
-        "FCEfs",
-        "First for Schools",
-        "B2 First for Schools (FCEfs)",
-    ],
-    "C1 Advanced": [
-        "CAE",
-        "C1 Advanced (CAE)",
-        "Certificate in Advanced English",
-        "Advanced",
-    ],
-    "C2 Proficiency": [
-        "CPE",
-        "C2 Proficiency (CPE)",
-        "Certificate of Proficiency in English",
-        "Proficiency",
-    ],
-    "Linguaskill": [
-        "Linguaskill",
-        "Linguaskill Business",
-        "Linguaskill General",
-    ],
-    "TKT": [
-        "TKT",
-        "Teaching Knowledge Test",
-        "TKT Module",
-        "TKT CLIL",
-        "TKT Young Learners",
-        "TKT YL",
-    ],
-    "Delta": [
-        "Delta",
-        "Delta Module",
-    ],
-    "CELTA": [
-        "CELTA",
-    ],
-    "IELTS": [
-        "IELTS",
-        "IELTS Academic",
-        "IELTS General Training",
-        "IELTS General",
-        "IELTS on Computer",
-        "IELTS GT",
-        "IELTS AC",
-        "International English Language Testing System",
-    ],
-    # "MET" alone is NOT listed: "Michigan (MET)" catches it via subset
-    # ({met} ⊆ {michigan,met}) without matching "MET Go!" (jaccard 1/3 < threshold).
-    "MET": [
-        "Michigan",
-        "Michigan (MET)",
-        "Michigan English Test",
-        "Michigan English Test (MET)",
-    ],
-    "MET Go!": [
-        "MET Go!",
-        "MET Go",
-        "Michigan MET Go",
-    ],
-    "TEA": [
-        "TEA",
-        "Test of English for Aviation",
-        "TEA (Test of English for Aviation)",
-    ],
-}
+def _specific_exam_enum(label: str | None) -> SpecificExamCategory:
+    if not label:
+        return SpecificExamCategory.OTHER
+    if label in RAW_SPECIFIC_EXAM_MAP:
+        return RAW_SPECIFIC_EXAM_MAP[label]
+    stripped = label.strip()
+    if stripped in RAW_SPECIFIC_EXAM_MAP:
+        return RAW_SPECIFIC_EXAM_MAP[stripped]
+    return _specific_from_contains(stripped)
 
 
 @lru_cache(maxsize=256)
 def canonical_exam_name(label: str | None) -> str:
-    for name in EXAM_NAME_ORDER:
-        aliases = EXAM_NAME_ALIASES.get(name, [])
-        if any(label_matches_alias(label, alias) for alias in aliases):
-            return name
-    return "Other"
+    return _specific_exam_enum(label).value
+
+
+@lru_cache(maxsize=256)
+def canonical_exam_category(label: str | None) -> str:
+    return SPECIFIC_TO_BROAD[_specific_exam_enum(label)].value
