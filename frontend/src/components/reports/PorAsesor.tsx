@@ -1,6 +1,8 @@
 import { useMemo, useState } from "react"
 import { ChevronRight } from "lucide-react"
 
+import { exportAsesorExcel, exportAsesorExcelAll, fetchPorAsesorPdfPayload } from "@/api/reports"
+import PorAsesorPDF from "@/components/pdf/PorAsesorPDF"
 import AsesorFilterBar from "@/components/reports/AsesorFilterBar"
 import DetalleAsesor from "@/components/reports/DetalleAsesor"
 import ReportPagination from "@/components/reports/ReportPagination"
@@ -18,6 +20,7 @@ import {
 import { useAsesorReport, useFilterOptions, useSellerOptions } from "@/hooks/useReports"
 import useCursorPagination from "@/hooks/useCursorPagination"
 import type { AsesorFilters, AsesorRow } from "@/types"
+import { downloadPdf } from "@/lib/exportPdf"
 import { cn, formatCurrency, formatInteger, formatPercentChange, getPercentChange } from "@/lib/utils"
 import { TABLE_DISPLAY_GROUPS } from "@/components/reports/asesorCategories"
 
@@ -37,6 +40,10 @@ export default function PorAsesor() {
     })
     const [showComparison, setShowComparison] = useState(false)
     const [selectedRow, setSelectedRow] = useState<AsesorRow | null>(null)
+    const [isExportingPdf, setIsExportingPdf] = useState(false)
+    const [isExportingExcel, setIsExportingExcel] = useState(false)
+    const [exportingExcelVariant, setExportingExcelVariant] = useState<"filtered" | "all" | null>(null)
+    const [exportError, setExportError] = useState<string | null>(null)
     const { page, currentCursor, reset, goPrevious, goNext } = useCursorPagination<string>()
 
     const { data: filterOptions } = useFilterOptions()
@@ -80,6 +87,37 @@ export default function PorAsesor() {
 
     const rows = data?.rows ?? []
 
+    const handleExportExcel = async (variant: "filtered" | "all") => {
+        setExportError(null)
+        setIsExportingExcel(true)
+        setExportingExcelVariant(variant)
+        try {
+            if (variant === "filtered") {
+                await exportAsesorExcel(requestFilters)
+            } else {
+                await exportAsesorExcelAll(normalizedFilters)
+            }
+        } catch {
+            setExportError("No fue posible exportar el archivo. Intenta de nuevo.")
+        } finally {
+            setIsExportingExcel(false)
+            setExportingExcelVariant(null)
+        }
+    }
+
+    const handleExportPdf = async () => {
+        setExportError(null)
+        setIsExportingPdf(true)
+        try {
+            const payload = await fetchPorAsesorPdfPayload(normalizedFilters)
+            await downloadPdf(<PorAsesorPDF data={payload} />, "por-asesor.pdf")
+        } catch {
+            setExportError("No fue posible exportar el archivo. Intenta de nuevo.")
+        } finally {
+            setIsExportingPdf(false)
+        }
+    }
+
     return (
         <div className="flex flex-col gap-8 p-6">
             <AsesorFilterBar
@@ -90,14 +128,21 @@ export default function PorAsesor() {
                 showComparison={showComparison}
                 onFiltersChange={nextFilters => {
                     reset()
+                    setExportError(null)
                     setFilters(nextFilters)
                 }}
                 onToggleComparison={value => {
                     reset()
+                    setExportError(null)
                     setShowComparison(value)
                 }}
-                onExportPdf={() => console.log("export pdf")}
-                onExportExcel={() => console.log("export excel")}
+                onExportPdf={() => void handleExportPdf()}
+                onExportExcelWithFilters={() => void handleExportExcel("filtered")}
+                onExportExcelWithoutFilters={() => void handleExportExcel("all")}
+                isExportingPdf={isExportingPdf}
+                isExportingExcel={isExportingExcel}
+                exportingExcelVariant={exportingExcelVariant}
+                exportError={exportError}
             />
 
             <Card className="rounded-[2rem] shadow-sm">

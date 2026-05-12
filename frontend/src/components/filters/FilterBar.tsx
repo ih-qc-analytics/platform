@@ -9,7 +9,12 @@ type FilterBarProps = {
     value?: ReportFilters
     onChange: (filters: ReportFilters) => void
     onExportPdf?: () => void
-    onExportExcel?: () => void
+    onExportExcelWithFilters?: () => void
+    onExportExcelWithoutFilters?: () => void
+    isExportingPdf?: boolean
+    isExportingExcel?: boolean
+    exportingExcelVariant?: "filtered" | "all" | null
+    exportError?: string | null
 }
 
 export default function FilterBar(props: FilterBarProps) {
@@ -70,7 +75,15 @@ export default function FilterBar(props: FilterBarProps) {
                     triggerClassName="min-w-32"
                     onChange={handleSelectChange}
                 />
-                <ExportButtons onExportPdf={props.onExportPdf} onExportExcel={props.onExportExcel} />
+                <ExportButtons
+                    onExportPdf={props.onExportPdf}
+                    onExportExcelWithFilters={props.onExportExcelWithFilters}
+                    onExportExcelWithoutFilters={props.onExportExcelWithoutFilters}
+                    isExportingPdf={props.isExportingPdf}
+                    isExportingExcel={props.isExportingExcel}
+                    exportingExcelVariant={props.exportingExcelVariant}
+                    exportError={props.exportError}
+                />
             </div>
         </div>
     )

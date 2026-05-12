@@ -3,6 +3,7 @@ from collections import defaultdict
 from datetime import datetime
 
 from app.enums import ProductType
+from app.schemas.pdf import PDFKpiItem, PDFTable, PDFTableRow, PorPaisDetailPDFPayload, PorPaisPDFPayload
 from app.schemas.reports import (
     PorPaisDetailResponse,
     PorPaisFilters,
@@ -10,6 +11,8 @@ from app.schemas.reports import (
     PorPaisStatusRow,
     PorPaisSummaryRow,
 )
+from app.services.exports.pdf_helpers import build_pdf_header, format_integer
+from app.services.exports.excel import ExcelColumn, ExcelWorksheetSpec
 from app.services.utils.report_filters import (
     build_payment_fact_where_clause,
     build_student_payment_fact_where_clause,
@@ -26,6 +29,28 @@ from app.services.por_pais.repository import (
 )
 
 DETALLE_EXAM_NAME_ORDER = [*EXAM_NAME_ORDER, "Other"]
+POR_PAIS_SUMMARY_COLUMNS = [
+    ExcelColumn("country", "Country"),
+    ExcelColumn("total_schools", "Total Schools"),
+    ExcelColumn("cambridge", "Cambridge"),
+    ExcelColumn("ielts", "IELTS"),
+    ExcelColumn("michigan", "Michigan"),
+    ExcelColumn("tea", "TEA"),
+    ExcelColumn("other", "Other"),
+]
+POR_PAIS_STATUS_COLUMNS = [
+    ExcelColumn("country", "Country"),
+    ExcelColumn("schools_ganados", "Schools Ganados"),
+    ExcelColumn("schools_perdidos", "Schools Perdidos"),
+    ExcelColumn("schools_mantenidos", "Schools Mantenidos"),
+    ExcelColumn("exams_ganados", "Exams Ganados"),
+    ExcelColumn("exams_perdidos", "Exams Perdidos"),
+    ExcelColumn("exams_mantenidos", "Exams Mantenidos"),
+]
+POR_PAIS_DETAIL_COLUMNS = [
+    ExcelColumn("country", "Country"),
+    *[ExcelColumn(exam_name, exam_name) for exam_name in DETALLE_EXAM_NAME_ORDER],
+]
 
 
 def summary_bucket_for_exam(label: str) -> str:
@@ -178,3 +203,171 @@ async def getPorPaisDetail(country: str, filters: PorPaisFilters) -> PorPaisDeta
     where_clause, params, expanding_keys = build_por_pais_student_payment_where_clause(filters)
     exam_rows = await fetch_country_exam_rows(where_clause, params, expanding_keys)
     return PorPaisDetailResponse(country=country, exam_counts=build_detail_counts(exam_rows, country))
+
+
+def build_por_pais_export_filters_for_all(filters: PorPaisFilters) -> PorPaisFilters:
+    return filters.model_copy()
+
+
+async def getPorPaisDetailsForReport(
+    report: PorPaisReportResponse,
+    filters: PorPaisFilters,
+) -> list[PorPaisDetailResponse]:
+    if not report.summary_rows:
+        return []
+    return list(
+        await asyncio.gather(
+            *(getPorPaisDetail(row.country, filters) for row in report.summary_rows)
+        )
+    )
+
+
+def build_por_pais_export_worksheets(
+    report: PorPaisReportResponse,
+    details: list[PorPaisDetailResponse],
+) -> list[ExcelWorksheetSpec]:
+    summary_rows = [row.model_dump() for row in report.summary_rows]
+    status_rows = [row.model_dump() for row in report.status_rows]
+    detail_rows = []
+    for detail in details:
+        detail_row = {"country": detail.country}
+        for exam_name in DETALLE_EXAM_NAME_ORDER:
+            detail_row[exam_name] = int(detail.exam_counts.get(exam_name, 0) or 0)
+        detail_rows.append(detail_row)
+
+    return [
+        ExcelWorksheetSpec(
+            name="Por Pais Summary",
+            columns=POR_PAIS_SUMMARY_COLUMNS,
+            rows=summary_rows,
+        ),
+        ExcelWorksheetSpec(
+            name="Por Pais Status",
+            columns=POR_PAIS_STATUS_COLUMNS,
+            rows=status_rows,
+        ),
+        ExcelWorksheetSpec(
+            name="Por Pais Detail",
+            columns=POR_PAIS_DETAIL_COLUMNS,
+            rows=detail_rows,
+        ),
+    ]
+
+
+async def build_por_pais_pdf_payload(filters: PorPaisFilters) -> PorPaisPDFPayload:
+    report = await getPorPaisReport(filters)
+
+    total_schools = sum(row.total_schools for row in report.summary_rows)
+    total_cambridge = sum(row.cambridge for row in report.summary_rows)
+    total_ielts = sum(row.ielts for row in report.summary_rows)
+    total_met = sum(row.michigan for row in report.summary_rows)
+    total_otros = sum(row.tea + row.other for row in report.summary_rows)
+
+    summary_rows = [
+        PDFTableRow(
+            cells=[
+                row.country,
+                format_integer(row.total_schools),
+                format_integer(row.cambridge),
+                format_integer(row.ielts),
+                format_integer(row.michigan),
+                format_integer(row.tea),
+                format_integer(row.other),
+            ]
+        )
+        for row in report.summary_rows
+    ]
+    status_rows = [
+        PDFTableRow(
+            cells=[
+                row.country,
+                format_integer(row.schools_ganados),
+                format_integer(row.schools_perdidos),
+                format_integer(row.schools_mantenidos),
+                format_integer(row.exams_ganados),
+                format_integer(row.exams_perdidos),
+                format_integer(row.exams_mantenidos),
+            ]
+        )
+        for row in report.status_rows
+    ]
+
+    return PorPaisPDFPayload(
+        header=build_pdf_header(
+            "Resultado por País",
+            "Resumen por país y estado de colegios/exámenes",
+            filters,
+        ),
+        kpis=[
+            PDFKpiItem(label="Países", value=format_integer(len(report.summary_rows))),
+            PDFKpiItem(label="Colegios", value=format_integer(total_schools)),
+            PDFKpiItem(label="Cambridge", value=format_integer(total_cambridge)),
+            PDFKpiItem(label="IELTS", value=format_integer(total_ielts)),
+            PDFKpiItem(label="MET", value=format_integer(total_met)),
+            PDFKpiItem(label="Otros", value=format_integer(total_otros)),
+        ],
+        summary_table=PDFTable(
+            headers=["País", "Colegios", "Cambridge", "IELTS", "MET", "TEA", "Otros"],
+            rows=summary_rows,
+            column_widths=[3, 2, 2, 2, 2, 2, 2],
+        ),
+        status_table=PDFTable(
+            headers=[
+                "País",
+                "Col. Ganados",
+                "Col. Perdidos",
+                "Col. Mantenidos",
+                "Ex. Ganados",
+                "Ex. Perdidos",
+                "Ex. Mantenidos",
+            ],
+            rows=status_rows,
+            column_widths=[3, 2, 2, 2, 2, 2, 2],
+        ),
+    )
+
+
+async def build_por_pais_detail_pdf_payload(
+    country: str,
+    filters: PorPaisFilters,
+) -> PorPaisDetailPDFPayload:
+    detail = await getPorPaisDetail(country, filters)
+
+    total_exams = sum(detail.exam_counts.values())
+    active_exam_types = sum(1 for count in detail.exam_counts.values() if count > 0)
+    cambridge_total = sum(
+        count
+        for exam_name, count in detail.exam_counts.items()
+        if exam_name not in {"IELTS", "MET", "MET Go!", "TEA", "Other"}
+    )
+    other_total = sum(
+        detail.exam_counts.get(exam_name, 0)
+        for exam_name in ("MET", "MET Go!", "TEA", "Other")
+    )
+
+    detail_rows = [
+        PDFTableRow(cells=[exam_name, format_integer(count)])
+        for exam_name in DETALLE_EXAM_NAME_ORDER
+        if (count := int(detail.exam_counts.get(exam_name, 0) or 0)) > 0
+    ]
+
+    return PorPaisDetailPDFPayload(
+        header=build_pdf_header(
+            f"Detalle por País - {detail.country}",
+            "Desglose por examen para el país seleccionado",
+            filters,
+        ),
+        kpis=[
+            PDFKpiItem(label="País", value=detail.country),
+            PDFKpiItem(label="Exámenes", value=format_integer(total_exams)),
+            PDFKpiItem(label="Tipos Activos", value=format_integer(active_exam_types)),
+            PDFKpiItem(label="Cambridge", value=format_integer(cambridge_total)),
+            PDFKpiItem(label="IELTS", value=format_integer(detail.exam_counts.get("IELTS", 0))),
+            PDFKpiItem(label="Otros", value=format_integer(other_total)),
+        ],
+        detail_table=PDFTable(
+            headers=["Examen", "Cantidad"],
+            rows=detail_rows,
+            column_widths=[4, 2],
+        ),
+    )

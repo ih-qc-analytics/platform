@@ -42,6 +42,83 @@ export type TotalSalesResponse = {
     product_mix: ProductMix | null
 }
 
+export type PDFHeader = {
+    title: string
+    subtitle: string
+    generated_at: string
+    filters_summary: Record<string, string>
+}
+
+export type PDFKpiItem = {
+    label: string
+    value: string
+    growth?: string | null
+    growth_positive?: boolean | null
+}
+
+export type PDFTrendPoint = {
+    label: string
+    value: number
+    scaled: number
+}
+
+export type PDFGeoPoint = {
+    label: string
+    value: number
+    scaled: number
+}
+
+export type PDFTableRow = {
+    cells: string[]
+}
+
+export type PDFTable = {
+    headers: string[]
+    rows: PDFTableRow[]
+    column_widths: number[]
+}
+
+export type VentasTotalesPDFPayload = {
+    header: PDFHeader
+    kpis: PDFKpiItem[]
+    trend_points: PDFTrendPoint[]
+    geo_points: PDFGeoPoint[]
+}
+
+export type PorAsesorPDFPayload = {
+    header: PDFHeader
+    kpis: PDFKpiItem[]
+    table: PDFTable
+}
+
+export type AsesorDetailPDFPayload = {
+    header: PDFHeader
+    kpis: PDFKpiItem[]
+    geo_table: PDFTable
+    categories_table: PDFTable
+    status_table: PDFTable
+}
+
+export type DetalleAsesorPDFPayload = {
+    header: PDFHeader
+    table_identity: PDFTable
+    table_exams: PDFTable
+    orientation: string
+}
+
+export type PorPaisPDFPayload = {
+    header: PDFHeader
+    kpis: PDFKpiItem[]
+    summary_table: PDFTable
+    status_table: PDFTable
+}
+
+export type PorPaisDetailPDFPayload = {
+    header: PDFHeader
+    kpis: PDFKpiItem[]
+    detail_table: PDFTable
+}
+
 export type FilterOptionsResponse = {
     countries: string[]
     zones: string[]

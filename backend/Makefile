@@ -7,6 +7,9 @@ run:
 run-prod:
 	ENVIRONMENT=prod $(UVICORN) app.main:app --host 0.0.0.0 --port 8000 --reload
 
+run-dev:
+	ENVIRONMENT=dev $(UVICORN) app.main:app --host 0.0.0.0 --port 8000 --reload
+
 seed-ui:
 	docker exec -i platform-mysql-1 mysql -u test_user -ptestpassword ihqc_test -e \
 		"SET FOREIGN_KEY_CHECKS=0; \

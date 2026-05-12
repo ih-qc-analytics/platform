@@ -6,6 +6,7 @@ from fastapi import HTTPException
 from sqlalchemy import text
 
 from app.enums import PaymentStatus
+from app.schemas.pdf import AsesorDetailPDFPayload, PDFKpiItem, PDFTable, PDFTableRow, PorAsesorPDFPayload
 from app.schemas.reports import (
     AsesorDetail,
     AsesorFilters,
@@ -14,6 +15,8 @@ from app.schemas.reports import (
     BusinessStatusDetail,
     ExamBrandDetail,
 )
+from app.services.exports.pdf_helpers import build_pdf_header, format_currency, format_integer
+from app.services.exports.excel import ExcelColumn, ExcelWorksheetSpec
 from app.services.por_asesor.product_grouping import (
     EXAM_CATEGORY_ORDER,
     canonical_exam_category,
@@ -31,6 +34,47 @@ from app.services.utils.fact_subqueries import build_paid_student_allocation_fac
 from app.services.utils.fact_subqueries import build_deduped_paid_cart_product_fact_subquery
 from app.services.utils.report_filters import build_payment_fact_where_clause
 from app.database import SessionLocal
+
+ASESOR_SUMMARY_COLUMNS = [
+    ExcelColumn("seller_name", "Seller"),
+    *[ExcelColumn(category, category) for category in EXAM_CATEGORY_ORDER],
+    ExcelColumn("ganados", "Ganados"),
+    ExcelColumn("perdidos", "Perdidos"),
+    ExcelColumn("mantenidos", "Mantenidos"),
+    ExcelColumn("total_revenue", "Total Revenue"),
+]
+
+ASESOR_DETAIL_COLUMNS = [
+    ExcelColumn("seller_name", "Seller"),
+    ExcelColumn("countries", "Countries"),
+    ExcelColumn("zones", "Zones"),
+    ExcelColumn("states", "States"),
+    ExcelColumn("cities", "Cities"),
+    ExcelColumn("total_schools", "Total Schools"),
+    ExcelColumn("total_exams", "Total Exams"),
+    ExcelColumn("total_revenue", "Total Revenue"),
+]
+for category in EXAM_CATEGORY_ORDER:
+    ASESOR_DETAIL_COLUMNS.extend(
+        [
+            ExcelColumn(f"{category}_exams", f"{category} Exams"),
+            ExcelColumn(f"{category}_schools", f"{category} Schools"),
+            ExcelColumn(f"{category}_revenue", f"{category} Revenue"),
+        ]
+    )
+ASESOR_DETAIL_COLUMNS.extend(
+    [
+        ExcelColumn("ganados_schools", "Ganados Schools"),
+        ExcelColumn("ganados_exams", "Ganados Exams"),
+        ExcelColumn("ganados_revenue", "Ganados Revenue"),
+        ExcelColumn("perdidos_schools", "Perdidos Schools"),
+        ExcelColumn("perdidos_exams", "Perdidos Exams"),
+        ExcelColumn("perdidos_revenue", "Perdidos Revenue"),
+        ExcelColumn("mantenidos_schools", "Mantenidos Schools"),
+        ExcelColumn("mantenidos_exams", "Mantenidos Exams"),
+        ExcelColumn("mantenidos_revenue", "Mantenidos Revenue"),
+    ]
+)
 
 
 async def execute_query(query: str, params: dict, expanding_keys: list[str]):
@@ -448,3 +492,270 @@ async def fetch_summary_status_counts(filters: AsesorFilters, seller_ids: list[i
             "mantenido": len(current & prior),
         }
     return status_counts
+
+
+def build_asesor_export_filters_for_all(filters: AsesorFilters) -> AsesorFilters:
+    return filters.model_copy(
+        update={
+            "countries": [],
+            "zones": [],
+            "states": [],
+            "cities": [],
+            "sellers": [],
+            "cursor": None,
+            "limit": 100,
+        }
+    )
+
+
+async def getAllAsesorReportRows(filters: AsesorFilters) -> AsesorReportResponse:
+    all_rows: list[AsesorRow] = []
+    cursor = filters.cursor
+    has_more = False
+
+    while True:
+        page = await getAsesorReport(filters.model_copy(update={"cursor": cursor}))
+        all_rows.extend(page.rows)
+        if not page.has_more or page.next_cursor is None:
+            has_more = False
+            break
+        cursor = page.next_cursor
+
+    return AsesorReportResponse(
+        rows=all_rows,
+        year=filters.year,
+        next_cursor=None,
+        has_more=has_more,
+    )
+
+
+async def getAsesorDetailsForRows(rows: list[AsesorRow], filters: AsesorFilters) -> list[AsesorDetail]:
+    if not rows:
+        return []
+    return list(await asyncio.gather(*(getAsesorDetail(row.seller_id, filters) for row in rows)))
+
+
+def build_asesor_export_worksheets(
+    report: AsesorReportResponse,
+    details: list[AsesorDetail],
+) -> list[ExcelWorksheetSpec]:
+    summary_rows = []
+    for row in report.rows:
+        summary_row = {
+            "seller_name": row.seller_name,
+            "ganados": row.ganados,
+            "perdidos": row.perdidos,
+            "mantenidos": row.mantenidos,
+            "total_revenue": row.total_revenue,
+        }
+        for category in EXAM_CATEGORY_ORDER:
+            summary_row[category] = int(row.exam_breakdown.get(category, 0) or 0)
+        summary_rows.append(summary_row)
+
+    detail_rows = []
+    for detail in details:
+        detail_row = {
+            "seller_name": detail.seller_name,
+            "countries": ", ".join(detail.countries),
+            "zones": ", ".join(detail.zones),
+            "states": ", ".join(detail.states),
+            "cities": ", ".join(detail.cities),
+            "total_schools": detail.total_schools,
+            "total_exams": detail.total_exams,
+            "total_revenue": detail.total_revenue,
+            "ganados_schools": detail.ganados.schools,
+            "ganados_exams": detail.ganados.exams,
+            "ganados_revenue": detail.ganados.revenue,
+            "perdidos_schools": detail.perdidos.schools,
+            "perdidos_exams": detail.perdidos.exams,
+            "perdidos_revenue": detail.perdidos.revenue,
+            "mantenidos_schools": detail.mantenidos.schools,
+            "mantenidos_exams": detail.mantenidos.exams,
+            "mantenidos_revenue": detail.mantenidos.revenue,
+        }
+        for category in EXAM_CATEGORY_ORDER:
+            category_detail = detail.exam_breakdown.get(category)
+            if isinstance(category_detail, ExamBrandDetail):
+                detail_row[f"{category}_exams"] = category_detail.exams
+                detail_row[f"{category}_schools"] = category_detail.schools
+                detail_row[f"{category}_revenue"] = category_detail.revenue
+            else:
+                detail_row[f"{category}_exams"] = int(category_detail or 0)
+                detail_row[f"{category}_schools"] = 0
+                detail_row[f"{category}_revenue"] = 0.0
+        detail_rows.append(detail_row)
+
+    return [
+        ExcelWorksheetSpec(
+            name="Por Asesor",
+            columns=ASESOR_SUMMARY_COLUMNS,
+            rows=summary_rows,
+        ),
+        ExcelWorksheetSpec(
+            name="Por Asesor Detail",
+            columns=ASESOR_DETAIL_COLUMNS,
+            rows=detail_rows,
+        ),
+    ]
+
+
+async def build_por_asesor_pdf_payload(filters: AsesorFilters) -> PorAsesorPDFPayload:
+    report = await getAllAsesorReportRows(build_asesor_export_filters_for_all(filters))
+
+    total_revenue = sum(row.total_revenue for row in report.rows)
+    total_exams = sum(sum(row.exam_breakdown.values()) for row in report.rows)
+    total_ganados = sum(row.ganados for row in report.rows)
+    total_perdidos = sum(row.perdidos for row in report.rows)
+    total_mantenidos = sum(row.mantenidos for row in report.rows)
+
+    table_rows = []
+    for row in report.rows:
+        cambridge = (
+            int(row.exam_breakdown.get("Cambridge English (Main Suite)", 0) or 0)
+            + int(row.exam_breakdown.get("Cambridge Teaching & Skills", 0) or 0)
+        )
+        ielts = int(row.exam_breakdown.get("IELTS", 0) or 0)
+        met = int(row.exam_breakdown.get("Michigan (MET)", 0) or 0)
+        otros = (
+            int(row.exam_breakdown.get("TEA (Test of English for Aviation)", 0) or 0)
+            + int(row.exam_breakdown.get("Placement & Otros", 0) or 0)
+        )
+        table_rows.append(
+            PDFTableRow(
+                cells=[
+                    row.seller_name,
+                    format_integer(cambridge),
+                    format_integer(ielts),
+                    format_integer(met),
+                    format_integer(otros),
+                    format_integer(row.ganados),
+                    format_integer(row.perdidos),
+                    format_integer(row.mantenidos),
+                    format_currency(row.total_revenue),
+                ]
+            )
+        )
+
+    return PorAsesorPDFPayload(
+        header=build_pdf_header(
+            f"Resultados por Asesor - {filters.year}",
+            "Resumen por asesor con familias de exámenes y valor total",
+            filters,
+        ),
+        kpis=[
+            PDFKpiItem(label="Asesores", value=format_integer(len(report.rows))),
+            PDFKpiItem(label="Exámenes", value=format_integer(total_exams)),
+            PDFKpiItem(label="Ganados", value=format_integer(total_ganados)),
+            PDFKpiItem(label="Perdidos", value=format_integer(total_perdidos)),
+            PDFKpiItem(label="Mantenidos", value=format_integer(total_mantenidos)),
+            PDFKpiItem(label="Valor Total", value=format_currency(total_revenue)),
+        ],
+        table=PDFTable(
+            headers=[
+                "Asesor",
+                "Cambridge",
+                "IELTS",
+                "MET",
+                "Otros",
+                "Ganados",
+                "Perdidos",
+                "Mantenidos",
+                "Valor Total",
+            ],
+            rows=table_rows,
+            column_widths=[4, 2, 2, 2, 2, 2, 2, 2, 3],
+        ),
+    )
+
+
+async def build_asesor_detail_pdf_payload(
+    seller_id: int,
+    filters: AsesorFilters,
+) -> AsesorDetailPDFPayload:
+    detail = await getAsesorDetail(seller_id, filters)
+
+    category_rows = []
+    for category in EXAM_CATEGORY_ORDER:
+        category_detail = detail.exam_breakdown.get(category)
+        if isinstance(category_detail, ExamBrandDetail):
+            exams = category_detail.exams
+            schools = category_detail.schools
+            revenue = category_detail.revenue
+        else:
+            exams = int(category_detail or 0)
+            schools = 0
+            revenue = 0.0
+        category_rows.append(
+            PDFTableRow(
+                cells=[
+                    category,
+                    format_integer(exams),
+                    format_integer(schools),
+                    format_currency(revenue),
+                ]
+            )
+        )
+
+    status_rows = [
+        PDFTableRow(
+            cells=[
+                "Ganados",
+                format_integer(detail.ganados.schools),
+                format_integer(detail.ganados.exams),
+                format_currency(detail.ganados.revenue),
+            ]
+        ),
+        PDFTableRow(
+            cells=[
+                "Perdidos",
+                format_integer(detail.perdidos.schools),
+                format_integer(detail.perdidos.exams),
+                format_currency(detail.perdidos.revenue),
+            ]
+        ),
+        PDFTableRow(
+            cells=[
+                "Mantenidos",
+                format_integer(detail.mantenidos.schools),
+                format_integer(detail.mantenidos.exams),
+                format_currency(detail.mantenidos.revenue),
+            ]
+        ),
+    ]
+
+    return AsesorDetailPDFPayload(
+        header=build_pdf_header(
+            detail.seller_name,
+            "Detalle del asesor por geografía, categorías y estado de colegios",
+            filters,
+        ),
+        kpis=[
+            PDFKpiItem(label="Total Colegios", value=format_integer(detail.total_schools)),
+            PDFKpiItem(label="Total Exámenes", value=format_integer(detail.total_exams)),
+            PDFKpiItem(label="Valor Total", value=format_currency(detail.total_revenue)),
+        ],
+        geo_table=PDFTable(
+            headers=["País", "Sede", "Estado", "Ciudad"],
+            rows=[
+                PDFTableRow(
+                    cells=[
+                        ", ".join(detail.countries) or "-",
+                        ", ".join(detail.zones) or "-",
+                        ", ".join(detail.states) or "-",
+                        ", ".join(detail.cities) or "-",
+                    ]
+                )
+            ],
+            column_widths=[2, 2, 2, 2],
+        ),
+        categories_table=PDFTable(
+            headers=["Categoría", "Exámenes", "Colegios", "Valor"],
+            rows=category_rows,
+            column_widths=[4, 2, 2, 2],
+        ),
+        status_table=PDFTable(
+            headers=["Estado", "Colegios", "Exámenes", "Valor"],
+            rows=status_rows,
+            column_widths=[3, 2, 2, 2],
+        ),
+    )

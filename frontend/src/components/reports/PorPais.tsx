@@ -1,8 +1,11 @@
 import { useMemo, useState } from "react"
 import { ChevronRight } from "lucide-react"
 
+import { exportPorPaisExcel, exportPorPaisExcelAll, fetchPorPaisPdfPayload } from "@/api/reports"
+import PorPaisPDF from "@/components/pdf/PorPaisPDF"
 import PorPaisDetail from "@/components/reports/PorPaisDetail"
 import PorPaisFilterBar from "@/components/reports/PorPaisFilterBar"
+import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import {
@@ -14,6 +17,7 @@ import {
     TableRow,
 } from "@/components/ui/table"
 import { usePorPaisReport } from "@/hooks/useReports"
+import { downloadPdf } from "@/lib/exportPdf"
 import { cn, formatInteger } from "@/lib/utils"
 import type { PorPaisFilters, PorPaisStatusRow, PorPaisSummaryRow } from "@/types"
 
@@ -24,19 +28,72 @@ export default function PorPais() {
         date_to: `${currentYear}-12-31`,
     })
     const [selectedCountry, setSelectedCountry] = useState<string | null>(null)
+    const [isExportingPdf, setIsExportingPdf] = useState(false)
+    const [isExportingExcel, setIsExportingExcel] = useState(false)
+    const [exportingExcelVariant, setExportingExcelVariant] = useState<"filtered" | "all" | null>(null)
+    const [exportError, setExportError] = useState<string | null>(null)
     const requestFilters = useMemo(() => filters, [filters])
     const { data, isLoading, isError } = usePorPaisReport(requestFilters)
 
     const summaryRows = data?.summary_rows ?? []
     const statusRows = data?.status_rows ?? []
 
+    const handleExportExcel = async (variant: "filtered" | "all") => {
+        if (!filters.date_from || !filters.date_to) {
+            setExportError("Selecciona fecha inicial y final antes de exportar.")
+            return
+        }
+
+        setExportError(null)
+        setIsExportingExcel(true)
+        setExportingExcelVariant(variant)
+        try {
+            if (variant === "filtered") {
+                await exportPorPaisExcel(filters)
+            } else {
+                await exportPorPaisExcelAll(filters)
+            }
+        } catch {
+            setExportError("No fue posible exportar el archivo. Intenta de nuevo.")
+        } finally {
+            setIsExportingExcel(false)
+            setExportingExcelVariant(null)
+        }
+    }
+
+    const handleExportPdf = async () => {
+        if (!filters.date_from || !filters.date_to) {
+            setExportError("Selecciona fecha inicial y final antes de exportar.")
+            return
+        }
+
+        setExportError(null)
+        setIsExportingPdf(true)
+        try {
+            const payload = await fetchPorPaisPdfPayload(filters)
+            await downloadPdf(<PorPaisPDF data={payload} />, "por-pais.pdf")
+        } catch {
+            setExportError("No fue posible exportar el archivo. Intenta de nuevo.")
+        } finally {
+            setIsExportingPdf(false)
+        }
+    }
+
     return (
         <div className="flex flex-col gap-8 p-6">
             <PorPaisFilterBar
                 filters={filters}
-                onChange={setFilters}
-                onExportPdf={() => console.log("export pdf")}
-                onExportExcel={() => console.log("export excel")}
+                onChange={nextFilters => {
+                    setExportError(null)
+                    setFilters(nextFilters)
+                }}
+                onExportPdf={() => void handleExportPdf()}
+                onExportExcelWithFilters={() => void handleExportExcel("filtered")}
+                onExportExcelWithoutFilters={() => void handleExportExcel("all")}
+                isExportingPdf={isExportingPdf}
+                isExportingExcel={isExportingExcel}
+                exportingExcelVariant={exportingExcelVariant}
+                exportError={exportError}
             />
 
             <Card className="rounded-[2rem] shadow-sm">
@@ -48,7 +105,7 @@ export default function PorPais() {
                         Resumen por país y detalle por familia de exámenes.
                     </p>
                 </CardHeader>
-                <CardContent className="p-0">
+                <CardContent className="px-0 pb-4">
                     {isError && (
                         <div className="px-6 py-10 text-sm text-destructive">
                             Error al cargar el resultado por país.
@@ -99,7 +156,7 @@ export default function PorPais() {
                         Ganados, Perdidos y Mantenidos
                     </CardTitle>
                 </CardHeader>
-                <CardContent className="p-0">
+                <CardContent className="px-0 pb-4">
                     {isLoading ? (
                         <PorPaisTableSkeleton columns={7} />
                     ) : statusRows.length === 0 ? (
@@ -169,11 +226,11 @@ function ClickableCountryRow({
                 {row.country}
             </TableBodyCell>
             <MetricCell value={row.total_schools} align="right" />
-            <MetricCell value={row.cambridge} align="right" />
-            <MetricCell value={row.ielts} align="right" />
-            <MetricCell value={row.michigan} align="right" />
-            <MetricCell value={row.tea} align="right" />
-            <MetricCell value={row.other} align="right" />
+            <MetricCell value={row.cambridge} align="right" emphasize />
+            <MetricCell value={row.ielts} align="right" emphasize />
+            <MetricCell value={row.michigan} align="right" emphasize />
+            <MetricCell value={row.tea} align="right" emphasize />
+            <MetricCell value={row.other} align="right" emphasize />
             <TableBodyCell className="w-12 text-right text-slate-400">
                 <ChevronRight className="ml-auto size-5" />
             </TableBodyCell>
@@ -187,12 +244,12 @@ function StatusRowView({ row }: { row: PorPaisStatusRow }) {
             <TableBodyCell className="sticky left-0 z-10 bg-card font-semibold text-slate-900">
                 {row.country}
             </TableBodyCell>
-            <MetricCell value={row.schools_ganados} />
-            <MetricCell value={row.schools_perdidos} />
-            <MetricCell value={row.schools_mantenidos} />
-            <MetricCell value={row.exams_ganados} />
-            <MetricCell value={row.exams_perdidos} />
-            <MetricCell value={row.exams_mantenidos} />
+            <StatusMetricCell value={row.schools_ganados} tone="success" />
+            <StatusMetricCell value={row.schools_perdidos} tone="danger" />
+            <StatusMetricCell value={row.schools_mantenidos} tone="info" />
+            <StatusMetricCell value={row.exams_ganados} tone="success" />
+            <StatusMetricCell value={row.exams_perdidos} tone="danger" />
+            <StatusMetricCell value={row.exams_mantenidos} tone="info" />
         </TableRow>
     )
 }
@@ -205,7 +262,9 @@ function TableHeadCell({
     children?: React.ReactNode
 }) {
     return (
-        <TableHead className={cn("px-3 py-3 text-xs font-semibold uppercase tracking-wide text-slate-700", className)}>
+        <TableHead
+            className={cn("border-b border-border px-3 py-3 text-xs font-semibold uppercase tracking-wide text-slate-700", className)}
+        >
             {children}
         </TableHead>
     )
@@ -218,19 +277,39 @@ function TableBodyCell({
     className?: string
     children: React.ReactNode
 }) {
-    return <TableCell className={cn("px-3 py-3 text-sm text-slate-700", className)}>{children}</TableCell>
+    return <TableCell className={cn("border-b border-border px-3 py-3 text-sm text-slate-700", className)}>{children}</TableCell>
 }
 
 function MetricCell({
     value,
     align = "center",
+    emphasize = false,
 }: {
     value: number
     align?: "center" | "right"
+    emphasize?: boolean
 }) {
     return (
         <TableBodyCell className={align === "right" ? "text-right" : "text-center"}>
-            <span className="tabular-nums">{formatInteger(value)}</span>
+            <span className={cn("tabular-nums text-slate-700", emphasize && "font-semibold")}>{formatInteger(value)}</span>
+        </TableBodyCell>
+    )
+}
+
+function StatusMetricCell({
+    value,
+    tone,
+}: {
+    value: number
+    tone: "success" | "danger" | "info"
+}) {
+    return (
+        <TableBodyCell>
+            <div className="flex justify-center">
+                <Badge variant={tone} className="min-w-14 px-2 py-0.5 text-xs font-semibold tabular-nums">
+                    {formatInteger(value)}
+                </Badge>
+            </div>
         </TableBodyCell>
     )
 }

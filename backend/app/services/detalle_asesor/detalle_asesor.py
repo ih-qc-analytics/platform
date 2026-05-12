@@ -1,7 +1,10 @@
 from sqlalchemy import bindparam, text
 
 from app.database import SessionLocal
+from app.schemas.pdf import DetalleAsesorPDFPayload, PDFTable, PDFTableRow
 from app.schemas.reports import DetalleFilters, DetalleReportResponse, DetalleRow
+from app.services.exports.excel import ExcelColumn, ExcelWorksheetSpec
+from app.services.exports.pdf_helpers import build_pdf_header, format_date, format_integer
 from app.services.por_asesor.product_grouping import EXAM_NAME_ORDER, canonical_exam_name
 from app.services.utils.fact_subqueries import (
     build_deduped_paid_cart_product_fact_subquery,
@@ -13,6 +16,13 @@ from app.services.utils.report_filters import (
 
 
 DETALLE_EXAM_NAME_ORDER = [*EXAM_NAME_ORDER, "Other"]
+DETALLE_EXPORT_COLUMNS = [
+    ExcelColumn("seller_name", "Seller"),
+    ExcelColumn("school_name", "School"),
+    ExcelColumn("exam_date", "Exam Date"),
+    *[ExcelColumn(exam_name, exam_name) for exam_name in DETALLE_EXAM_NAME_ORDER],
+    ExcelColumn("total", "Total"),
+]
 
 
 def create_empty_exam_counts() -> dict[str, int]:
@@ -105,3 +115,99 @@ async def getDetalleData(filters: DetalleFilters) -> DetalleReportResponse:
     next_cursor = rows[-1].id if has_more and rows else None
 
     return DetalleReportResponse(rows=rows, next_cursor=next_cursor, has_more=has_more)
+
+
+def build_detalle_export_filters_for_all(filters: DetalleFilters) -> DetalleFilters:
+    return filters.model_copy(
+        update={
+            "countries": [],
+            "zones": [],
+            "states": [],
+            "cities": [],
+            "search": None,
+            "cursor": None,
+            "page_size": 500,
+        }
+    )
+
+
+async def getAllDetalleRows(filters: DetalleFilters) -> DetalleReportResponse:
+    all_rows: list[DetalleRow] = []
+    cursor = filters.cursor
+
+    while True:
+        page = await getDetalleData(filters.model_copy(update={"cursor": cursor}))
+        all_rows.extend(page.rows)
+        if not page.has_more or page.next_cursor is None:
+            break
+        cursor = page.next_cursor
+
+    return DetalleReportResponse(rows=all_rows, next_cursor=None, has_more=False)
+
+
+def build_detalle_export_worksheets(report: DetalleReportResponse) -> list[ExcelWorksheetSpec]:
+    rows = []
+    for row in report.rows:
+        export_row = {
+            "seller_name": row.seller_name,
+            "school_name": row.school_name,
+            "exam_date": row.exam_date,
+            "total": row.total,
+        }
+        for exam_name in DETALLE_EXAM_NAME_ORDER:
+            export_row[exam_name] = int(row.exam_counts.get(exam_name, 0) or 0)
+        rows.append(export_row)
+
+    return [
+        ExcelWorksheetSpec(
+            name="Detalle Asesor",
+            columns=DETALLE_EXPORT_COLUMNS,
+            rows=rows,
+        )
+    ]
+
+
+async def build_detalle_asesor_pdf_payload(filters: DetalleFilters) -> DetalleAsesorPDFPayload:
+    report = await getAllDetalleRows(build_detalle_export_filters_for_all(filters))
+
+    identity_rows = [
+        PDFTableRow(
+            cells=[
+                row.seller_name,
+                row.school_name,
+                format_date(row.exam_date) if row.exam_date else "-",
+                format_integer(row.total),
+            ]
+        )
+        for row in report.rows
+    ]
+    exam_rows = [
+        PDFTableRow(
+            cells=[
+                row.seller_name,
+                row.school_name,
+                *[format_integer(row.exam_counts.get(exam_name, 0) or 0) for exam_name in DETALLE_EXAM_NAME_ORDER],
+                format_integer(row.total),
+            ]
+        )
+        for row in report.rows
+    ]
+
+    return DetalleAsesorPDFPayload(
+        header=build_pdf_header(
+            "Detalle por Asesor",
+            "Desglose por asesor, escuela y fecha de examen",
+            filters,
+        ),
+        table_identity=PDFTable(
+            headers=["Asesor", "Escuela", "Fecha", "Total"],
+            rows=identity_rows,
+            column_widths=[3, 4, 2, 1],
+        ),
+        table_exams=PDFTable(
+            headers=["Asesor", "Escuela", *DETALLE_EXAM_NAME_ORDER, "Total"],
+            rows=exam_rows,
+            column_widths=[3, 4, *([1] * len(DETALLE_EXAM_NAME_ORDER)), 1],
+        ),
+        orientation="landscape",
+    )

@@ -7,20 +7,29 @@ type PorPaisFilterBarProps = {
     filters: PorPaisFilters
     onChange: (filters: PorPaisFilters) => void
     onExportPdf?: () => void
-    onExportExcel?: () => void
+    onExportExcelWithFilters?: () => void
+    onExportExcelWithoutFilters?: () => void
+    isExportingPdf?: boolean
+    isExportingExcel?: boolean
+    exportingExcelVariant?: "filtered" | "all" | null
+    exportError?: string | null
 }
 
 export default function PorPaisFilterBar({
     filters,
     onChange,
     onExportPdf,
-    onExportExcel,
+    onExportExcelWithFilters,
+    onExportExcelWithoutFilters,
+    isExportingPdf,
+    isExportingExcel,
+    exportingExcelVariant,
+    exportError,
 }: PorPaisFilterBarProps) {
     return (
         <Card className="rounded-[2rem] shadow-sm">
             <CardContent className="flex flex-col gap-5 p-6 lg:flex-row lg:items-end lg:justify-between">
                 <div className="flex flex-col gap-2">
-                    <span className="text-sm font-medium text-slate-700">Período</span>
                     <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
                         <DateRangePicker
                             dateFrom={filters.date_from}
@@ -30,7 +39,15 @@ export default function PorPaisFilterBar({
                         />
                     </div>
                 </div>
-                <ExportButtons onExportPdf={onExportPdf} onExportExcel={onExportExcel} />
+                <ExportButtons
+                    onExportPdf={onExportPdf}
+                    onExportExcelWithFilters={onExportExcelWithFilters}
+                    onExportExcelWithoutFilters={onExportExcelWithoutFilters}
+                    isExportingPdf={isExportingPdf}
+                    isExportingExcel={isExportingExcel}
+                    exportingExcelVariant={exportingExcelVariant}
+                    exportError={exportError}
+                />
             </CardContent>
         </Card>
     )

@@ -1,10 +1,17 @@
+import { FileDown, Loader2 } from "lucide-react"
+
+import { fetchAsesorDetailPdfPayload } from "@/api/reports"
+import AsesorDetailPDF from "@/components/pdf/AsesorDetailPDF"
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
+import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useAsesorDetail } from "@/hooks/useReports"
+import { downloadPdf } from "@/lib/exportPdf"
 import type { AsesorFilters, BusinessStatusDetail } from "@/types"
 import { cn, formatCurrency, formatInteger } from "@/lib/utils"
 import { ASESOR_EXAM_CATEGORIES } from "@/components/reports/asesorCategories"
+import { useState } from "react"
 
 type DetalleAsesorProps = {
     sellerId: number | null
@@ -47,6 +54,8 @@ export default function DetalleAsesor({
     onOpenChange,
     filters,
 }: DetalleAsesorProps) {
+    const [isExportingPdf, setIsExportingPdf] = useState(false)
+    const [exportError, setExportError] = useState<string | null>(null)
     const { data, isLoading, isError } = useAsesorDetail(sellerId, filters, open)
 
     const statusEntries: Array<{
@@ -61,16 +70,46 @@ export default function DetalleAsesor({
           ]
         : []
 
+    const handleExportPdf = async () => {
+        if (!sellerId) return
+
+        setExportError(null)
+        setIsExportingPdf(true)
+        try {
+            const payload = await fetchAsesorDetailPdfPayload(sellerId, filters)
+            await downloadPdf(
+                <AsesorDetailPDF data={payload} />,
+                buildAsesorDetailPdfFilename(payload.header.title),
+            )
+        } catch {
+            setExportError("No fue posible exportar el archivo. Intenta de nuevo.")
+        } finally {
+            setIsExportingPdf(false)
+        }
+    }
+
     return (
         <Sheet open={open} onOpenChange={onOpenChange}>
             <SheetContent side="right" className="w-full overflow-y-auto p-0 sm:max-w-3xl lg:max-w-5xl">
                 <SheetHeader className="border-b border-border px-5 py-4">
-                    <SheetTitle className="text-2xl font-semibold tracking-tight text-slate-900">
-                        {data?.seller_name ?? sellerName ?? "Detalle"}
-                    </SheetTitle>
+                    <div className="flex items-start justify-between gap-4">
+                        <SheetTitle className="text-2xl font-semibold tracking-tight text-slate-900">
+                            {data?.seller_name ?? sellerName ?? "Detalle"}
+                        </SheetTitle>
+                        <Button
+                            onClick={() => void handleExportPdf()}
+                            variant="outline"
+                            className="shrink-0 rounded-2xl"
+                            disabled={!sellerId || isLoading || isExportingPdf}
+                        >
+                            {isExportingPdf ? <Loader2 className="size-4 animate-spin" /> : <FileDown className="size-4" />}
+                            {isExportingPdf ? "Generando PDF..." : "Exportar PDF"}
+                        </Button>
+                    </div>
                 </SheetHeader>
 
                 <div className="flex flex-col gap-5 px-5 py-5">
+                    {exportError ? <p className="text-sm text-destructive">{exportError}</p> : null}
                     {isLoading ? (
                         <DetalleSkeleton />
                     ) : isError ? (
@@ -192,6 +231,17 @@ function MetricRow({ label, value }: { label: string; value: string }) {
 
 function joinValues(values: string[]) {
     return values.length > 0 ? values.join(", ") : "-"
+}
+
+function buildAsesorDetailPdfFilename(sellerName: string) {
+    const slug = sellerName
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "")
+
+    return slug ? `detalle-asesor-${slug}.pdf` : "detalle-asesor.pdf"
 }
 
 function DetalleSkeleton() {

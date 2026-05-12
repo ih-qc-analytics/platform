@@ -9,6 +9,7 @@ from app.schemas.reports import (
     PorPaisStatusRow,
     PorPaisSummaryRow,
 )
+from app.schemas.pdf import PorPaisDetailPDFPayload
 
 
 REPORT_RESPONSE = PorPaisReportResponse(
@@ -111,3 +112,24 @@ async def test_por_pais_detail_parses_body_and_country():
     assert country == "colombia"
     assert filters.date_from == "2025-07-01"
     assert filters.date_to == "2025-12-31"
+
+
+@pytest.mark.asyncio(loop_scope="session")
+async def test_por_pais_detail_pdf_returns_200():
+    payload = PorPaisDetailPDFPayload(
+        header={"title": "México", "subtitle": "x", "generated_at": "12/05/2026 10:00", "filters_summary": {}},
+        kpis=[{"label": "País", "value": "México"}],
+        detail_table={"headers": ["Examen", "Cantidad"], "rows": [{"cells": ["IELTS", "2"]}], "column_widths": [1, 1]},
+    )
+    with patch(
+        "app.routers.por_pais.build_por_pais_detail_pdf_payload",
+        new=AsyncMock(return_value=payload),
+    ):
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:  # type: ignore[arg-type]
+            response = await client.post(
+                "/reports/por-pais/mexico/export/pdf",
+                json={"date_from": "2025-01-01", "date_to": "2025-12-31"},
+            )
+
+    assert response.status_code == 200
+    assert response.json()["detail_table"]["rows"][0]["cells"] == ["IELTS", "2"]

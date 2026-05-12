@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from "react"
 import { Search } from "lucide-react"
 
+import { exportDetalleAsesorExcel, exportDetalleAsesorExcelAll, fetchDetalleAsesorPdfPayload } from "@/api/reports"
 import FilterBar from "@/components/filters/FilterBar"
 import { DETALLE_ASESOR_EXAM_TYPES, EXAM_TYPE_LABELS } from "@/components/constants/detalleAsesorExamTypes"
+import DetalleAsesorPDF from "@/components/pdf/DetalleAsesorPDF"
 import ReportPagination from "@/components/reports/ReportPagination"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -17,6 +19,7 @@ import {
 } from "@/components/ui/table"
 import useCursorPagination from "@/hooks/useCursorPagination"
 import { useDetalleAsesorReport } from "@/hooks/useReports"
+import { downloadPdf } from "@/lib/exportPdf"
 import { cn, formatInteger } from "@/lib/utils"
 import type { DetalleAsesorFilters, ReportFilters } from "@/types"
 
@@ -33,6 +36,10 @@ export default function DetallePorAsesor() {
     })
     const [searchInput, setSearchInput] = useState("")
     const [search, setSearch] = useState("")
+    const [isExportingPdf, setIsExportingPdf] = useState(false)
+    const [isExportingExcel, setIsExportingExcel] = useState(false)
+    const [exportingExcelVariant, setExportingExcelVariant] = useState<"filtered" | "all" | null>(null)
+    const [exportError, setExportError] = useState<string | null>(null)
     const { page, currentCursor, reset, goPrevious, goNext } = useCursorPagination<number>()
 
     useEffect(() => {
@@ -57,16 +64,69 @@ export default function DetallePorAsesor() {
     const { data, isLoading, isError } = useDetalleAsesorReport(requestFilters)
     const rows = data?.rows ?? []
 
+    const handleExportExcel = async (variant: "filtered" | "all") => {
+        if (!filters.date_from || !filters.date_to) {
+            setExportError("Selecciona fecha inicial y final antes de exportar.")
+            return
+        }
+
+        setExportError(null)
+        setIsExportingExcel(true)
+        setExportingExcelVariant(variant)
+        try {
+            if (variant === "filtered") {
+                await exportDetalleAsesorExcel(requestFilters)
+            } else {
+                await exportDetalleAsesorExcelAll({
+                    ...filters,
+                    search: search || undefined,
+                })
+            }
+        } catch {
+            setExportError("No fue posible exportar el archivo. Intenta de nuevo.")
+        } finally {
+            setIsExportingExcel(false)
+            setExportingExcelVariant(null)
+        }
+    }
+
+    const handleExportPdf = async () => {
+        if (!filters.date_from || !filters.date_to) {
+            setExportError("Selecciona fecha inicial y final antes de exportar.")
+            return
+        }
+
+        setExportError(null)
+        setIsExportingPdf(true)
+        try {
+            const payload = await fetchDetalleAsesorPdfPayload({
+                ...filters,
+                search: search || undefined,
+            })
+            await downloadPdf(<DetalleAsesorPDF data={payload} />, "detalle-asesor.pdf")
+        } catch {
+            setExportError("No fue posible exportar el archivo. Intenta de nuevo.")
+        } finally {
+            setIsExportingPdf(false)
+        }
+    }
+
     return (
         <div className="flex flex-col gap-8 p-6">
             <FilterBar
                 value={filters}
                 onChange={nextFilters => {
                     reset()
+                    setExportError(null)
                     setFilters(nextFilters)
                 }}
-                onExportPdf={() => console.log("export pdf")}
-                onExportExcel={() => console.log("export excel")}
+                onExportPdf={() => void handleExportPdf()}
+                onExportExcelWithFilters={() => void handleExportExcel("filtered")}
+                onExportExcelWithoutFilters={() => void handleExportExcel("all")}
+                isExportingPdf={isExportingPdf}
+                isExportingExcel={isExportingExcel}
+                exportingExcelVariant={exportingExcelVariant}
+                exportError={exportError}
             />
 
             <div className="max-w-xl">

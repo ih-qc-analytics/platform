@@ -16,7 +16,12 @@ type AsesorFilterBarProps = {
     onFiltersChange: (filters: AsesorFilters) => void
     onToggleComparison: (value: boolean) => void
     onExportPdf?: () => void
-    onExportExcel?: () => void
+    onExportExcelWithFilters?: () => void
+    onExportExcelWithoutFilters?: () => void
+    isExportingPdf?: boolean
+    isExportingExcel?: boolean
+    exportingExcelVariant?: "filtered" | "all" | null
+    exportError?: string | null
 }
 
 type FilterKey = "countries" | "zones" | "states" | "cities" | "sellers"
@@ -40,7 +45,12 @@ export default function AsesorFilterBar({
     onFiltersChange,
     onToggleComparison,
     onExportPdf,
-    onExportExcel,
+    onExportExcelWithFilters,
+    onExportExcelWithoutFilters,
+    isExportingPdf,
+    isExportingExcel,
+    exportingExcelVariant,
+    exportError,
 }: AsesorFilterBarProps) {
     const cleanedSellerOptions = useMemo(() => cleanOptions(sellerOptions), [sellerOptions])
 
@@ -71,7 +81,15 @@ export default function AsesorFilterBar({
                         onChange={value => handleSelectChange("sellers", value)}
                     />
                 </div>
-                <ExportButtons onExportPdf={onExportPdf} onExportExcel={onExportExcel} />
+                <ExportButtons
+                    onExportPdf={onExportPdf}
+                    onExportExcelWithFilters={onExportExcelWithFilters}
+                    onExportExcelWithoutFilters={onExportExcelWithoutFilters}
+                    isExportingPdf={isExportingPdf}
+                    isExportingExcel={isExportingExcel}
+                    exportingExcelVariant={exportingExcelVariant}
+                    exportError={exportError}
+                />
             </div>
 
             <div className="rounded-3xl border border-border bg-card px-6 py-5 shadow-sm">
