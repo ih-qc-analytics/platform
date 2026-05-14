@@ -4,9 +4,11 @@ import json
 from sqlalchemy import bindparam, text
 
 from app.database import SessionLocal
+from app.services.utils.currency_rates import FALLBACK_EXCHANGE_RATE, build_country_rates_derived_table
 from app.enums import ProductType
 from app.services.utils.fact_subqueries import (
     build_deduped_paid_cart_product_fact_subquery,
+    build_paid_payment_fact_subquery,
     build_paid_student_allocation_fact_subquery,
 )
 from app.services.utils.report_filters import (
@@ -69,19 +71,14 @@ def build_student_payment_where_clause(filters, include_sellers: bool = False) -
     return " AND ".join(conditions), params, expanding_keys
 
 
-def build_summary_base_query(where_clause: str) -> str:
+def build_summary_base_query(where_clause: str, fx_table_sql: str) -> str:
     return f"""
         SELECT
             s.id AS seller_id,
             CONCAT(s.name, ' ', s.lastName) AS seller_name,
-            COALESCE(SUM(pay.quantity), 0) AS total_revenue
-        FROM seller s
-        JOIN seller_lead sl ON sl.sellerId = s.id
-        JOIN `lead` l ON sl.leadId = l.id
-        LEFT JOIN zone z ON l.zoneId = z.id
-        JOIN cart c ON c.sellerLeadId = sl.id
-        JOIN payment pay ON pay.cartId = c.id
-        WHERE {where_clause}
+            COALESCE(SUM(qp.paid_amount_base), 0) AS total_revenue
+        FROM ({build_paid_payment_fact_subquery(where_clause, fx_table_sql=fx_table_sql)}) qp
+        JOIN seller s ON s.id = qp.seller_id
         GROUP BY s.id, s.name, s.lastName
     """
 
@@ -113,12 +110,14 @@ async def fetch_paginated_summary_rows(
     expanding_keys: list[str],
     limit: int,
     cursor: str | None,
+    country_rates: dict[str, float],
 ):
     cursor_clause, cursor_params = build_cursor_clause(cursor)
+    fx_table_sql, fx_params = build_country_rates_derived_table(country_rates)
     query = f"""
         SELECT *
         FROM (
-            {build_summary_base_query(where_clause)}
+            {build_summary_base_query(where_clause, fx_table_sql)}
         ) summary
         {cursor_clause}
         ORDER BY summary.total_revenue DESC, summary.seller_name ASC, summary.seller_id ASC
@@ -126,7 +125,9 @@ async def fetch_paginated_summary_rows(
     """
     page_params = {
         **params,
+        **fx_params,
         **cursor_params,
+        "fallback_rate": FALLBACK_EXCHANGE_RATE,
         "page_size": limit + 1,
     }
     rows = await execute_repo_query(query, page_params, expanding_keys)
@@ -211,8 +212,10 @@ async def fetch_school_metric_rows(
     params: dict,
     expanding_keys: list[str],
     year: int,
+    country_rates: dict[str, float],
 ):
-    paid_allocation_fact = build_paid_student_allocation_fact_subquery(where_clause)
+    fx_table_sql, fx_params = build_country_rates_derived_table(country_rates)
+    paid_allocation_fact = build_paid_student_allocation_fact_subquery(where_clause, fx_table_sql=fx_table_sql)
     paid_cart_product_fact = build_deduped_paid_cart_product_fact_subquery(paid_allocation_fact)
     query = f"""
         SELECT
@@ -233,7 +236,7 @@ async def fetch_school_metric_rows(
             SELECT
                 qsp.seller_id,
                 qsp.lead_id,
-                COALESCE(SUM(qsp.allocated_amount), 0) AS revenue
+                COALESCE(SUM(qsp.allocated_amount_base), 0) AS revenue
             FROM ({paid_allocation_fact}) qsp
             WHERE YEAR(qsp.payment_day) = :metrics_year
             GROUP BY qsp.seller_id, qsp.lead_id
@@ -246,7 +249,9 @@ async def fetch_school_metric_rows(
         query,
         {
             **params,
+            **fx_params,
             "metrics_year": year,
+            "fallback_rate": FALLBACK_EXCHANGE_RATE,
         },
         expanding_keys,
     )

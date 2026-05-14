@@ -11,6 +11,7 @@ from app.services.exports.pdf_helpers import (
     scale_series,
 )
 from app.services.total_sales.total_sales import build_ventas_totales_pdf_payload
+from app.services.utils.currency_rates import build_country_rates_for_mxn, build_country_rates_derived_table
 
 
 MOCK_RESPONSE = TotalSalesResponse(
@@ -146,6 +147,20 @@ def test_scale_series_and_growth_formatting_cover_edge_cases():
     assert format_growth(12.34) == ("+12.3%", True)
     assert format_growth(0.0) == ("+0.0%", True)
     assert format_growth(None) == (None, None)
+
+
+def test_country_rate_helpers_build_country_mapping_and_derived_sql():
+    rates = build_country_rates_for_mxn({"COP": 20.0, "PEN": 5.0})
+    sql, params = build_country_rates_derived_table(rates)
+
+    assert rates == {
+        "mexico": 1.0,
+        "colombia": 0.05,
+        "peru": 0.2,
+    }
+    assert "country_key" in sql
+    assert "rate_to_base" in sql
+    assert params["fx_country_0"] == "mexico"
 
 
 @pytest.mark.asyncio(loop_scope="session")

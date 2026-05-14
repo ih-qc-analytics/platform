@@ -26,45 +26,15 @@ def build_sync_url() -> str:
 
 
 QUERIES = {
-    "cart_billing_status": """
-        SELECT 
-            CASE 
-                WHEN status IS NULL THEN 'IS NULL'
-                WHEN status = '' THEN 'EMPTY STRING'
-                ELSE status 
-            END AS status_check,
-            COUNT(*) AS occurrences
-        FROM cart_billing
-        GROUP BY 
-            CASE 
-                WHEN status IS NULL THEN 'IS NULL'
-                WHEN status = '' THEN 'EMPTY STRING'
-                ELSE status 
-            END
-        ORDER BY occurrences DESC;
-    """,
-    "payment_status" : """
-    SELECT status, COUNT(*) as count
-    FROM payment
-    GROUP BY status
-    ORDER BY count DESC;
-    """,
-    "orphan": """
-            SELECT COUNT(*) AS orphan_student_payments
-        FROM student_payments sp
-        LEFT JOIN payment p ON p.id = sp.payment_id
-        WHERE p.id IS NULL;
-    """, 
-    "countries": 
-    """ 
-    SELECT site from `lead`
-    GROUP BY site; 
-    """,
-    "countries": 
-    """ 
-    SELECT name from exam_cat
-    GROUP BY name; 
+    "addresses": 
     """
+        SELECT COUNT(*) FROM lead_address
+    """,
+    "favorites": 
+    """
+    SELECT COUNT(*) FROM lead_address WHERE isFavorite = 1
+    """
+  
 }
 
 

@@ -30,6 +30,11 @@ from app.services.por_asesor.repository import (
     fetch_paginated_summary_rows,
     fetch_summary_exam_breakdown_rows_by_seller_ids,
 )
+from app.services.utils.currency_rates import (
+    FALLBACK_EXCHANGE_RATE,
+    build_country_rates_derived_table,
+    build_country_rates_for_mxn,
+)
 from app.services.utils.fact_subqueries import build_paid_student_allocation_fact_subquery
 from app.services.utils.fact_subqueries import build_deduped_paid_cart_product_fact_subquery
 from app.services.utils.report_filters import build_payment_fact_where_clause
@@ -98,19 +103,37 @@ async def fetch_detail_aggregate_row(
     breakdown_where_clause: str,
     breakdown_params: dict,
     breakdown_expanding_keys: list[str],
+    country_rates: dict[str, float],
 ):
+    fx_table_sql, fx_params = build_country_rates_derived_table(country_rates)
     payment_query = f"""
         SELECT
-            COUNT(DISTINCT l.id) AS total_schools,
-            COALESCE(SUM(pay.quantity), 0) AS total_revenue
-        FROM seller_lead sl
-        JOIN `lead` l ON sl.leadId = l.id
-        LEFT JOIN zone z ON l.zoneId = z.id
-        JOIN cart c ON c.sellerLeadId = sl.id
-        JOIN payment pay ON pay.cartId = c.id
-        WHERE sl.sellerId = :seller_id AND {payment_where_clause}
+            COUNT(DISTINCT qp.lead_id) AS total_schools,
+            COALESCE(SUM(qp.paid_amount_base), 0) AS total_revenue
+        FROM (
+            SELECT *
+            FROM (
+                SELECT
+                    pay.id AS payment_id,
+                    pay.quantity AS paid_amount,
+                    pay.quantity * COALESCE(fx.rate_to_base, :fallback_rate) AS paid_amount_base,
+                    CONCAT(s.name, ' ', s.lastName) AS seller_name,
+                    s.id AS seller_id,
+                    l.id AS lead_id
+                FROM payment pay
+                JOIN cart c ON c.id = pay.cartId
+                JOIN seller_lead sl ON sl.id = c.sellerLeadId
+                JOIN seller s ON s.id = sl.sellerId
+                JOIN `lead` l ON l.id = sl.leadId
+                LEFT JOIN zone z ON z.id = l.zoneId
+                LEFT JOIN ({fx_table_sql}) fx ON
+                    LOWER(TRIM(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(COALESCE(l.site, ''), 'á', 'a'), 'é', 'e'), 'í', 'i'), 'ó', 'o'), 'ú', 'u'), 'ñ', 'n'))) = fx.country_key
+                WHERE {payment_where_clause}
+            ) qp_inner
+            WHERE qp_inner.seller_id = :seller_id
+        ) qp
     """
-    paid_allocation_fact = build_paid_student_allocation_fact_subquery(breakdown_where_clause)
+    paid_allocation_fact = build_paid_student_allocation_fact_subquery(breakdown_where_clause, fx_table_sql=fx_table_sql)
     paid_cart_product_fact = build_deduped_paid_cart_product_fact_subquery(paid_allocation_fact)
     exams_query = f"""
         SELECT COALESCE(SUM(paid_cart_products.exam_count), 0) AS total_exams
@@ -122,8 +145,16 @@ async def fetch_detail_aggregate_row(
             WHERE pcp.seller_id = :seller_id
         ) paid_cart_products
     """
-    payment_rows = await execute_query(payment_query, payment_params, payment_expanding_keys)
-    exam_rows = await execute_query(exams_query, breakdown_params, breakdown_expanding_keys)
+    payment_rows = await execute_query(
+        payment_query,
+        {**payment_params, **fx_params, "fallback_rate": FALLBACK_EXCHANGE_RATE},
+        payment_expanding_keys,
+    )
+    exam_rows = await execute_query(
+        exams_query,
+        {**breakdown_params, **fx_params, "fallback_rate": FALLBACK_EXCHANGE_RATE},
+        breakdown_expanding_keys,
+    )
     payment_row = payment_rows[0] if payment_rows else None
     exam_row = exam_rows[0] if exam_rows else None
     return SimpleNamespace(
@@ -159,8 +190,10 @@ async def fetch_detail_exam_breakdown_rows(
     where_clause: str,
     params: dict,
     expanding_keys: list[str],
+    country_rates: dict[str, float],
 ):
-    paid_allocation_fact = build_paid_student_allocation_fact_subquery(where_clause)
+    fx_table_sql, fx_params = build_country_rates_derived_table(country_rates)
+    paid_allocation_fact = build_paid_student_allocation_fact_subquery(where_clause, fx_table_sql=fx_table_sql)
     paid_cart_product_fact = build_deduped_paid_cart_product_fact_subquery(paid_allocation_fact)
     query = f"""
         SELECT
@@ -181,26 +214,31 @@ async def fetch_detail_exam_breakdown_rows(
         LEFT JOIN (
             SELECT
                 qsp.exam_name,
-                COALESCE(SUM(qsp.allocated_amount), 0) AS revenue
+                COALESCE(SUM(qsp.allocated_amount_base), 0) AS revenue
             FROM ({paid_allocation_fact}) qsp
             WHERE qsp.seller_id = :seller_id
             GROUP BY qsp.exam_name
         ) ar ON ar.exam_name = pcp.exam_name
         GROUP BY pcp.exam_name
     """
-    return await execute_query(query, params, expanding_keys)
+    return await execute_query(
+        query,
+        {**params, **fx_params, "fallback_rate": FALLBACK_EXCHANGE_RATE},
+        expanding_keys,
+    )
 
 
 async def fetch_detail_status_rows(
     seller_id: int,
     filters: AsesorFilters,
+    country_rates: dict[str, float],
 ):
     presence_where_clause, presence_params, expanding_keys = build_presence_filters(filters, seller_id=seller_id)
     current_rows, prior_rows, current_metric_rows, prior_metric_rows = await asyncio.gather(
         fetch_school_presence_rows(presence_where_clause, presence_params, expanding_keys, filters.year),
         fetch_school_presence_rows(presence_where_clause, presence_params, expanding_keys, filters.year - 1),
-        fetch_school_metric_rows(presence_where_clause, presence_params, expanding_keys, filters.year),
-        fetch_school_metric_rows(presence_where_clause, presence_params, expanding_keys, filters.year - 1),
+        fetch_school_metric_rows(presence_where_clause, presence_params, expanding_keys, filters.year, country_rates),
+        fetch_school_metric_rows(presence_where_clause, presence_params, expanding_keys, filters.year - 1, country_rates),
     )
     return build_status_map_from_year_sets(current_rows, prior_rows, current_metric_rows, prior_metric_rows)
 
@@ -350,7 +388,11 @@ def build_asesor_detail_response(
     )
 
 
-async def getAsesorReport(filters: AsesorFilters) -> AsesorReportResponse:
+async def getAsesorReport(
+    filters: AsesorFilters,
+    country_rates: dict[str, float] | None = None,
+) -> AsesorReportResponse:
+    effective_rates = country_rates or build_country_rates_for_mxn(None, identity_fallback=True)
     payment_where_clause, payment_params, payment_expanding_keys = build_payment_where_clause(
         filters, include_sellers=True
     )
@@ -360,6 +402,7 @@ async def getAsesorReport(filters: AsesorFilters) -> AsesorReportResponse:
         payment_expanding_keys,
         limit=filters.limit,
         cursor=filters.cursor,
+        country_rates=effective_rates,
     )
     seller_ids = [int(row.seller_id) for row in summary_rows]
     breakdown_where_clause, breakdown_params, breakdown_expanding_keys = build_student_payment_where_clause(
@@ -376,7 +419,12 @@ async def getAsesorReport(filters: AsesorFilters) -> AsesorReportResponse:
     return build_asesor_report_response(summary_rows, exam_breakdowns, status_counts, filters.year, next_cursor, has_more)
 
 
-async def getAsesorDetail(seller_id: int, filters: AsesorFilters) -> AsesorDetail:
+async def getAsesorDetail(
+    seller_id: int,
+    filters: AsesorFilters,
+    country_rates: dict[str, float] | None = None,
+) -> AsesorDetail:
+    effective_rates = country_rates or build_country_rates_for_mxn(None, identity_fallback=True)
     seller_name = await fetch_seller_name(seller_id)
     if seller_name is None:
         raise HTTPException(status_code=404, detail="Seller not found")
@@ -393,14 +441,16 @@ async def getAsesorDetail(seller_id: int, filters: AsesorFilters) -> AsesorDetai
             breakdown_where_clause,
             detail_breakdown_params,
             breakdown_expanding_keys,
+            effective_rates,
         ),
         fetch_detail_geo_rows(payment_where_clause, detail_payment_params, payment_expanding_keys),
         fetch_detail_exam_breakdown_rows(
             breakdown_where_clause,
             detail_breakdown_params,
             breakdown_expanding_keys,
+            effective_rates,
         ),
-        fetch_detail_status_rows(seller_id, filters),
+        fetch_detail_status_rows(seller_id, filters, effective_rates),
     )
     exam_breakdown = map_detail_exam_breakdown(breakdown_rows)
     status_map = map_status_rows(status_rows)
@@ -508,13 +558,17 @@ def build_asesor_export_filters_for_all(filters: AsesorFilters) -> AsesorFilters
     )
 
 
-async def getAllAsesorReportRows(filters: AsesorFilters) -> AsesorReportResponse:
+async def getAllAsesorReportRows(
+    filters: AsesorFilters,
+    country_rates: dict[str, float] | None = None,
+) -> AsesorReportResponse:
     all_rows: list[AsesorRow] = []
     cursor = filters.cursor
     has_more = False
+    effective_rates = country_rates or build_country_rates_for_mxn(None, identity_fallback=True)
 
     while True:
-        page = await getAsesorReport(filters.model_copy(update={"cursor": cursor}))
+        page = await getAsesorReport(filters.model_copy(update={"cursor": cursor}), country_rates=effective_rates)
         all_rows.extend(page.rows)
         if not page.has_more or page.next_cursor is None:
             has_more = False
@@ -529,10 +583,15 @@ async def getAllAsesorReportRows(filters: AsesorFilters) -> AsesorReportResponse
     )
 
 
-async def getAsesorDetailsForRows(rows: list[AsesorRow], filters: AsesorFilters) -> list[AsesorDetail]:
+async def getAsesorDetailsForRows(
+    rows: list[AsesorRow],
+    filters: AsesorFilters,
+    country_rates: dict[str, float] | None = None,
+) -> list[AsesorDetail]:
     if not rows:
         return []
-    return list(await asyncio.gather(*(getAsesorDetail(row.seller_id, filters) for row in rows)))
+    effective_rates = country_rates or build_country_rates_for_mxn(None, identity_fallback=True)
+    return list(await asyncio.gather(*(getAsesorDetail(row.seller_id, filters, country_rates=effective_rates) for row in rows)))
 
 
 def build_asesor_export_worksheets(
@@ -599,8 +658,11 @@ def build_asesor_export_worksheets(
     ]
 
 
-async def build_por_asesor_pdf_payload(filters: AsesorFilters) -> PorAsesorPDFPayload:
-    report = await getAllAsesorReportRows(build_asesor_export_filters_for_all(filters))
+async def build_por_asesor_pdf_payload(
+    filters: AsesorFilters,
+    country_rates: dict[str, float] | None = None,
+) -> PorAsesorPDFPayload:
+    report = await getAllAsesorReportRows(build_asesor_export_filters_for_all(filters), country_rates=country_rates)
 
     total_revenue = sum(row.total_revenue for row in report.rows)
     total_exams = sum(sum(row.exam_breakdown.values()) for row in report.rows)
@@ -671,8 +733,9 @@ async def build_por_asesor_pdf_payload(filters: AsesorFilters) -> PorAsesorPDFPa
 async def build_asesor_detail_pdf_payload(
     seller_id: int,
     filters: AsesorFilters,
+    country_rates: dict[str, float] | None = None,
 ) -> AsesorDetailPDFPayload:
-    detail = await getAsesorDetail(seller_id, filters)
+    detail = await getAsesorDetail(seller_id, filters, country_rates=country_rates)
 
     category_rows = []
     for category in EXAM_CATEGORY_ORDER:

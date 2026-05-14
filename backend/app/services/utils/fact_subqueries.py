@@ -1,4 +1,5 @@
 from app.services.utils.report_filters import payment_date_expr
+from app.services.utils.currency_rates import FALLBACK_EXCHANGE_RATE, sql_normalized_country_expr
 
 
 """
@@ -17,11 +18,26 @@ from app.services.utils.report_filters import payment_date_expr
     - the caller's `where_clause` is written against these aliases:
       `pay`, `c`, `sl`, `l`, `z`
     """
-def build_paid_payment_fact_subquery(where_clause: str) -> str:
+def build_paid_payment_fact_subquery(
+    where_clause: str,
+    *,
+    fx_table_sql: str | None = None,
+) -> str:
+    payment_rate_expr = (
+        "COALESCE(fx.rate_to_base, :fallback_rate)"
+        if fx_table_sql
+        else str(FALLBACK_EXCHANGE_RATE)
+    )
+    payment_join = (
+        f"LEFT JOIN ({fx_table_sql}) fx ON {sql_normalized_country_expr('l.site')} = fx.country_key"
+        if fx_table_sql
+        else ""
+    )
     return f"""
         SELECT
             pay.id AS payment_id,
             pay.quantity AS paid_amount,
+            pay.quantity * {payment_rate_expr} AS paid_amount_base,
             {payment_date_expr()} AS payment_day,
             c.id AS cart_id,
             sl.id AS seller_lead_id,
@@ -37,6 +53,7 @@ def build_paid_payment_fact_subquery(where_clause: str) -> str:
         JOIN seller s ON s.id = sl.sellerId
         JOIN `lead` l ON l.id = sl.leadId
         LEFT JOIN zone z ON z.id = l.zoneId
+        {payment_join}
         WHERE {where_clause}
     """
 
@@ -56,16 +73,32 @@ def build_paid_payment_fact_subquery(where_clause: str) -> str:
     - the caller's `where_clause` is written against these aliases:
       `pay`, `cp`, `p`, `c`, `sl`, `l`, `z`
     """
-def build_paid_student_allocation_fact_subquery(where_clause: str) -> str:
+def build_paid_student_allocation_fact_subquery(
+    where_clause: str,
+    *,
+    fx_table_sql: str | None = None,
+) -> str:
+    allocation_rate_expr = (
+        "COALESCE(fx.rate_to_base, :fallback_rate)"
+        if fx_table_sql
+        else str(FALLBACK_EXCHANGE_RATE)
+    )
+    allocation_join = (
+        f"LEFT JOIN ({fx_table_sql}) fx ON {sql_normalized_country_expr('l.site')} = fx.country_key"
+        if fx_table_sql
+        else ""
+    )
     return f"""
         SELECT
             sp.payment_id,
             sp.student_id,
             sp.amount AS allocated_amount,
+            sp.amount * {allocation_rate_expr} AS allocated_amount_base,
             {payment_date_expr()} AS payment_day,
             cp.id AS cart_product_id,
             cp.quantity AS cart_product_quantity,
             cp.cost AS cart_product_cost,
+            cp.cost * {allocation_rate_expr} AS cart_product_cost_base,
             cp.testDate AS exam_date,
             p.productType AS product_type,
             ec.name AS exam_name,
@@ -88,6 +121,7 @@ def build_paid_student_allocation_fact_subquery(where_clause: str) -> str:
         JOIN seller s ON s.id = sl.sellerId
         JOIN `lead` l ON l.id = sl.leadId
         LEFT JOIN zone z ON z.id = l.zoneId
+        {allocation_join}
         WHERE {where_clause}
     """
 
@@ -116,6 +150,7 @@ def build_deduped_paid_cart_product_fact_subquery(
             qsp.cart_product_id,
             qsp.cart_product_quantity,
             qsp.cart_product_cost,
+            qsp.cart_product_cost_base,
             qsp.product_type,
             qsp.exam_name,
             qsp.seller_id,

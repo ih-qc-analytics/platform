@@ -18,6 +18,11 @@ from app.services.exports.pdf_helpers import (
     scale_series,
 )
 from app.services.utils.date_utils import rewind_date_range_one_year
+from app.services.utils.currency_rates import (
+    FALLBACK_EXCHANGE_RATE,
+    build_country_rates_derived_table,
+    build_country_rates_for_mxn,
+)
 from app.services.utils.fact_subqueries import (
     build_deduped_paid_cart_product_fact_subquery,
     build_paid_payment_fact_subquery,
@@ -77,20 +82,26 @@ def build_student_payment_where_clause(filters: ReportFilters) -> tuple[str, dic
 
 
 async def run_payment_summary_query(
-    session, where_clause: str, params: dict[str, object]
+    session, where_clause: str, params: dict[str, object], fx_table_sql: str, fx_params: dict[str, float]
 ) -> tuple[int, float]:
     query = f"""
         SELECT
             COUNT(DISTINCT qp.lead_id) AS total_clients,
-            COALESCE(SUM(qp.paid_amount), 0) AS total_revenue
-        FROM ({build_paid_payment_fact_subquery(where_clause)}) qp
+            COALESCE(SUM(qp.paid_amount_base), 0) AS total_revenue
+        FROM ({build_paid_payment_fact_subquery(where_clause, fx_table_sql=fx_table_sql)}) qp
     """
-    row = (await session.execute(text(query), params)).fetchone()
+    row = (await session.execute(text(query), {**params, **fx_params, "fallback_rate": FALLBACK_EXCHANGE_RATE})).fetchone()
     return int(row.total_clients or 0), float(row.total_revenue or 0)
 
 
-async def run_breakdown_summary_query(session, where_clause: str, params: dict[str, object]):
-    student_payment_fact = build_paid_student_allocation_fact_subquery(where_clause)
+async def run_breakdown_summary_query(
+    session,
+    where_clause: str,
+    params: dict[str, object],
+    fx_table_sql: str,
+    fx_params: dict[str, float],
+):
+    student_payment_fact = build_paid_student_allocation_fact_subquery(where_clause, fx_table_sql=fx_table_sql)
     paid_cart_product_fact = build_deduped_paid_cart_product_fact_subquery(student_payment_fact)
     query = f"""
         SELECT
@@ -120,14 +131,14 @@ async def run_breakdown_summary_query(session, where_clause: str, params: dict[s
                         ELSE 0
                     END
                 ) AS total_otros,
-                SUM(pcp.cart_product_cost) AS total_cost
+                SUM(pcp.cart_product_cost_base) AS total_cost
             FROM ({paid_cart_product_fact}) pcp
         ) quantity_mix
         CROSS JOIN (
             SELECT
-                SUM(CASE WHEN ar.product_type = :product_type_exam THEN ar.allocated_amount ELSE 0 END) AS exam_revenue,
-                SUM(CASE WHEN ar.product_type = :product_type_book THEN ar.allocated_amount ELSE 0 END) AS book_revenue,
-                SUM(CASE WHEN ar.product_type = :product_type_course THEN ar.allocated_amount ELSE 0 END) AS course_revenue,
+                SUM(CASE WHEN ar.product_type = :product_type_exam THEN ar.allocated_amount_base ELSE 0 END) AS exam_revenue,
+                SUM(CASE WHEN ar.product_type = :product_type_book THEN ar.allocated_amount_base ELSE 0 END) AS book_revenue,
+                SUM(CASE WHEN ar.product_type = :product_type_course THEN ar.allocated_amount_base ELSE 0 END) AS course_revenue,
                 SUM(
                     CASE
                         WHEN ar.product_type IS NULL
@@ -136,7 +147,7 @@ async def run_breakdown_summary_query(session, where_clause: str, params: dict[s
                               :product_type_book,
                               :product_type_course
                           )
-                        THEN ar.allocated_amount
+                        THEN ar.allocated_amount_base
                         ELSE 0
                     END
                 ) AS otros_revenue
@@ -148,18 +159,25 @@ async def run_breakdown_summary_query(session, where_clause: str, params: dict[s
         "product_type_exam": ProductType.EXAM.value,
         "product_type_book": ProductType.BOOK.value,
         "product_type_course": ProductType.COURSE.value,
+        **fx_params,
+        "fallback_rate": FALLBACK_EXCHANGE_RATE,
     }
     return (await session.execute(text(query), query_params)).fetchone()
 
 
-async def run_main_query(session, filters: ReportFilters) -> TotalSalesResponse:
+async def run_main_query(
+    session,
+    filters: ReportFilters,
+    country_rates: dict[str, float],
+) -> TotalSalesResponse:
     payment_where_clause, payment_params = build_payment_where_clause(filters)
     breakdown_where_clause, breakdown_params = build_student_payment_where_clause(filters)
+    fx_table_sql, fx_params = build_country_rates_derived_table(country_rates)
 
     total_clients, total_revenue = await run_payment_summary_query(
-        session, payment_where_clause, payment_params
+        session, payment_where_clause, payment_params, fx_table_sql, fx_params
     )
-    breakdown = await run_breakdown_summary_query(session, breakdown_where_clause, breakdown_params)
+    breakdown = await run_breakdown_summary_query(session, breakdown_where_clause, breakdown_params, fx_table_sql, fx_params)
 
     total_cost = float(breakdown.total_cost or 0)
     profit_margin = ((total_revenue - total_cost) / total_revenue * 100) if total_revenue > 0 else 0
@@ -184,29 +202,41 @@ async def run_main_query(session, filters: ReportFilters) -> TotalSalesResponse:
     )
 
 
-async def run_trend_query(session, where_clause: str, params: dict[str, object]) -> list[TrendPoint]:
+async def run_trend_query(
+    session,
+    where_clause: str,
+    params: dict[str, object],
+    fx_table_sql: str,
+    fx_params: dict[str, float],
+) -> list[TrendPoint]:
     query = f"""
         SELECT
             DATE_FORMAT(qp.payment_day, '%Y-%m') AS month,
-            COALESCE(SUM(qp.paid_amount), 0) AS revenue
-        FROM ({build_paid_payment_fact_subquery(where_clause)}) qp
+            COALESCE(SUM(qp.paid_amount_base), 0) AS revenue
+        FROM ({build_paid_payment_fact_subquery(where_clause, fx_table_sql=fx_table_sql)}) qp
         GROUP BY month
         ORDER BY month ASC
     """
-    result = await session.execute(text(query), params)
+    result = await session.execute(text(query), {**params, **fx_params, "fallback_rate": FALLBACK_EXCHANGE_RATE})
     return [TrendPoint(month=row.month, revenue=float(row.revenue or 0)) for row in result.fetchall()]
 
 
-async def run_geo_query(session, where_clause: str, params: dict[str, object]) -> list[GeoPoint]:
+async def run_geo_query(
+    session,
+    where_clause: str,
+    params: dict[str, object],
+    fx_table_sql: str,
+    fx_params: dict[str, float],
+) -> list[GeoPoint]:
     query = f"""
         SELECT
             qp.country AS dimension,
-            COALESCE(SUM(qp.paid_amount), 0) AS revenue
-        FROM ({build_paid_payment_fact_subquery(where_clause)}) qp
+            COALESCE(SUM(qp.paid_amount_base), 0) AS revenue
+        FROM ({build_paid_payment_fact_subquery(where_clause, fx_table_sql=fx_table_sql)}) qp
         GROUP BY dimension
         ORDER BY dimension ASC
     """
-    result = await session.execute(text(query), params)
+    result = await session.execute(text(query), {**params, **fx_params, "fallback_rate": FALLBACK_EXCHANGE_RATE})
     return [GeoPoint(dimension=row.dimension, revenue=float(row.revenue or 0)) for row in result.fetchall()]
 
 
@@ -222,31 +252,41 @@ def rewind_dates_one_year(filters: ReportFilters) -> ReportFilters:
     )
 
 
-async def run_prior_year_query(session, filters: ReportFilters) -> float:
+async def run_prior_year_query(
+    session,
+    filters: ReportFilters,
+    country_rates: dict[str, float],
+) -> float:
     prior_filters = rewind_dates_one_year(filters)
     where_clause, params = build_payment_where_clause(prior_filters)
+    fx_table_sql, fx_params = build_country_rates_derived_table(country_rates)
     query = f"""
-        SELECT COALESCE(SUM(qp.paid_amount), 0) AS prior_revenue
-        FROM ({build_paid_payment_fact_subquery(where_clause)}) qp
+        SELECT COALESCE(SUM(qp.paid_amount_base), 0) AS prior_revenue
+        FROM ({build_paid_payment_fact_subquery(where_clause, fx_table_sql=fx_table_sql)}) qp
     """
-    row = (await session.execute(text(query), params)).fetchone()
+    row = (await session.execute(text(query), {**params, **fx_params, "fallback_rate": FALLBACK_EXCHANGE_RATE})).fetchone()
     return float(row.prior_revenue or 0)
 
 
-async def getTotalSalesData(filters: ReportFilters) -> TotalSalesResponse:
+async def getTotalSalesData(
+    filters: ReportFilters,
+    country_rates: dict[str, float] | None = None,
+) -> TotalSalesResponse:
     payment_where_clause, payment_params = build_payment_where_clause(filters)
+    effective_rates = country_rates or build_country_rates_for_mxn(None, identity_fallback=True)
+    fx_table_sql, fx_params = build_country_rates_derived_table(effective_rates)
     async with SessionLocal() as session:
-        response = await run_main_query(session, filters)
+        response = await run_main_query(session, filters, effective_rates)
         if response.total_revenue:
             response.product_mix = ProductMix(
                 exams_pct=round(response.exam_revenue / response.total_revenue * 100, 1),
                 books_pct=round(response.book_revenue / response.total_revenue * 100, 1),
                 courses_pct=round(response.course_revenue / response.total_revenue * 100, 1),
             )
-        response.trend_points = await run_trend_query(session, payment_where_clause, payment_params)
-        response.geo_points = await run_geo_query(session, payment_where_clause, payment_params)
+        response.trend_points = await run_trend_query(session, payment_where_clause, payment_params, fx_table_sql, fx_params)
+        response.geo_points = await run_geo_query(session, payment_where_clause, payment_params, fx_table_sql, fx_params)
         if filters.date_from and filters.date_to:
-            response.prior_year_revenue = await run_prior_year_query(session, filters)
+            response.prior_year_revenue = await run_prior_year_query(session, filters, effective_rates)
             if response.prior_year_revenue > 0:
                 response.growth_pct = (
                     (response.total_revenue - response.prior_year_revenue)
@@ -256,8 +296,11 @@ async def getTotalSalesData(filters: ReportFilters) -> TotalSalesResponse:
         return response
 
 
-async def build_ventas_totales_pdf_payload(filters: ReportFilters) -> VentasTotalesPDFPayload:
-    response = await getTotalSalesData(filters)
+async def build_ventas_totales_pdf_payload(
+    filters: ReportFilters,
+    country_rates: dict[str, float] | None = None,
+) -> VentasTotalesPDFPayload:
+    response = await getTotalSalesData(filters, country_rates=country_rates)
 
     trend_values = [point.revenue for point in response.trend_points]
     geo_values = [point.revenue for point in response.geo_points]
