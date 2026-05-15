@@ -24,3 +24,12 @@ install:
 
 test:
 	$(PYTEST) tests/ -v
+
+migrate:
+	.venv/bin/alembic upgrade head
+
+migrate-down:
+	.venv/bin/alembic downgrade -1
+
+migrate-status:
+	.venv/bin/alembic current

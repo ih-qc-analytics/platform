@@ -8,10 +8,14 @@ from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, Asyn
 from sqlalchemy import text
 import importlib
 
-load_dotenv(Path(__file__).parent / ".env.test")
+pytest_plugins = ["conftest_reporting"]
+
+_BACKEND_DIR = Path(__file__).parent.parent
+
+load_dotenv(_BACKEND_DIR / ".env.test")
 TEST_DB_URL = os.getenv("SOURCE_DB_URL", "").replace("mysql://", "mysql+aiomysql://")
-SEEDS_DIR = Path(__file__).parent / "tests" / "seeds"
-SCHEMA_FILE = Path(__file__).parent / "tests" / "schema.sql"
+SEEDS_DIR = _BACKEND_DIR / "tests" / "seeds"
+SCHEMA_FILE = _BACKEND_DIR / "tests" / "schema.sql"
 
 
 @pytest.fixture(scope="session")

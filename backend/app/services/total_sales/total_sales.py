@@ -1,6 +1,6 @@
 from sqlalchemy import text
 
-from app.database import SessionLocal
+from app.reporting.database import ReportingSessionLocal
 from app.enums import ProductType
 from app.schemas.pdf import PDFGeoPoint, PDFKpiItem, PDFTrendPoint, VentasTotalesPDFPayload
 from app.schemas.reports import GeoPoint, ProductMix, ReportFilters, TotalSalesResponse, TrendPoint
@@ -18,20 +18,7 @@ from app.services.exports.pdf_helpers import (
     scale_series,
 )
 from app.services.utils.date_utils import rewind_date_range_one_year
-from app.services.utils.currency_rates import (
-    FALLBACK_EXCHANGE_RATE,
-    build_country_rates_derived_table,
-    build_country_rates_for_mxn,
-)
-from app.services.utils.fact_subqueries import (
-    build_deduped_paid_cart_product_fact_subquery,
-    build_paid_payment_fact_subquery,
-    build_paid_student_allocation_fact_subquery,
-)
-from app.services.utils.report_filters import (
-    build_payment_fact_where_clause,
-    build_student_payment_fact_where_clause,
-)
+from app.services.shared import build_geo_where_clause
 
 TOTAL_SALES_SUMMARY_COLUMNS = [
     ExcelColumn("total_clients", "Total Clients"),
@@ -57,248 +44,109 @@ TOTAL_SALES_CHART_COLUMNS = [
 ]
 
 
-# NOTE:
-# This comparison implementation intentionally keeps two separate fact grains:
-# - payment for total paid cash metrics, trend, geo, and prior-year comparison
-# - student_payments for paid revenue breakdown
-# - deduped cart_product rows for paid unit counts and line cost
-#
-# Assumptions based on clarified business rules:
-# - payment.quantity is the amount to sum for approved payments
-# - paid product attribution is reached through:
-#     payment -> student_payments -> student -> cart_product -> product
-# - cp.quantity represents the number of units sold for that cart-product line
-# - geo filters should avoid one-to-many fanout by using EXISTS for address checks
-
-
-def build_payment_where_clause(filters: ReportFilters) -> tuple[str, dict[str, object]]:
-    where_clause, params, _ = build_payment_fact_where_clause(filters)
-    return where_clause, params
-
-
-def build_student_payment_where_clause(filters: ReportFilters) -> tuple[str, dict[str, object]]:
-    where_clause, params, _ = build_student_payment_fact_where_clause(filters)
-    return where_clause, params
-
-
-async def run_payment_summary_query(
-    session, where_clause: str, params: dict[str, object], fx_table_sql: str, fx_params: dict[str, float]
-) -> tuple[int, float]:
-    query = f"""
-        SELECT
-            COUNT(DISTINCT qp.lead_id) AS total_clients,
-            COALESCE(SUM(qp.paid_amount_base), 0) AS total_revenue
-        FROM ({build_paid_payment_fact_subquery(where_clause, fx_table_sql=fx_table_sql)}) qp
-    """
-    row = (await session.execute(text(query), {**params, **fx_params, "fallback_rate": FALLBACK_EXCHANGE_RATE})).fetchone()
-    return int(row.total_clients or 0), float(row.total_revenue or 0)
-
-
-async def run_breakdown_summary_query(
-    session,
-    where_clause: str,
-    params: dict[str, object],
-    fx_table_sql: str,
-    fx_params: dict[str, float],
-):
-    student_payment_fact = build_paid_student_allocation_fact_subquery(where_clause, fx_table_sql=fx_table_sql)
-    paid_cart_product_fact = build_deduped_paid_cart_product_fact_subquery(student_payment_fact)
-    query = f"""
-        SELECT
-            COALESCE(quantity_mix.total_exams, 0) AS total_exams,
-            COALESCE(revenue_mix.exam_revenue, 0) AS exam_revenue,
-            COALESCE(quantity_mix.total_books, 0) AS total_books,
-            COALESCE(revenue_mix.book_revenue, 0) AS book_revenue,
-            COALESCE(quantity_mix.total_courses, 0) AS total_courses,
-            COALESCE(revenue_mix.course_revenue, 0) AS course_revenue,
-            COALESCE(quantity_mix.total_otros, 0) AS total_otros,
-            COALESCE(revenue_mix.otros_revenue, 0) AS otros_revenue,
-            COALESCE(quantity_mix.total_cost, 0) AS total_cost
-        FROM (
-            SELECT
-                SUM(CASE WHEN pcp.product_type = :product_type_exam THEN pcp.cart_product_quantity ELSE 0 END) AS total_exams,
-                SUM(CASE WHEN pcp.product_type = :product_type_book THEN pcp.cart_product_quantity ELSE 0 END) AS total_books,
-                SUM(CASE WHEN pcp.product_type = :product_type_course THEN pcp.cart_product_quantity ELSE 0 END) AS total_courses,
-                SUM(
-                    CASE
-                        WHEN pcp.product_type IS NULL
-                          OR pcp.product_type NOT IN (
-                              :product_type_exam,
-                              :product_type_book,
-                              :product_type_course
-                          )
-                        THEN pcp.cart_product_quantity
-                        ELSE 0
-                    END
-                ) AS total_otros,
-                SUM(pcp.cart_product_cost_base) AS total_cost
-            FROM ({paid_cart_product_fact}) pcp
-        ) quantity_mix
-        CROSS JOIN (
-            SELECT
-                SUM(CASE WHEN ar.product_type = :product_type_exam THEN ar.allocated_amount_base ELSE 0 END) AS exam_revenue,
-                SUM(CASE WHEN ar.product_type = :product_type_book THEN ar.allocated_amount_base ELSE 0 END) AS book_revenue,
-                SUM(CASE WHEN ar.product_type = :product_type_course THEN ar.allocated_amount_base ELSE 0 END) AS course_revenue,
-                SUM(
-                    CASE
-                        WHEN ar.product_type IS NULL
-                          OR ar.product_type NOT IN (
-                              :product_type_exam,
-                              :product_type_book,
-                              :product_type_course
-                          )
-                        THEN ar.allocated_amount_base
-                        ELSE 0
-                    END
-                ) AS otros_revenue
-            FROM ({student_payment_fact}) ar
-        ) revenue_mix
-    """
-    query_params = {
-        **params,
-        "product_type_exam": ProductType.EXAM.value,
-        "product_type_book": ProductType.BOOK.value,
-        "product_type_course": ProductType.COURSE.value,
-        **fx_params,
-        "fallback_rate": FALLBACK_EXCHANGE_RATE,
-    }
-    return (await session.execute(text(query), query_params)).fetchone()
-
-
-async def run_main_query(
-    session,
+async def getTotalSalesData(
     filters: ReportFilters,
-    country_rates: dict[str, float],
+    country_rates: dict | None = None,
 ) -> TotalSalesResponse:
-    payment_where_clause, payment_params = build_payment_where_clause(filters)
-    breakdown_where_clause, breakdown_params = build_student_payment_where_clause(filters)
-    fx_table_sql, fx_params = build_country_rates_derived_table(country_rates)
+    where_clause, params = build_geo_where_clause(filters)
 
-    total_clients, total_revenue = await run_payment_summary_query(
-        session, payment_where_clause, payment_params, fx_table_sql, fx_params
-    )
-    breakdown = await run_breakdown_summary_query(session, breakdown_where_clause, breakdown_params, fx_table_sql, fx_params)
+    async with ReportingSessionLocal() as session:
+        # Main summary
+        row = (await session.execute(text(f"""
+            SELECT
+                COUNT(DISTINCT lead_id)                                                      AS total_clients,
+                SUM(CASE WHEN product_type = 'exam'          THEN quantity  ELSE 0 END) AS total_exams,
+                SUM(CASE WHEN product_type = 'exam'          THEN total_mxn ELSE 0 END) AS exam_revenue,
+                SUM(CASE WHEN product_type = 'book'          THEN quantity  ELSE 0 END) AS total_books,
+                SUM(CASE WHEN product_type = 'book'          THEN total_mxn ELSE 0 END) AS book_revenue,
+                SUM(CASE WHEN product_type = 'course'        THEN quantity  ELSE 0 END) AS total_courses,
+                SUM(CASE WHEN product_type = 'course'        THEN total_mxn ELSE 0 END) AS course_revenue,
+                SUM(CASE WHEN product_type = 'UNCATEGORIZED' THEN quantity  ELSE 0 END) AS total_otros,
+                SUM(CASE WHEN product_type = 'UNCATEGORIZED' THEN total_mxn ELSE 0 END) AS otros_revenue,
+                SUM(total_mxn)                                                           AS total_revenue,
+                SUM(cost_mxn)                                                            AS total_cost
+            FROM report_line_items
+            WHERE {where_clause}
+        """), params)).fetchone()
 
-    total_cost = float(breakdown.total_cost or 0)
-    profit_margin = ((total_revenue - total_cost) / total_revenue * 100) if total_revenue > 0 else 0
+        total_revenue = float(row.total_revenue or 0)
+        total_cost    = float(row.total_cost or 0)
+        profit_margin = ((total_revenue - total_cost) / total_revenue * 100) if total_revenue > 0 else 0
 
-    return TotalSalesResponse(
-        total_clients=total_clients,
-        total_exams=int(breakdown.total_exams or 0),
-        exam_revenue=float(breakdown.exam_revenue or 0),
-        total_books=int(breakdown.total_books or 0),
-        book_revenue=float(breakdown.book_revenue or 0),
-        total_courses=int(breakdown.total_courses or 0),
-        course_revenue=float(breakdown.course_revenue or 0),
-        total_otros=int(breakdown.total_otros or 0),
-        otros_revenue=float(breakdown.otros_revenue or 0),
+        # Trend (monthly)
+        trend_rows = (await session.execute(text(f"""
+            SELECT
+                TO_CHAR(created_at, 'YYYY-MM') AS month,
+                SUM(total_mxn)                 AS revenue
+            FROM report_line_items
+            WHERE {where_clause}
+            GROUP BY month
+            ORDER BY month ASC
+        """), params)).fetchall()
+
+        # Geo (by country/site)
+        geo_rows = (await session.execute(text(f"""
+            SELECT
+                site           AS dimension,
+                SUM(total_mxn) AS revenue
+            FROM report_line_items
+            WHERE {where_clause}
+            GROUP BY site
+            ORDER BY site ASC
+        """), params)).fetchall()
+
+        # Prior-year revenue (only when date range is provided)
+        prior_year_revenue = 0.0
+        if filters.date_from and filters.date_to:
+            prior_date_from, prior_date_to = rewind_date_range_one_year(filters.date_from, filters.date_to)
+            prior_filters = filters.model_copy(update={"date_from": prior_date_from, "date_to": prior_date_to})
+            prior_where, prior_params = build_geo_where_clause(prior_filters)
+            prior_row = (await session.execute(text(f"""
+                SELECT SUM(total_mxn) AS prior_revenue
+                FROM report_line_items
+                WHERE {prior_where}
+            """), prior_params)).fetchone()
+            prior_year_revenue = float(prior_row.prior_revenue or 0)
+
+    growth_pct = None
+    if prior_year_revenue > 0:
+        growth_pct = (total_revenue - prior_year_revenue) / prior_year_revenue * 100
+
+    trend_points = [TrendPoint(month=r.month, revenue=float(r.revenue or 0)) for r in trend_rows]
+    geo_points   = [GeoPoint(dimension=r.dimension, revenue=float(r.revenue or 0)) for r in geo_rows]
+
+    response = TotalSalesResponse(
+        total_clients=int(row.total_clients or 0),
+        total_exams=int(row.total_exams or 0),
+        exam_revenue=float(row.exam_revenue or 0),
+        total_books=int(row.total_books or 0),
+        book_revenue=float(row.book_revenue or 0),
+        total_courses=int(row.total_courses or 0),
+        course_revenue=float(row.course_revenue or 0),
+        total_otros=int(row.total_otros or 0),
+        otros_revenue=float(row.otros_revenue or 0),
         total_revenue=total_revenue,
         profit_margin=profit_margin,
-        prior_year_revenue=0,
-        growth_pct=0,
-        trend_points=[],
-        geo_points=[],
+        prior_year_revenue=prior_year_revenue,
+        growth_pct=growth_pct,
+        trend_points=trend_points,
+        geo_points=geo_points,
         product_mix=None,
     )
 
+    if response.total_revenue:
+        response.product_mix = ProductMix(
+            exams_pct=round(response.exam_revenue / response.total_revenue * 100, 1),
+            books_pct=round(response.book_revenue / response.total_revenue * 100, 1),
+            courses_pct=round(response.course_revenue / response.total_revenue * 100, 1),
+        )
 
-async def run_trend_query(
-    session,
-    where_clause: str,
-    params: dict[str, object],
-    fx_table_sql: str,
-    fx_params: dict[str, float],
-) -> list[TrendPoint]:
-    query = f"""
-        SELECT
-            DATE_FORMAT(qp.payment_day, '%Y-%m') AS month,
-            COALESCE(SUM(qp.paid_amount_base), 0) AS revenue
-        FROM ({build_paid_payment_fact_subquery(where_clause, fx_table_sql=fx_table_sql)}) qp
-        GROUP BY month
-        ORDER BY month ASC
-    """
-    result = await session.execute(text(query), {**params, **fx_params, "fallback_rate": FALLBACK_EXCHANGE_RATE})
-    return [TrendPoint(month=row.month, revenue=float(row.revenue or 0)) for row in result.fetchall()]
-
-
-async def run_geo_query(
-    session,
-    where_clause: str,
-    params: dict[str, object],
-    fx_table_sql: str,
-    fx_params: dict[str, float],
-) -> list[GeoPoint]:
-    query = f"""
-        SELECT
-            qp.country AS dimension,
-            COALESCE(SUM(qp.paid_amount_base), 0) AS revenue
-        FROM ({build_paid_payment_fact_subquery(where_clause, fx_table_sql=fx_table_sql)}) qp
-        GROUP BY dimension
-        ORDER BY dimension ASC
-    """
-    result = await session.execute(text(query), {**params, **fx_params, "fallback_rate": FALLBACK_EXCHANGE_RATE})
-    return [GeoPoint(dimension=row.dimension, revenue=float(row.revenue or 0)) for row in result.fetchall()]
-
-
-def rewind_dates_one_year(filters: ReportFilters) -> ReportFilters:
-    if filters.date_from is None or filters.date_to is None:
-        raise ValueError("Cannot rewind non-existent dates")
-    prior_date_from, prior_date_to = rewind_date_range_one_year(filters.date_from, filters.date_to)
-    return filters.model_copy(
-        update={
-            "date_from": prior_date_from,
-            "date_to": prior_date_to,
-        }
-    )
-
-
-async def run_prior_year_query(
-    session,
-    filters: ReportFilters,
-    country_rates: dict[str, float],
-) -> float:
-    prior_filters = rewind_dates_one_year(filters)
-    where_clause, params = build_payment_where_clause(prior_filters)
-    fx_table_sql, fx_params = build_country_rates_derived_table(country_rates)
-    query = f"""
-        SELECT COALESCE(SUM(qp.paid_amount_base), 0) AS prior_revenue
-        FROM ({build_paid_payment_fact_subquery(where_clause, fx_table_sql=fx_table_sql)}) qp
-    """
-    row = (await session.execute(text(query), {**params, **fx_params, "fallback_rate": FALLBACK_EXCHANGE_RATE})).fetchone()
-    return float(row.prior_revenue or 0)
-
-
-async def getTotalSalesData(
-    filters: ReportFilters,
-    country_rates: dict[str, float] | None = None,
-) -> TotalSalesResponse:
-    payment_where_clause, payment_params = build_payment_where_clause(filters)
-    effective_rates = country_rates or build_country_rates_for_mxn(None, identity_fallback=True)
-    fx_table_sql, fx_params = build_country_rates_derived_table(effective_rates)
-    async with SessionLocal() as session:
-        response = await run_main_query(session, filters, effective_rates)
-        if response.total_revenue:
-            response.product_mix = ProductMix(
-                exams_pct=round(response.exam_revenue / response.total_revenue * 100, 1),
-                books_pct=round(response.book_revenue / response.total_revenue * 100, 1),
-                courses_pct=round(response.course_revenue / response.total_revenue * 100, 1),
-            )
-        response.trend_points = await run_trend_query(session, payment_where_clause, payment_params, fx_table_sql, fx_params)
-        response.geo_points = await run_geo_query(session, payment_where_clause, payment_params, fx_table_sql, fx_params)
-        if filters.date_from and filters.date_to:
-            response.prior_year_revenue = await run_prior_year_query(session, filters, effective_rates)
-            if response.prior_year_revenue > 0:
-                response.growth_pct = (
-                    (response.total_revenue - response.prior_year_revenue)
-                    / response.prior_year_revenue
-                    * 100
-                )
-        return response
+    return response
 
 
 async def build_ventas_totales_pdf_payload(
     filters: ReportFilters,
-    country_rates: dict[str, float] | None = None,
+    country_rates: dict | None = None,
 ) -> VentasTotalesPDFPayload:
     response = await getTotalSalesData(filters, country_rates=country_rates)
 
@@ -329,12 +177,7 @@ async def build_ventas_totales_pdf_payload(
         PDFKpiItem(label="Margen de Utilidad", value=format_percent(response.profit_margin)),
     ]
     if response.prior_year_revenue > 0:
-        kpis.append(
-            PDFKpiItem(
-                label="Ingreso Año Anterior",
-                value=format_currency(response.prior_year_revenue),
-            )
-        )
+        kpis.append(PDFKpiItem(label="Ingreso Año Anterior", value=format_currency(response.prior_year_revenue)))
 
     return VentasTotalesPDFPayload(
         header=build_pdf_header(
@@ -364,12 +207,7 @@ async def build_ventas_totales_pdf_payload(
 
 def build_total_sales_export_filters_for_all(filters: ReportFilters) -> ReportFilters:
     return filters.model_copy(
-        update={
-            "countries": [],
-            "zones": [],
-            "states": [],
-            "cities": [],
-        }
+        update={"countries": [], "zones": [], "states": [], "cities": []}
     )
 
 
@@ -405,15 +243,13 @@ def build_total_sales_export_worksheets(
         chart_rows = []
         for index in range(max_length):
             trend_point = response.trend_points[index] if index < len(response.trend_points) else None
-            geo_point = response.geo_points[index] if index < len(response.geo_points) else None
-            chart_rows.append(
-                {
-                    "month": trend_point.month if trend_point else "",
-                    "trend_revenue": trend_point.revenue if trend_point else 0,
-                    "dimension": geo_point.dimension if geo_point else "",
-                    "geo_revenue": geo_point.revenue if geo_point else 0,
-                }
-            )
+            geo_point   = response.geo_points[index]   if index < len(response.geo_points)   else None
+            chart_rows.append({
+                "month":        trend_point.month   if trend_point else "",
+                "trend_revenue": trend_point.revenue if trend_point else 0,
+                "dimension":    geo_point.dimension if geo_point   else "",
+                "geo_revenue":  geo_point.revenue   if geo_point   else 0,
+            })
         worksheets.append(
             ExcelWorksheetSpec(
                 name="Ventas Totales Charts",

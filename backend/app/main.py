@@ -4,7 +4,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
 from app.validator import validate_schema
 from app.routers import detalle_asesor, filters, por_asesor, por_pais, total_sales
-import logging 
+from app.etl.scheduler import start_etl_scheduler
+from app.etl.payment_upsert import run_payment_upsert
+from app.etl.dimensional_refresh import run_dimensional_refresh
+import logging
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 import httpx
 
@@ -28,20 +31,24 @@ async def refresh_rates(app: FastAPI):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    if settings.host:
+    if settings.source_db_url or settings.host:
         print(f"--- Starting app in {settings.env_mode} mode ---")
         await validate_schema()
 
     await refresh_rates(app)
     scheduler = AsyncIOScheduler()
     scheduler.add_job(
-        refresh_rates, 
-        'cron', 
-        hour=8, 
-        minute=0, 
+        refresh_rates,
+        'cron',
+        hour=8,
+        minute=0,
         args=[app]
     )
     scheduler.start()
+
+    if settings.reporting_db_url:
+        start_etl_scheduler()
+
     yield
     scheduler.shutdown()
 
@@ -54,7 +61,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],  
+    allow_origins=["http://localhost:5173"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -62,7 +69,18 @@ app.add_middleware(
 
 @app.get("/health")
 async def health():
-    return {"status": "ok", "environment": settings.environment}
+    return {"status": "ok", "environment": settings.env_mode}
+
+# Admin ETL triggers — protect with API key before production
+@app.post("/admin/etl/payment-upsert")
+async def trigger_payment_upsert():
+    await run_payment_upsert()
+    return {"status": "ok"}
+
+@app.post("/admin/etl/dimensional-refresh")
+async def trigger_dimensional_refresh():
+    await run_dimensional_refresh()
+    return {"status": "ok"}
 
 app.include_router(filters.router, prefix="/filters", tags=["filters"])
 app.include_router(total_sales.router, prefix="/reports", tags=["reports"])

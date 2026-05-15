@@ -1,0 +1,207 @@
+"""
+Por País report query tests.
+
+Seed rows directly into report_line_items — no Jones DB needed.
+PorPaisFilters uses date_from/date_to (not year) to filter created_at.
+
+Summary rows: total_schools = COUNT(DISTINCT lead_id) per site.
+Exam counts: SUM(quantity) per (site, exam_canonical_name) for product_type='exam'.
+Status rows: ganado/perdido/mantenido based on current vs prior year date range presence.
+"""
+import pytest
+from datetime import datetime, date
+from sqlalchemy import text
+
+from app.schemas.reports import PorPaisFilters
+from app.services.por_pais.por_pais import getPorPaisReport
+from tests.conftest_reporting import bind_test_reporting_database
+
+
+# ─────────────────────────────────────────────────────────────
+# Helpers
+# ─────────────────────────────────────────────────────────────
+
+def make_row(**overrides) -> dict:
+    defaults = {
+        "cart_product_id":      1,
+        "etl_date":             date.today(),
+        "seller_id":            1,
+        "seller_name":          "Ana Garcia",
+        "lead_id":              1,
+        "school_name":          "Colegio Test",
+        "site":                 "mexico",
+        "zone_name":            "IH Mexico",
+        "state_name":           "CDMX",
+        "city":                 "Ciudad de Mexico",
+        "business_status":      "ganado",
+        "cart_id":              1,
+        "created_at":           datetime(2025, 1, 15),
+        "year":                 2025,
+        "month":                1,
+        "payment_status":       "Aprobado",
+        "payment_date":         date(2025, 1, 16),
+        "billing_status":       "Aprobado",
+        "product_id":           1,
+        "product_type":         "exam",
+        "exam_cat_name":        "KET",
+        "exam_category":        "Cambridge English (Main Suite)",
+        "exam_canonical_name":  "A2 Key",
+        "exam_date_type":       "fixed",
+        "quantity":             5,
+        "total":                5000.00,
+        "cost":                 2000.00,
+        "discount":             0,
+        "book_commission":      0,
+        "exam_commission":      0,
+        "base_currency":        "MXN",
+        "total_mxn":            5000.00,
+        "cost_mxn":             2000.00,
+        "is_active":            True,
+    }
+    return {**defaults, **overrides}
+
+
+async def _insert(session_factory, *rows):
+    cols = list(rows[0].keys())
+    col_str = ", ".join(cols)
+    val_str = ", ".join(f":{c}" for c in cols)
+    sql = text(f"INSERT INTO report_line_items ({col_str}) VALUES ({val_str})")
+    async with session_factory() as session:
+        async with session.begin():
+            for row in rows:
+                await session.execute(sql, row)
+
+
+def _bind(session_factory):
+    bind_test_reporting_database(session_factory)
+    import app.services.por_pais.por_pais as svc
+    import app.services.por_pais.repository as repo
+    svc.ReportingSessionLocal = session_factory
+    repo.ReportingSessionLocal = session_factory
+
+
+def _filters(date_from="2025-01-01", date_to="2025-12-31") -> PorPaisFilters:
+    return PorPaisFilters(date_from=date_from, date_to=date_to)
+
+
+# ─────────────────────────────────────────────────────────────
+# Summary rows
+# ─────────────────────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_returns_one_row_per_country(reporting_session_factory, clean_reporting_db):
+    _bind(reporting_session_factory)
+    await _insert(
+        reporting_session_factory,
+        make_row(cart_product_id=1, site="mexico",   lead_id=1, created_at=datetime(2025, 3, 1)),
+        make_row(cart_product_id=2, site="colombia", lead_id=2, created_at=datetime(2025, 3, 1)),
+        make_row(cart_product_id=3, site="mexico",   lead_id=3, created_at=datetime(2025, 4, 1)),
+    )
+    result = await getPorPaisReport(_filters())
+    countries = {row.country for row in result.summary_rows}
+    assert countries == {"mexico", "colombia"}
+    assert len(result.summary_rows) == 2
+
+
+@pytest.mark.asyncio
+async def test_exam_count_per_country_correct(reporting_session_factory, clean_reporting_db):
+    _bind(reporting_session_factory)
+    await _insert(
+        reporting_session_factory,
+        make_row(cart_product_id=1, site="mexico", lead_id=1, product_type="exam",
+                 exam_canonical_name="A2 Key", quantity=3, created_at=datetime(2025, 3, 1)),
+        make_row(cart_product_id=2, site="mexico", lead_id=2, product_type="exam",
+                 exam_canonical_name="A2 Key", quantity=7, created_at=datetime(2025, 4, 1)),
+        make_row(cart_product_id=3, site="colombia", lead_id=3, product_type="exam",
+                 exam_canonical_name="B2 First", quantity=5, created_at=datetime(2025, 5, 1)),
+    )
+    result = await getPorPaisReport(_filters())
+    mexico_row = next(r for r in result.summary_rows if r.country == "mexico")
+    colombia_row = next(r for r in result.summary_rows if r.country == "colombia")
+    # A2 Key maps to cambridge bucket
+    assert mexico_row.cambridge == 10  # 3 + 7
+    assert colombia_row.cambridge == 5
+
+
+@pytest.mark.asyncio
+async def test_inactive_excluded(reporting_session_factory, clean_reporting_db):
+    _bind(reporting_session_factory)
+    await _insert(
+        reporting_session_factory,
+        make_row(cart_product_id=1, site="mexico", lead_id=1, is_active=True,  created_at=datetime(2025, 3, 1)),
+        make_row(cart_product_id=2, site="mexico", lead_id=2, is_active=False, created_at=datetime(2025, 3, 1)),
+    )
+    result = await getPorPaisReport(_filters())
+    assert len(result.summary_rows) == 1
+    mexico_row = result.summary_rows[0]
+    assert mexico_row.total_schools == 1  # only the active lead
+
+
+@pytest.mark.asyncio
+async def test_unapproved_excluded(reporting_session_factory, clean_reporting_db):
+    _bind(reporting_session_factory)
+    await _insert(
+        reporting_session_factory,
+        make_row(cart_product_id=1, site="mexico", lead_id=1, payment_status="Aprobado",  created_at=datetime(2025, 3, 1)),
+        make_row(cart_product_id=2, site="mexico", lead_id=2, payment_status="Pendiente", created_at=datetime(2025, 3, 1)),
+    )
+    result = await getPorPaisReport(_filters())
+    assert len(result.summary_rows) == 1
+    assert result.summary_rows[0].total_schools == 1
+
+
+@pytest.mark.asyncio
+async def test_date_range_filter(reporting_session_factory, clean_reporting_db):
+    """Rows outside the date range are not counted in summary or status."""
+    _bind(reporting_session_factory)
+    await _insert(
+        reporting_session_factory,
+        make_row(cart_product_id=1, site="mexico", lead_id=1, created_at=datetime(2025, 6, 15)),
+        make_row(cart_product_id=2, site="mexico", lead_id=2, created_at=datetime(2026, 1, 10)),
+    )
+    # Only 2025 rows included
+    result = await getPorPaisReport(_filters(date_from="2025-01-01", date_to="2025-12-31"))
+    assert len(result.summary_rows) == 1
+    assert result.summary_rows[0].total_schools == 1
+
+
+@pytest.mark.asyncio
+async def test_multiple_countries(reporting_session_factory, clean_reporting_db):
+    _bind(reporting_session_factory)
+    await _insert(
+        reporting_session_factory,
+        make_row(cart_product_id=1, site="mexico",   lead_id=1, created_at=datetime(2025, 1, 1), quantity=10),
+        make_row(cart_product_id=2, site="colombia", lead_id=2, created_at=datetime(2025, 2, 1), quantity=5),
+        make_row(cart_product_id=3, site="peru",     lead_id=3, created_at=datetime(2025, 3, 1), quantity=8),
+    )
+    result = await getPorPaisReport(_filters())
+    assert len(result.summary_rows) == 3
+    countries = {row.country for row in result.summary_rows}
+    assert countries == {"mexico", "colombia", "peru"}
+
+
+@pytest.mark.asyncio
+async def test_status_rows_ganado_perdido_mantenido(reporting_session_factory, clean_reporting_db):
+    """
+    Status rows re-compute ganado/perdido/mantenido by comparing current vs prior year presence.
+    - lead_id=1 in 2025 only → ganado
+    - lead_id=2 in 2024 only → perdido
+    - lead_id=3 in both → mantenido
+    The prior-year date range is derived by rewinding date_from/date_to by 1 year.
+    """
+    _bind(reporting_session_factory)
+    await _insert(
+        reporting_session_factory,
+        # Current year (2025): lead_id=1 and lead_id=3
+        make_row(cart_product_id=1, site="mexico", lead_id=1, created_at=datetime(2025, 6, 1)),
+        make_row(cart_product_id=2, site="mexico", lead_id=3, created_at=datetime(2025, 7, 1)),
+        # Prior year (2024): lead_id=2 and lead_id=3
+        make_row(cart_product_id=3, site="mexico", lead_id=2, created_at=datetime(2024, 6, 1)),
+        make_row(cart_product_id=4, site="mexico", lead_id=3, created_at=datetime(2024, 7, 1)),
+    )
+    result = await getPorPaisReport(_filters(date_from="2025-01-01", date_to="2025-12-31"))
+    mexico_status = next((r for r in result.status_rows if r.country == "mexico"), None)
+    assert mexico_status is not None
+    assert mexico_status.schools_ganados == 1     # lead_id=1
+    assert mexico_status.schools_perdidos == 1    # lead_id=2
+    assert mexico_status.schools_mantenidos == 1  # lead_id=3
