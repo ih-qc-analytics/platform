@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from sqlalchemy import text
 
 from app.reporting.database import ReportingSessionLocal
@@ -18,7 +20,7 @@ from app.services.exports.pdf_helpers import (
     scale_series,
 )
 from app.services.utils.date_utils import rewind_date_range_one_year
-from app.services.shared import build_geo_where_clause
+from app.services.shared import build_geo_where_clause, coerce_iso_date_param, report_date_expr
 
 TOTAL_SALES_SUMMARY_COLUMNS = [
     ExcelColumn("total_clients", "Total Clients"),
@@ -55,14 +57,14 @@ async def getTotalSalesData(
         row = (await session.execute(text(f"""
             SELECT
                 COUNT(DISTINCT lead_id)                                                      AS total_clients,
-                SUM(CASE WHEN product_type = 'exam'          THEN quantity  ELSE 0 END) AS total_exams,
-                SUM(CASE WHEN product_type = 'exam'          THEN total_mxn ELSE 0 END) AS exam_revenue,
-                SUM(CASE WHEN product_type = 'book'          THEN quantity  ELSE 0 END) AS total_books,
-                SUM(CASE WHEN product_type = 'book'          THEN total_mxn ELSE 0 END) AS book_revenue,
-                SUM(CASE WHEN product_type = 'course'        THEN quantity  ELSE 0 END) AS total_courses,
-                SUM(CASE WHEN product_type = 'course'        THEN total_mxn ELSE 0 END) AS course_revenue,
-                SUM(CASE WHEN product_type = 'UNCATEGORIZED' THEN quantity  ELSE 0 END) AS total_otros,
-                SUM(CASE WHEN product_type = 'UNCATEGORIZED' THEN total_mxn ELSE 0 END) AS otros_revenue,
+                SUM(CASE WHEN product_type = 'exam' AND include_in_product_breakdown THEN quantity  ELSE 0 END) AS total_exams,
+                SUM(CASE WHEN product_type = 'exam' AND include_in_product_breakdown THEN total_mxn ELSE 0 END) AS exam_revenue,
+                SUM(CASE WHEN product_type = 'book' AND include_in_product_breakdown THEN quantity  ELSE 0 END) AS total_books,
+                SUM(CASE WHEN product_type = 'book' AND include_in_product_breakdown THEN total_mxn ELSE 0 END) AS book_revenue,
+                SUM(CASE WHEN product_type = 'course' AND include_in_product_breakdown THEN quantity  ELSE 0 END) AS total_courses,
+                SUM(CASE WHEN product_type = 'course' AND include_in_product_breakdown THEN total_mxn ELSE 0 END) AS course_revenue,
+                SUM(CASE WHEN product_type = 'UNCATEGORIZED' AND include_in_product_breakdown THEN quantity  ELSE 0 END) AS total_otros,
+                SUM(CASE WHEN product_type = 'UNCATEGORIZED' AND include_in_product_breakdown THEN total_mxn ELSE 0 END) AS otros_revenue,
                 SUM(total_mxn)                                                           AS total_revenue,
                 SUM(cost_mxn)                                                            AS total_cost
             FROM report_line_items
@@ -76,11 +78,11 @@ async def getTotalSalesData(
         # Trend (monthly)
         trend_rows = (await session.execute(text(f"""
             SELECT
-                TO_CHAR(created_at, 'YYYY-MM') AS month,
+                TO_CHAR({report_date_expr()}, 'YYYY-MM') AS month,
                 SUM(total_mxn)                 AS revenue
             FROM report_line_items
             WHERE {where_clause}
-            GROUP BY month
+            GROUP BY TO_CHAR({report_date_expr()}, 'YYYY-MM')
             ORDER BY month ASC
         """), params)).fetchall()
 
@@ -108,11 +110,11 @@ async def getTotalSalesData(
             """), prior_params)).fetchone()
             prior_year_revenue = float(prior_row.prior_revenue or 0)
 
-    growth_pct = None
+    growth_pct = 0.0
     if prior_year_revenue > 0:
         growth_pct = (total_revenue - prior_year_revenue) / prior_year_revenue * 100
 
-    trend_points = [TrendPoint(month=r.month, revenue=float(r.revenue or 0)) for r in trend_rows]
+    trend_points = _build_trend_points(filters, trend_rows)
     geo_points   = [GeoPoint(dimension=r.dimension, revenue=float(r.revenue or 0)) for r in geo_rows]
 
     response = TotalSalesResponse(
@@ -142,6 +144,27 @@ async def getTotalSalesData(
         )
 
     return response
+
+
+def _build_trend_points(filters: ReportFilters, trend_rows) -> list[TrendPoint]:
+    revenue_by_month = {row.month: float(row.revenue or 0) for row in trend_rows}
+    if not filters.date_from or not filters.date_to:
+        return [TrendPoint(month=month, revenue=revenue) for month, revenue in revenue_by_month.items()]
+    if not trend_rows:
+        return []
+
+    months = sorted(revenue_by_month)
+    current = datetime.strptime(months[0], "%Y-%m").date()
+    end = datetime.strptime(months[-1], "%Y-%m").date()
+    points: list[TrendPoint] = []
+    while current <= end:
+        month_key = current.strftime("%Y-%m")
+        points.append(TrendPoint(month=month_key, revenue=revenue_by_month.get(month_key, 0.0)))
+        if current.month == 12:
+            current = current.replace(year=current.year + 1, month=1)
+        else:
+            current = current.replace(month=current.month + 1)
+    return points
 
 
 async def build_ventas_totales_pdf_payload(

@@ -1,5 +1,6 @@
 import pytest
 import pytest_asyncio
+import importlib
 from pathlib import Path
 from dotenv import load_dotenv
 import os
@@ -33,7 +34,7 @@ def _run_alembic_upgrade():
     command.upgrade(cfg, "head")
 
 
-@pytest_asyncio.fixture(scope="session")
+@pytest_asyncio.fixture(scope="session", loop_scope="session")
 async def reporting_engine():
     _run_alembic_upgrade()  # applies all migrations including cost_mxn
     engine = create_async_engine(TEST_REPORTING_DB_URL, echo=False, pool_pre_ping=True)
@@ -41,7 +42,7 @@ async def reporting_engine():
     await engine.dispose()
 
 
-@pytest_asyncio.fixture(scope="session")
+@pytest_asyncio.fixture(scope="session", loop_scope="session")
 async def reporting_session_factory(reporting_engine):
     return async_sessionmaker(
         bind=reporting_engine,
@@ -50,19 +51,33 @@ async def reporting_session_factory(reporting_engine):
     )
 
 
-@pytest_asyncio.fixture
+@pytest_asyncio.fixture(loop_scope="session")
 async def clean_reporting_db(reporting_engine):
     """Truncate reporting tables between tests."""
     yield
     async with reporting_engine.begin() as conn:
-        await conn.execute(text("TRUNCATE report_line_items, etl_meta RESTART IDENTITY"))
+        await conn.execute(text("TRUNCATE report_line_items, exchange_rates, etl_meta RESTART IDENTITY"))
 
 
 def bind_test_reporting_database(session_factory):
     """Patch ReportingSessionLocal in ETL and reporting modules to use the test DB."""
+    import app.etl.exchange_rate_backfill as erb
     import app.etl.payment_upsert as pu
     import app.etl.dimensional_refresh as dr
     import app.reporting.database as rdb
     rdb.ReportingSessionLocal = session_factory
+    erb.ReportingSessionLocal = session_factory
     pu.ReportingSessionLocal = session_factory
     dr.ReportingSessionLocal = session_factory
+
+    module_names = [
+        "app.services.total_sales.total_sales",
+        "app.services.por_asesor.repository",
+        "app.services.por_asesor.por_asesor",
+        "app.services.detalle_asesor.detalle_asesor",
+        "app.services.por_pais.repository",
+        "app.services.por_pais.por_pais",
+    ]
+    for module_name in module_names:
+        module = importlib.import_module(module_name)
+        setattr(module, "ReportingSessionLocal", session_factory)

@@ -22,6 +22,8 @@ from tests.conftest_reporting import bind_test_reporting_database
 # ─────────────────────────────────────────────────────────────
 
 def make_row(**overrides) -> dict:
+    created_at = overrides.get("created_at", datetime(2025, 1, 15))
+    payment_date = overrides.get("payment_date", created_at.date())
     defaults = {
         "cart_product_id":      1,
         "etl_date":             date.today(),
@@ -32,14 +34,17 @@ def make_row(**overrides) -> dict:
         "site":                 "mexico",
         "zone_name":            "IH Mexico",
         "state_name":           "CDMX",
+        "state_names":          ["CDMX"],
         "city":                 "Ciudad de Mexico",
+        "city_names":           ["Ciudad de Mexico"],
         "business_status":      "ganado",
         "cart_id":              1,
-        "created_at":           datetime(2025, 1, 15),
+        "created_at":           created_at,
         "year":                 2025,
         "month":                1,
         "payment_status":       "Aprobado",
-        "payment_date":         date(2025, 1, 16),
+        "payment_date":         payment_date,
+        "payment_day":          payment_date,
         "billing_status":       "Aprobado",
         "product_id":           1,
         "product_type":         "exam",
@@ -54,11 +59,16 @@ def make_row(**overrides) -> dict:
         "book_commission":      0,
         "exam_commission":      0,
         "base_currency":        "MXN",
+        "include_in_product_breakdown": True,
         "total_mxn":            5000.00,
         "cost_mxn":             2000.00,
         "is_active":            True,
     }
-    return {**defaults, **overrides}
+    row = {**defaults, **overrides}
+    row["state_names"] = overrides.get("state_names", [row["state_name"]] if row.get("state_name") else [])
+    row["city_names"] = overrides.get("city_names", [row["city"]] if row.get("city") else [])
+    row["payment_day"] = overrides.get("payment_day", row["payment_date"])
+    return row
 
 
 async def _insert(session_factory, *rows):

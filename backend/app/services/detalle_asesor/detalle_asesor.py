@@ -7,6 +7,7 @@ from app.schemas.reports import DetalleFilters, DetalleReportResponse, DetalleRo
 from app.services.exports.excel import ExcelColumn, ExcelWorksheetSpec
 from app.services.exports.pdf_helpers import build_pdf_header, format_date, format_integer
 from app.services.por_asesor.product_grouping import EXAM_NAME_ORDER
+from app.services.shared import coerce_iso_date_param, report_date_expr
 
 DETALLE_EXAM_NAME_ORDER = [*EXAM_NAME_ORDER, "Other"]
 
@@ -24,6 +25,7 @@ def _build_where(filters: DetalleFilters) -> tuple[str, dict]:
         "is_active = TRUE",
         "payment_status = :payment_status",
         "product_type = 'exam'",
+        "include_in_product_breakdown = TRUE",
     ]
     params: dict = {"payment_status": PaymentStatus.APROBADO.value}
 
@@ -34,17 +36,21 @@ def _build_where(filters: DetalleFilters) -> tuple[str, dict]:
         conditions.append("zone_name = ANY(:zones)")
         params["zones"] = list(filters.zones)
     if getattr(filters, "states", None):
-        conditions.append("state_name = ANY(:states)")
+        conditions.append(
+            "COALESCE(state_names, ARRAY[]::text[]) && CAST(:states AS text[])"
+        )
         params["states"] = list(filters.states)
     if getattr(filters, "cities", None):
-        conditions.append("city = ANY(:cities)")
+        conditions.append(
+            "COALESCE(city_names, ARRAY[]::text[]) && CAST(:cities AS text[])"
+        )
         params["cities"] = list(filters.cities)
     if getattr(filters, "date_from", None):
-        conditions.append("created_at >= :date_from")
-        params["date_from"] = filters.date_from
+        conditions.append(f"{report_date_expr()} >= :date_from")
+        params["date_from"] = coerce_iso_date_param(filters.date_from)
     if getattr(filters, "date_to", None):
-        conditions.append("created_at <= :date_to")
-        params["date_to"] = filters.date_to
+        conditions.append(f"{report_date_expr()} <= :date_to")
+        params["date_to"] = coerce_iso_date_param(filters.date_to)
     if filters.cursor is not None:
         conditions.append("cart_product_id > :cursor")
         params["cursor"] = filters.cursor

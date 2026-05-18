@@ -1,16 +1,17 @@
 from sqlalchemy import text
 from app.reporting.database import ReportingSessionLocal
 from app.enums import PaymentStatus
+from app.services.shared import coerce_iso_date_param, report_date_expr
 
 
 def _por_pais_where(date_from: str, date_to: str) -> tuple[str, dict]:
     return (
         "is_active = TRUE AND payment_status = :payment_status"
-        " AND created_at >= :date_from AND created_at <= :date_to",
+        f" AND {report_date_expr()} >= :date_from AND {report_date_expr()} <= :date_to",
         {
             "payment_status": PaymentStatus.APROBADO.value,
-            "date_from":      date_from,
-            "date_to":        date_to,
+            "date_from":      coerce_iso_date_param(date_from),
+            "date_to":        coerce_iso_date_param(date_to),
         },
     )
 
@@ -38,7 +39,7 @@ async def fetch_country_exam_rows(date_from: str, date_to: str) -> list:
                 exam_canonical_name  AS exam_name,
                 SUM(quantity)        AS exam_count
             FROM report_line_items
-            WHERE {where} AND product_type = 'exam'
+            WHERE {where} AND product_type = 'exam' AND include_in_product_breakdown = TRUE
             GROUP BY site, exam_canonical_name
             ORDER BY site ASC, exam_canonical_name ASC
         """), params)).fetchall()
@@ -68,7 +69,7 @@ async def fetch_country_metric_rows(date_from: str, date_to: str) -> list:
                 lead_id,
                 SUM(quantity) AS exams
             FROM report_line_items
-            WHERE {where} AND product_type = 'exam'
+            WHERE {where} AND product_type = 'exam' AND include_in_product_breakdown = TRUE
             GROUP BY site, lead_id
             ORDER BY country ASC, lead_id ASC
         """), params)).fetchall()

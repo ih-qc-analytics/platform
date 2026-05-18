@@ -1,4 +1,5 @@
 import os
+from datetime import datetime
 from urllib.parse import quote_plus
 from dotenv import load_dotenv
 
@@ -50,5 +51,14 @@ class Settings:
             f"postgresql+asyncpg://{self.reporting_db_user}:{safe_pass}"
             f"@{self.reporting_db_host}:{self.reporting_db_port}/{self.reporting_db_name}"
         )
+
+    @property
+    def payment_upsert_lookback_hours(self) -> int:
+        return int(os.getenv("PAYMENT_UPSERT_LOOKBACK_HOURS", "3"))
+
+    @property
+    def payment_upsert_initial_since(self) -> datetime:
+        raw_value = os.getenv("PAYMENT_UPSERT_INITIAL_SINCE", "2023-01-01T00:00:00")
+        return datetime.fromisoformat(raw_value)
 
 settings = Settings()

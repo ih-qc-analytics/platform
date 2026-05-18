@@ -6,6 +6,7 @@ from sqlalchemy import text
 from app.reporting.database import ReportingSessionLocal
 from app.enums import PaymentStatus
 from app.schemas.reports import AsesorFilters
+from app.services.shared import report_date_expr
 
 
 # ─────────────────────────────────────────────────────────────
@@ -60,10 +61,14 @@ def _base_where(
         conditions.append("zone_name = ANY(:zones)")
         params["zones"] = list(filters.zones)
     if getattr(filters, "states", None):
-        conditions.append("state_name = ANY(:states)")
+        conditions.append(
+            "COALESCE(state_names, ARRAY[]::text[]) && CAST(:states AS text[])"
+        )
         params["states"] = list(filters.states)
     if getattr(filters, "cities", None):
-        conditions.append("city = ANY(:cities)")
+        conditions.append(
+            "COALESCE(city_names, ARRAY[]::text[]) && CAST(:cities AS text[])"
+        )
         params["cities"] = list(filters.cities)
     if getattr(filters, "sellers", None):
         conditions.append("seller_name = ANY(:sellers)")
@@ -147,6 +152,7 @@ async def fetch_summary_exam_breakdown_rows_by_seller_ids(
         WHERE {where}
           AND seller_id = ANY(:seller_ids)
           AND product_type = 'exam'
+          AND include_in_product_breakdown = TRUE
         GROUP BY seller_id, exam_category
     """
     async with ReportingSessionLocal() as session:
@@ -186,11 +192,10 @@ async def fetch_school_metric_rows(
         SELECT
             seller_id,
             lead_id,
-            SUM(quantity)  AS exams,
-            SUM(total_mxn) AS revenue
+            SUM(CASE WHEN product_type = 'exam' AND include_in_product_breakdown THEN quantity ELSE 0 END) AS exams,
+            SUM(CASE WHEN include_in_product_breakdown THEN total_mxn ELSE 0 END) AS revenue
         FROM report_line_items
         WHERE {where}
-          AND product_type = 'exam'
         GROUP BY seller_id, lead_id
     """
     async with ReportingSessionLocal() as session:

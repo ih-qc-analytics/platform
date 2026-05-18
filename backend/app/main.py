@@ -5,7 +5,7 @@ from app.config import settings
 from app.validator import validate_schema
 from app.routers import detalle_asesor, filters, por_asesor, por_pais, total_sales
 from app.etl.scheduler import start_etl_scheduler
-from app.etl.payment_upsert import run_payment_upsert
+from app.etl.payment_upsert import run_payment_upsert, run_startup_payment_upsert
 from app.etl.dimensional_refresh import run_dimensional_refresh
 import logging
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -28,6 +28,7 @@ async def refresh_rates(app: FastAPI):
             print(f"Rates refreshed successfully at {data[0]['date']}")
         except Exception as e:
             print(f"Failed to refresh rates: {e}")
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -75,6 +76,11 @@ async def health():
 @app.post("/admin/etl/payment-upsert")
 async def trigger_payment_upsert():
     await run_payment_upsert()
+    return {"status": "ok"}
+
+@app.post("/admin/etl/payment-upsert-backfill")
+async def trigger_payment_upsert_backfill():
+    await run_startup_payment_upsert()
     return {"status": "ok"}
 
 @app.post("/admin/etl/dimensional-refresh")

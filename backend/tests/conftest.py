@@ -1,12 +1,16 @@
 import pytest
 import pytest_asyncio
 import asyncio
+from datetime import date
 from pathlib import Path
 from dotenv import load_dotenv
 import os
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 from sqlalchemy import text
 import importlib
+from app.config import settings
+from app.etl.payment_upsert import run_payment_upsert
+from tests.conftest_reporting import bind_test_reporting_database
 
 pytest_plugins = ["conftest_reporting"]
 
@@ -89,11 +93,42 @@ async def truncate_all(engine):
         await conn.execute(text("SET FOREIGN_KEY_CHECKS = 1"))
 
 
+async def truncate_reporting_all(engine):
+    async with engine.begin() as conn:
+        await conn.execute(text("TRUNCATE report_line_items, exchange_rates, etl_meta RESTART IDENTITY"))
+
+
+async def seed_identity_exchange_rates(session_factory):
+    today = date.today()
+    rows = [
+        {"date": today, "from_currency": "MXN", "to_currency": "USD", "rate": 1.0},
+        {"date": today, "from_currency": "COP", "to_currency": "MXN", "rate": 1.0},
+        {"date": today, "from_currency": "COP", "to_currency": "USD", "rate": 1.0},
+        {"date": today, "from_currency": "PEN", "to_currency": "MXN", "rate": 1.0},
+        {"date": today, "from_currency": "PEN", "to_currency": "USD", "rate": 1.0},
+    ]
+    async with session_factory() as session:
+        async with session.begin():
+            for row in rows:
+                await session.execute(text("""
+                    INSERT INTO exchange_rates (date, from_currency, to_currency, rate)
+                    VALUES (:date, :from_currency, :to_currency, :rate)
+                    ON CONFLICT (date, from_currency, to_currency) DO UPDATE
+                    SET rate = EXCLUDED.rate
+                """), row)
+
+
 def bind_test_database(session_factory, engine):
     import app.database as db
+    import app.etl.dimensional_refresh as dr
+    import app.etl.exchange_rate_backfill as erb
+    import app.etl.payment_upsert as pu
 
     db.SessionLocal = session_factory
     db.engine = engine
+    dr.SessionLocal = session_factory
+    erb.SessionLocal = session_factory
+    pu.SessionLocal = session_factory
 
     module_names = [
         "app.services.total_sales.total_sales",
@@ -142,3 +177,16 @@ async def detalle_asesor_db(test_engine, session_factory):
     bind_test_database(session_factory, test_engine)
     yield
     await truncate_all(test_engine)
+
+
+@pytest_asyncio.fixture(loop_scope="session")
+async def ui_dev_reporting_db(ui_dev_db, reporting_engine, reporting_session_factory):
+    await truncate_reporting_all(reporting_engine)
+    bind_test_reporting_database(reporting_session_factory)
+    await seed_identity_exchange_rates(reporting_session_factory)
+    await run_payment_upsert(
+        since=settings.payment_upsert_initial_since,
+        job_name="payment_upsert_test",
+    )
+    yield
+    await truncate_reporting_all(reporting_engine)

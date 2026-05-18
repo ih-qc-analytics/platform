@@ -87,7 +87,7 @@ async def test_excel_response_round_trips_headers_unicode_and_content_type():
 
 
 @pytest.mark.asyncio(loop_scope="session")
-async def test_total_sales_export_builds_summary_and_chart_sheets(ui_dev_db):
+async def test_total_sales_export_builds_summary_and_chart_sheets(ui_dev_reporting_db):
     filters = ReportFilters(
         date_from="2025-01-01",
         date_to="2025-12-31",
@@ -130,7 +130,7 @@ async def test_total_sales_export_builds_summary_and_chart_sheets(ui_dev_db):
 
 
 @pytest.mark.asyncio(loop_scope="session")
-async def test_por_asesor_export_all_ignores_optional_filters_and_adds_detail_sheet(ui_dev_db):
+async def test_por_asesor_export_all_ignores_optional_filters_and_adds_detail_sheet(ui_dev_reporting_db):
     filters = AsesorFilters(
         year=2025,
         sellers=["Carlos Rodriguez"],
@@ -197,7 +197,7 @@ async def test_por_asesor_export_all_ignores_optional_filters_and_adds_detail_sh
 
 
 @pytest.mark.asyncio(loop_scope="session")
-async def test_detalle_export_preserves_canonical_exam_columns_and_headers_only_for_empty_ranges(ui_dev_db):
+async def test_detalle_export_preserves_canonical_exam_columns_and_headers_only_for_empty_ranges(ui_dev_reporting_db):
     export_filters = build_detalle_export_filters_for_all(
         DetalleFilters(
             date_from="2025-01-01",
@@ -257,7 +257,7 @@ async def test_detalle_export_preserves_canonical_exam_columns_and_headers_only_
 
 
 @pytest.mark.asyncio(loop_scope="session")
-async def test_por_pais_export_builds_three_sheets_with_country_detail_rows(ui_dev_db):
+async def test_por_pais_export_builds_three_sheets_with_country_detail_rows(ui_dev_reporting_db):
     filters = build_por_pais_export_filters_for_all(
         PorPaisFilters(date_from="2025-01-01", date_to="2025-12-31")
     )

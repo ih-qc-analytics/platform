@@ -91,7 +91,7 @@ async def fetch_detail_aggregate_row(seller_id: int, filters: AsesorFilters):
         exam_row = (await session.execute(text(f"""
             SELECT SUM(quantity) AS total_exams
             FROM report_line_items
-            WHERE {where} AND product_type = 'exam'
+            WHERE {where} AND product_type = 'exam' AND include_in_product_breakdown = TRUE
         """), params)).fetchone()
 
     from types import SimpleNamespace
@@ -128,7 +128,7 @@ async def fetch_detail_exam_breakdown_rows(seller_id: int, filters: AsesorFilter
                 COUNT(DISTINCT lead_id) AS schools,
                 SUM(total_mxn)          AS revenue
             FROM report_line_items
-            WHERE {where} AND product_type = 'exam'
+            WHERE {where} AND product_type = 'exam' AND include_in_product_breakdown = TRUE
             GROUP BY exam_category
         """), params)).fetchall()
 

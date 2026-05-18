@@ -5,7 +5,7 @@ from app.services.por_pais.por_pais import getPorPaisDetail, getPorPaisReport
 
 
 @pytest.mark.asyncio(loop_scope="session")
-async def test_por_pais_full_year_summary_and_status_rows_match_payment_based_model(ui_dev_db):
+async def test_por_pais_full_year_summary_and_status_rows_match_payment_based_model(ui_dev_reporting_db):
     result = await getPorPaisReport(
         PorPaisFilters(date_from="2025-01-01", date_to="2025-12-31")
     )
@@ -71,7 +71,7 @@ async def test_por_pais_full_year_summary_and_status_rows_match_payment_based_mo
 
 
 @pytest.mark.asyncio(loop_scope="session")
-async def test_por_pais_detail_returns_canonical_exam_counts_per_country(ui_dev_db):
+async def test_por_pais_detail_returns_canonical_exam_counts_per_country(ui_dev_reporting_db):
     mexico = await getPorPaisDetail(
         "mexico",
         PorPaisFilters(date_from="2025-01-01", date_to="2025-12-31"),
@@ -92,7 +92,7 @@ async def test_por_pais_detail_returns_canonical_exam_counts_per_country(ui_dev_
 
 
 @pytest.mark.asyncio(loop_scope="session")
-async def test_por_pais_midyear_range_rewinds_exact_prior_period_for_statuses(ui_dev_db):
+async def test_por_pais_midyear_range_rewinds_exact_prior_period_for_statuses(ui_dev_reporting_db):
     result = await getPorPaisReport(
         PorPaisFilters(date_from="2025-05-01", date_to="2025-08-31")
     )
@@ -158,7 +158,7 @@ async def test_por_pais_midyear_range_rewinds_exact_prior_period_for_statuses(ui
 
 
 @pytest.mark.asyncio(loop_scope="session")
-async def test_por_pais_empty_range_returns_empty_sections(ui_dev_db):
+async def test_por_pais_empty_range_returns_empty_sections(ui_dev_reporting_db):
     result = await getPorPaisReport(
         PorPaisFilters(date_from="2030-01-01", date_to="2030-12-31")
     )

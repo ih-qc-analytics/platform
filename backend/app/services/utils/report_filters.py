@@ -1,5 +1,5 @@
 from app.enums import PaymentStatus, ProductType
-from app.services.shared import build_geo_where_clause
+from app.services.shared import build_geo_where_clause, coerce_iso_date_param
 
 
 def payment_date_expr(payment_alias: str = "pay") -> str:
@@ -25,10 +25,10 @@ def add_payment_date_range_conditions(
     payment_date = payment_date_expr(payment_alias)
     if getattr(filters, "date_from", None):
         conditions.append(f"{payment_date} >= :date_from")
-        params["date_from"] = filters.date_from
+        params["date_from"] = coerce_iso_date_param(filters.date_from)
     if getattr(filters, "date_to", None):
         conditions.append(f"{payment_date} <= :date_to")
-        params["date_to"] = filters.date_to
+        params["date_to"] = coerce_iso_date_param(filters.date_to)
 
 
 def add_payment_year_condition(
