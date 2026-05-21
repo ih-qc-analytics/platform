@@ -19,6 +19,12 @@ class PaymentStatus(str, Enum):
     UNCATEGORIZED = "UNCATEGORIZED"
 
 
+class ETLJobName(str, Enum):
+    STARTUP_BACKFILL = "startup_backfill"
+    UPSERT = "upsert"
+    DIMENSIONAL_REFRESH = "dimensional_refresh"
+
+
 class ProductType(str, Enum):
     EXAM = "exam"
     BOOK = "book"

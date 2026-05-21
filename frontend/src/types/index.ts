@@ -16,6 +16,7 @@ export type ProductMix = {
     exams_pct: number
     books_pct: number
     courses_pct: number
+    unknown_pct: number
 }
 
 export type GeoPoint = {
@@ -34,6 +35,11 @@ export type TotalSalesResponse = {
     total_otros: number
     otros_revenue: number
     total_revenue: number
+    expected_revenue: number
+    expected_cost: number
+    uncategorized_revenue: number
+    unknown_site_revenue: number
+    unknown_site_expected_revenue: number
     profit_margin: number
     prior_year_revenue: number
     growth_pct: number
@@ -148,6 +154,7 @@ export type AsesorRow = {
     ganados: number
     perdidos: number
     mantenidos: number
+    uncategorized_revenue: number
     total_revenue: number
 }
 
@@ -178,6 +185,7 @@ export type AsesorDetail = {
     cities: string[]
     total_schools: number
     total_exams: number
+    uncategorized_revenue: number
     total_revenue: number
     exam_breakdown: Record<string, ExamBrandDetail>
     ganados: BusinessStatusDetail
@@ -214,6 +222,8 @@ export type PorPaisFilters = {
 export type PorPaisSummaryRow = {
     country: string
     total_schools: number
+    total_revenue: number
+    uncategorized_revenue: number
     cambridge: number
     ielts: number
     michigan: number

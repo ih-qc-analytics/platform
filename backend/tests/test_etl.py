@@ -1,628 +1,556 @@
-"""
-ETL test suite.
+from datetime import date, datetime, timedelta
 
-Transform tests: pure unit tests — no DB needed.
-Upsert tests: require test reporting DB (clean_reporting_db fixture).
-Business status tests: require Jones test DB (ui_dev_db fixture).
-Integration tests: require both DBs.
-"""
+import httpx
 import pytest
-import pytest_asyncio
-from datetime import datetime, date
 from sqlalchemy import text
 
-from app.etl.exchange_rate_backfill import get_source_earliest_rate_date
-from app.etl.payment_upsert import (
-    EXTRACT_QUERY,
-    _conversion_date,
-    _convert_amount,
-    _delete_cart_products,
-    _incremental_since,
-    _transform,
-    _upsert,
-    calculate_business_status,
+from app.config import settings
+from app.etl.dimensional_refresh import run_dimensional_refresh
+from app.etl.exchange_rate_backfill import ensure_exchange_rates_for_range
+from app.etl.frankfurter import FXRateFetchError, fetch_frankfurter_rate, fetch_frankfurter_time_series
+from app.etl.startup_backfill import (
+    STARTUP_BACKFILL_FLOOR,
+    get_startup_backfill_since,
+    run_startup_backfill_if_needed,
 )
-from app.enums import PaymentStatus, ProductType, BusinessStatus, ExamCategory
+from app.etl.shared import (
+    calculate_business_status,
+    convert_currency,
+    extract_dimensions,
+    get_rate,
+    resolve_business_status,
+)
+from app.etl.upsert import run_upsert
+from app.enums import BusinessStatus, ETLJobName
 from tests.conftest_reporting import bind_test_reporting_database
 
 
-# ─────────────────────────────────────────────────────────────
-# Helpers
-# ─────────────────────────────────────────────────────────────
-
-def _base_row(**overrides) -> dict:
-    created_at = overrides.get("created_at", datetime(2025, 3, 15))
-    payment_date = overrides.get("payment_date", date(2025, 3, 16))
+def _base_dimension_row(**overrides) -> dict:
     row = {
-        "cart_product_id": 1,
         "seller_id": 1,
         "seller_name": "Ana Garcia",
         "lead_id": 1,
-        "school_name": "Test School",
+        "school_name": "Colegio Test",
         "site": "mexico",
         "zone_name": "IH Mexico",
         "state_name": "CDMX",
         "city": "Ciudad de Mexico",
-        "state_names": ["CDMX"],
-        "city_names": ["Ciudad de Mexico"],
-        "cart_id": 1,
-        "billing_status": "Aprobado",
-        "created_at": created_at,
-        "book_commission": 0,
-        "exam_commission": 0,
-        "payment_status": "Aprobado",
-        "payment_date": payment_date,
-        "payment_day": payment_date,
-        "product_id": 1,
-        "product_type": "exam",
-        "exam_cat_name": "KET",
-        "exam_date_type": "fixed",
-        "quantity": 5,
-        "total": 5000.00,
-        "cost": 2000.00,
-        "discount": 0,
-        "has_paid_allocation": 1,
+        "all_states": "CDMX||Jalisco",
+        "all_cities": "Ciudad de Mexico||Guadalajara",
+        "created_at": datetime(2025, 1, 15, 10, 0, 0),
+        "payment_date": date(2025, 1, 16),
     }
     row.update(overrides)
     return row
 
 
-def _default_rate_history() -> dict[tuple[str, str], dict[str, list]]:
-    return {
-        ("MXN", "USD"): {
-            "dates": [date(2025, 3, 14), date(2025, 3, 16)],
-            "rates": [0.059, 0.058],
-        },
-        ("COP", "MXN"): {
-            "dates": [date(2025, 3, 14), date(2025, 3, 16)],
-            "rates": [0.0047, 0.0048],
-        },
-        ("COP", "USD"): {
-            "dates": [date(2025, 3, 14), date(2025, 3, 16)],
-            "rates": [0.00028, 0.00029],
-        },
-        ("PEN", "MXN"): {
-            "dates": [date(2025, 3, 14), date(2025, 3, 16)],
-            "rates": [5.10, 5.15],
-        },
-        ("PEN", "USD"): {
-            "dates": [date(2025, 3, 14), date(2025, 3, 16)],
-            "rates": [0.27, 0.28],
-        },
-    }
-
-
-def _do_transform(row: dict, ganados=None, perdidos=None, mantenidos=None, rate_history=None) -> dict:
-    return _transform(
-        row,
-        ganados or set(),
-        perdidos or set(),
-        mantenidos or set(),
-        rate_history or _default_rate_history(),
-    )
-
-
-async def _fetch_extract_rows_for_cart_product(session_factory, cart_product_id: int) -> list[dict]:
-    query = text(EXTRACT_QUERY + " AND cp.id = :cart_product_id")
-    async with session_factory() as session:
-        result = await session.execute(
-            query,
-            {"since": datetime(2023, 1, 1), "cart_product_id": cart_product_id},
-        )
-        return [dict(row) for row in result.mappings().fetchall()]
-
-
-# ─────────────────────────────────────────────────────────────
-# Transform tests (pure unit — no DB)
-# ─────────────────────────────────────────────────────────────
-
-def test_transform_product_type_known():
-    result = _do_transform(_base_row(product_type="exam"))
-    assert result["product_type"] == "exam"
-
-
-def test_transform_product_type_unknown():
-    result = _do_transform(_base_row(product_type=""))
-    assert result["product_type"] == ProductType.UNCATEGORIZED.value
-
-
-def test_transform_product_type_none():
-    result = _do_transform(_base_row(product_type=None))
-    assert result["product_type"] == ProductType.UNCATEGORIZED.value
-
-
-def test_transform_payment_status_empty():
-    result = _do_transform(_base_row(payment_status=None))
-    assert result["payment_status"] == PaymentStatus.UNCATEGORIZED.value
-
-
-def test_transform_is_active_true_for_aprobado():
-    result = _do_transform(_base_row(payment_status="Aprobado"))
-    assert result["is_active"] is True
-
-
-def test_transform_is_active_false_for_cancelado():
-    result = _do_transform(_base_row(payment_status="Cancelado"))
-    assert result["is_active"] is False
-
-
-def test_transform_is_active_true_for_pendiente():
-    result = _do_transform(_base_row(payment_status="Pendiente"))
-    assert result["is_active"] is True
-
-
-def test_transform_business_status_ganado():
-    result = _do_transform(_base_row(lead_id=10), ganados={10})
-    assert result["business_status"] == BusinessStatus.GANADO.value
-
-
-def test_transform_business_status_perdido():
-    result = _do_transform(_base_row(lead_id=20), perdidos={20})
-    assert result["business_status"] == BusinessStatus.PERDIDO.value
-
-
-def test_transform_business_status_mantenido():
-    result = _do_transform(_base_row(lead_id=30), mantenidos={30})
-    assert result["business_status"] == BusinessStatus.MANTENIDO.value
-
-
-def test_transform_business_status_uncategorized():
-    result = _do_transform(_base_row(lead_id=99))
-    assert result["business_status"] == BusinessStatus.UNCATEGORIZED.value
-
-
-def test_transform_year_month_extracted():
-    result = _do_transform(_base_row(created_at=datetime(2025, 3, 15)))
+def test_extract_dimensions_splits_multi_value_geo():
+    result = extract_dimensions(_base_dimension_row())
+    assert result["all_states"] == ["CDMX", "Jalisco"]
+    assert result["all_cities"] == ["Ciudad de Mexico", "Guadalajara"]
+    assert result["state_names"] == ["CDMX", "Jalisco"]
+    assert result["city_names"] == ["Ciudad de Mexico", "Guadalajara"]
     assert result["year"] == 2025
-    assert result["month"] == 3
+    assert result["month"] == 1
 
 
-def test_transform_exam_category_mapped():
-    result = _do_transform(_base_row(exam_cat_name="KET"))
-    assert result["exam_category"] == ExamCategory.CAMBRIDGE_ENGLISH.value
+def test_resolve_business_status_prefers_matching_bucket():
+    assert resolve_business_status(1, {1}, set(), set()) == BusinessStatus.GANADO.value
+    assert resolve_business_status(2, set(), {2}, set()) == BusinessStatus.PERDIDO.value
+    assert resolve_business_status(3, set(), set(), {3}) == BusinessStatus.MANTENIDO.value
+    assert resolve_business_status(4, set(), set(), set()) == BusinessStatus.UNCATEGORIZED.value
 
 
-def test_transform_exam_category_uncategorized_empty():
-    result = _do_transform(_base_row(exam_cat_name=""))
-    assert result["exam_category"] == ExamCategory.UNCATEGORIZED.value
-
-
-def test_transform_exam_category_uncategorized_none():
-    result = _do_transform(_base_row(exam_cat_name=None))
-    assert result["exam_category"] == ExamCategory.UNCATEGORIZED.value
-
-
-def test_transform_exam_canonical_name_mapped():
-    result = _do_transform(_base_row(exam_cat_name="KET"))
-    assert result["exam_canonical_name"] == "A2 Key"
-
-
-def test_transform_exam_canonical_name_uncategorized():
-    result = _do_transform(_base_row(exam_cat_name=None))
-    assert result["exam_canonical_name"] == "UNCATEGORIZED"
-
-
-def test_transform_computes_mxn_and_usd_for_mxn_rows():
-    result = _do_transform(_base_row(total=1000, cost=400, site="mexico"))
-    assert result["base_currency"] == "MXN"
-    assert result["total_mxn"] == pytest.approx(1000.0)
-    assert result["cost_mxn"] == pytest.approx(400.0)
-    assert result["total_usd"] == pytest.approx(58.0)
-    assert result["cost_usd"] == pytest.approx(23.2)
-
-
-def test_transform_computes_mxn_and_usd_for_foreign_rows():
-    result = _do_transform(_base_row(total=1000, cost=400, site="colombia"))
-    assert result["base_currency"] == "COP"
-    assert result["total_mxn"] == pytest.approx(4.8)
-    assert result["cost_mxn"] == pytest.approx(1.92)
-    assert result["total_usd"] == pytest.approx(0.29)
-    assert result["cost_usd"] == pytest.approx(0.12)
-
-
-def test_incremental_since_uses_configured_lookback(monkeypatch):
-    now = datetime(2026, 5, 17, 12, 0, 0)
-    monkeypatch.setenv("PAYMENT_UPSERT_LOOKBACK_HOURS", "6")
-
-    assert _incremental_since(now) == datetime(2026, 5, 17, 6, 0, 0)
-
-
-def test_conversion_date_uses_payment_date_first():
-    row = _base_row(payment_date=date(2025, 3, 16), created_at=datetime(2025, 3, 10))
-    assert _conversion_date(row) == date(2025, 3, 16)
-
-
-def test_conversion_date_falls_back_to_created_at():
-    row = _base_row(payment_date=None, created_at=datetime(2025, 3, 10, 9, 0, 0))
-    assert _conversion_date(row) == date(2025, 3, 10)
-
-
-def test_convert_amount_uses_previous_published_day():
-    rate_history = {
-        ("COP", "MXN"): {
-            "dates": [date(2025, 3, 14), date(2025, 3, 17)],
-            "rates": [0.0047, 0.0049],
-        }
+@pytest.mark.asyncio
+async def test_convert_currency_uses_exact_rate():
+    rates = {
+        (date(2025, 1, 16), "COP", "MXN"): 0.0048,
+        (date(2025, 1, 16), "COP", "USD"): 0.00029,
     }
-    assert _convert_amount(1000, "COP", "MXN", date(2025, 3, 15), rate_history) == pytest.approx(4.7)
+    amount_mxn, amount_usd = await convert_currency(1000, "colombia", date(2025, 1, 16), rates)
+    assert amount_mxn == pytest.approx(4.8)
+    assert amount_usd == pytest.approx(0.29)
 
 
 @pytest.mark.asyncio
-async def test_get_source_earliest_rate_date_uses_payment_date_fallback(ui_dev_db):
-    earliest_date = await get_source_earliest_rate_date()
-    assert earliest_date is not None
-    assert isinstance(earliest_date, date)
+async def test_fetch_frankfurter_rate_uses_pair_endpoint_and_requested_date():
+    requested_url: str | None = None
+    requested_params: dict[str, str] | None = None
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal requested_url, requested_params
+        requested_url = str(request.url)
+        requested_params = dict(request.url.params)
+        return httpx.Response(
+            200,
+            json={
+                "date": "2025-01-16",
+                "base": "COP",
+                "quote": "MXN",
+                "rate": 0.0048,
+            },
+            request=request,
+        )
+
+    transport = httpx.MockTransport(handler)
+    async with httpx.AsyncClient(transport=transport) as client:
+        provider_date, rate = await fetch_frankfurter_rate(
+            "COP",
+            "MXN",
+            date(2025, 1, 16),
+            client=client,
+        )
+
+    assert requested_url is not None and "/v2/rate/COP/MXN" in requested_url
+    assert requested_params == {"date": "2025-01-16"}
+    assert provider_date == date(2025, 1, 16)
+    assert rate == pytest.approx(0.0048)
 
 
 @pytest.mark.asyncio
-async def test_extract_query_does_not_duplicate_when_one_student_has_multiple_student_payments(
-    ui_dev_db,
-    session_factory,
-):
-    target_cart_product_id = 1001
-    async with session_factory() as session:
-        async with session.begin():
-            await session.execute(text("""
-                INSERT INTO `lead` (id, name, site, zoneId, campaign)
-                VALUES (1001, 'Colegio Dup Uno', 'mexico', 1, 'etl-test')
-            """))
-            await session.execute(text("""
-                INSERT INTO lead_address (id, leadId, stateName, city, comments, deletedAt, isFavorite)
-                VALUES (1001, 1001, 'CDMX', 'Mexico City', '', NULL, 1)
-            """))
-            await session.execute(text("""
-                INSERT INTO seller_lead (id, sellerId, leadId, businessStatus)
-                VALUES (1001, 1, 1001, 'ganado')
-            """))
-            await session.execute(text("""
-                INSERT INTO cart (id, sellerLeadId, total, cost, createdAt, deletedAt)
-                VALUES (1001, 1001, 1000, 500, '2025-11-01 10:00:00', NULL)
-            """))
-            await session.execute(text("""
-                INSERT INTO cart (id, sellerLeadId, total, cost, createdAt, deletedAt)
-                VALUES (1002, 1001, 500, 250, '2025-11-02 10:00:00', NULL)
-            """))
-            await session.execute(text("""
-                INSERT INTO payment (
-                    id, quantity, status, createdAt, updatedAt, cartId, `use`, comments, billingStatus,
-                    studentId, paymentDate
-                ) VALUES
-                    (1001, 1000, 'Aprobado', '2025-11-01 10:00:00', '2025-11-01 10:00:00', 1001, '', '', '', 0, '2025-11-01'),
-                    (1002, 500, 'Aprobado', '2025-11-02 10:00:00', '2025-11-02 10:00:00', 1002, '', '', '', 0, '2025-11-02')
-            """))
-            await session.execute(text("""
-                INSERT INTO cart_product (id, cartId, productId, quantity, total, cost, testDate, deletedAt)
-                VALUES (1001, 1001, 1, 1, 1000, 500, '2025-11-10', NULL)
-            """))
-            await session.execute(text("""
-                INSERT INTO student (id, cartProductId)
-                VALUES (1001, 1001)
-            """))
-            await session.execute(text("""
-                INSERT INTO student_payments (student_id, payment_id, amount)
-                VALUES
-                    (1001, 1001, 500.00),
-                    (1001, 1002, 500.00)
-            """))
+async def test_fetch_frankfurter_rate_raises_domain_error_on_http_error():
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(404, json={"message": "not found"}, request=request)
 
-    rows = await _fetch_extract_rows_for_cart_product(session_factory, target_cart_product_id)
-
-    assert len(rows) == 1
-    assert rows[0]["cart_product_id"] == target_cart_product_id
-    assert rows[0]["has_paid_allocation"] == 1
+    transport = httpx.MockTransport(handler)
+    async with httpx.AsyncClient(transport=transport) as client:
+        with pytest.raises(FXRateFetchError, match="COP/MXN"):
+            await fetch_frankfurter_rate(
+                "COP",
+                "MXN",
+                date(2025, 1, 16),
+                client=client,
+            )
 
 
 @pytest.mark.asyncio
-async def test_extract_query_does_not_duplicate_when_multiple_students_share_one_cart_product(
-    ui_dev_db,
-    session_factory,
-):
-    target_cart_product_id = 1101
-    async with session_factory() as session:
-        async with session.begin():
-            await session.execute(text("""
-                INSERT INTO `lead` (id, name, site, zoneId, campaign)
-                VALUES (1101, 'Colegio Dup Dos', 'mexico', 1, 'etl-test')
-            """))
-            await session.execute(text("""
-                INSERT INTO lead_address (id, leadId, stateName, city, comments, deletedAt, isFavorite)
-                VALUES (1101, 1101, 'Jalisco', 'Guadalajara', '', NULL, 1)
-            """))
-            await session.execute(text("""
-                INSERT INTO seller_lead (id, sellerId, leadId, businessStatus)
-                VALUES (1101, 1, 1101, 'ganado')
-            """))
-            await session.execute(text("""
-                INSERT INTO cart (id, sellerLeadId, total, cost, createdAt, deletedAt)
-                VALUES (1101, 1101, 1200, 600, '2025-11-03 10:00:00', NULL)
-            """))
-            await session.execute(text("""
-                INSERT INTO payment (
-                    id, quantity, status, createdAt, updatedAt, cartId, `use`, comments, billingStatus,
-                    studentId, paymentDate
-                ) VALUES
-                    (1101, 1200, 'Aprobado', '2025-11-03 10:00:00', '2025-11-03 10:00:00', 1101, '', '', '', 0, '2025-11-03')
-            """))
-            await session.execute(text("""
-                INSERT INTO cart_product (id, cartId, productId, quantity, total, cost, testDate, deletedAt)
-                VALUES (1101, 1101, 2, 2, 1200, 600, '2025-11-12', NULL)
-            """))
-            await session.execute(text("""
-                INSERT INTO student (id, cartProductId)
-                VALUES
-                    (1101, 1101),
-                    (1102, 1101)
-            """))
-            await session.execute(text("""
-                INSERT INTO student_payments (student_id, payment_id, amount)
-                VALUES
-                    (1101, 1101, 600.00),
-                    (1102, 1101, 600.00)
-            """))
+async def test_fetch_frankfurter_time_series_uses_date_range_endpoint():
+    requested_url: str | None = None
+    requested_params: dict[str, str] | None = None
 
-    rows = await _fetch_extract_rows_for_cart_product(session_factory, target_cart_product_id)
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal requested_url, requested_params
+        requested_url = str(request.url)
+        requested_params = dict(request.url.params)
+        return httpx.Response(
+            200,
+            json=[
+                {
+                    "date": "2025-01-01",
+                    "base": "COP",
+                    "quote": "MXN",
+                    "rate": 0.0048,
+                },
+                {
+                    "date": "2025-01-02",
+                    "base": "COP",
+                    "quote": "MXN",
+                    "rate": 0.0049,
+                },
+            ],
+            request=request,
+        )
 
-    assert len(rows) == 1
-    assert rows[0]["cart_product_id"] == target_cart_product_id
-    assert rows[0]["has_paid_allocation"] == 1
+    transport = httpx.MockTransport(handler)
+    async with httpx.AsyncClient(transport=transport) as client:
+        rows = await fetch_frankfurter_time_series(
+            "COP",
+            ["MXN"],
+            date(2025, 1, 1),
+            date(2025, 1, 2),
+            client=client,
+        )
 
-
-# ─────────────────────────────────────────────────────────────
-# Upsert tests (require test reporting DB)
-# ─────────────────────────────────────────────────────────────
-
-@pytest.mark.asyncio
-async def test_upsert_inserts_new_row(reporting_engine, reporting_session_factory, clean_reporting_db):
-    bind_test_reporting_database(reporting_session_factory)
-    row = _do_transform(_base_row())
-    async with reporting_session_factory() as session:
-        async with session.begin():
-            await _upsert(session, [row])
-    async with reporting_engine.connect() as conn:
-        count = (await conn.execute(text("SELECT COUNT(*) FROM report_line_items"))).scalar()
-    assert count == 1
-
-
-@pytest.mark.asyncio
-async def test_upsert_updates_existing_row_on_conflict(reporting_engine, reporting_session_factory, clean_reporting_db):
-    bind_test_reporting_database(reporting_session_factory)
-    row_pending = _do_transform(_base_row(cart_product_id=1, payment_status="Pendiente"))
-    row_aprobado = _do_transform(_base_row(cart_product_id=1, payment_status="Aprobado"))
-    async with reporting_session_factory() as session:
-        async with session.begin():
-            await _upsert(session, [row_pending])
-    async with reporting_session_factory() as session:
-        async with session.begin():
-            await _upsert(session, [row_aprobado])
-    async with reporting_engine.connect() as conn:
-        result = await conn.execute(text("SELECT payment_status, COUNT(*) as cnt FROM report_line_items GROUP BY payment_status"))
-        rows = result.fetchall()
-    assert len(rows) == 1
-    assert rows[0].payment_status == "Aprobado"
-    assert rows[0].cnt == 1
-
-
-@pytest.mark.asyncio
-async def test_upsert_does_not_duplicate(reporting_engine, reporting_session_factory, clean_reporting_db):
-    bind_test_reporting_database(reporting_session_factory)
-    row = _do_transform(_base_row())
-    async with reporting_session_factory() as session:
-        async with session.begin():
-            await _upsert(session, [row])
-    async with reporting_session_factory() as session:
-        async with session.begin():
-            await _upsert(session, [row])
-    async with reporting_engine.connect() as conn:
-        count = (await conn.execute(text("SELECT COUNT(*) FROM report_line_items"))).scalar()
-    assert count == 1
-
-
-@pytest.mark.asyncio
-async def test_delete_cart_products_removes_soft_deleted_rows(reporting_engine, reporting_session_factory, clean_reporting_db):
-    bind_test_reporting_database(reporting_session_factory)
-    rows = [
-        _do_transform(_base_row(cart_product_id=17)),
-        _do_transform(_base_row(cart_product_id=18, lead_id=18, cart_id=18)),
+    assert requested_url is not None and "/v2/rates" in requested_url
+    assert requested_params == {
+        "base": "COP",
+        "quotes": "MXN",
+        "from": "2025-01-01",
+        "to": "2025-01-02",
+    }
+    assert rows == [
+        {
+            "date": date(2025, 1, 1),
+            "from_currency": "COP",
+            "to_currency": "MXN",
+            "rate": pytest.approx(0.0048),
+        },
+        {
+            "date": date(2025, 1, 2),
+            "from_currency": "COP",
+            "to_currency": "MXN",
+            "rate": pytest.approx(0.0049),
+        },
     ]
-    async with reporting_session_factory() as session:
-        async with session.begin():
-            await _upsert(session, rows)
-    async with reporting_session_factory() as session:
-        async with session.begin():
-            await _delete_cart_products(session, [17])
-    async with reporting_engine.connect() as conn:
-        remaining_ids = [row[0] for row in (await conn.execute(
-            text("SELECT cart_product_id FROM report_line_items ORDER BY cart_product_id")
-        )).fetchall()]
-    assert remaining_ids == [18]
 
 
 @pytest.mark.asyncio
-async def test_upsert_updates_dimensions_on_conflict(reporting_engine, reporting_session_factory, clean_reporting_db):
+async def test_get_rate_does_not_fallback_to_today_rate(monkeypatch):
+    requested_rate_date = date(2025, 1, 16)
+    rates = {
+        (date.today(), "COP", "MXN"): 999.0,
+    }
+
+    async def fake_fetch_live_rate(rate_date: date, from_cur: str, to_cur: str) -> float:
+        assert rate_date == requested_rate_date
+        assert from_cur == "COP"
+        assert to_cur == "MXN"
+        return 0.0048
+
+    monkeypatch.setattr("app.etl.shared.fetch_live_rate", fake_fetch_live_rate)
+
+    rate = await get_rate(requested_rate_date, "COP", "MXN", rates)
+
+    assert rate == pytest.approx(0.0048)
+    assert rates[(requested_rate_date, "COP", "MXN")] == pytest.approx(0.0048)
+
+
+@pytest.mark.asyncio
+async def test_exchange_rate_backfill_honors_full_requested_range(
+    reporting_engine,
+    reporting_session_factory,
+    clean_reporting_db,
+    monkeypatch,
+):
     bind_test_reporting_database(reporting_session_factory)
-    old_row = _do_transform(_base_row(cart_product_id=1, school_name="Old Name"))
-    new_row = _do_transform(_base_row(cart_product_id=1, school_name="New Name"))
-    async with reporting_session_factory() as session:
-        async with session.begin():
-            await _upsert(session, [old_row])
-    async with reporting_session_factory() as session:
-        async with session.begin():
-            await _upsert(session, [new_row])
+    async with reporting_engine.begin() as conn:
+        await conn.execute(
+            text("TRUNCATE report_payment_allocations, report_payments, report_line_items, exchange_rates, etl_meta RESTART IDENTITY")
+        )
+
+    async def fake_fetch_time_series(
+        base_currency: str,
+        quote_currencies: list[str],
+        start_date: date,
+        end_date: date,
+        *,
+        client: httpx.AsyncClient | None = None,
+    ) -> list[dict[str, object]]:
+        del client
+        rows: list[dict[str, object]] = []
+        current_date = start_date
+        while current_date <= end_date:
+            for quote_currency in quote_currencies:
+                rows.append(
+                    {
+                        "date": current_date,
+                        "from_currency": base_currency,
+                        "to_currency": quote_currency,
+                        "rate": float(len(base_currency) + len(quote_currency)),
+                    }
+                )
+            current_date += timedelta(days=1)
+        return rows
+
+    monkeypatch.setattr("app.etl.exchange_rate_backfill.fetch_frankfurter_time_series", fake_fetch_time_series)
+
+    await ensure_exchange_rates_for_range(date(2025, 1, 1), date(2025, 1, 2))
+
     async with reporting_engine.connect() as conn:
-        name = (await conn.execute(text("SELECT school_name FROM report_line_items WHERE cart_product_id = 1"))).scalar()
-    assert name == "New Name"
+        count = (
+            await conn.execute(text("SELECT COUNT(*) FROM exchange_rates"))
+        ).scalar()
+
+    assert count == 10
 
 
 @pytest.mark.asyncio
-async def test_upsert_preserves_financials_correctly(reporting_engine, reporting_session_factory, clean_reporting_db):
-    bind_test_reporting_database(reporting_session_factory)
-    row = _do_transform(_base_row(total=1000, cost=500))
-    async with reporting_session_factory() as session:
-        async with session.begin():
-            await _upsert(session, [row])
-    async with reporting_engine.connect() as conn:
-        result = (await conn.execute(text("SELECT total, cost, total_usd, cost_usd FROM report_line_items"))).fetchone()
-    assert float(result.total) == 1000.0
-    assert float(result.cost) == 500.0
-    assert float(result.total_usd) == pytest.approx(58.0)
-    assert float(result.cost_usd) == pytest.approx(29.0)
-
-
-@pytest.mark.asyncio
-async def test_upsert_handles_large_batch(reporting_engine, reporting_session_factory, clean_reporting_db):
-    bind_test_reporting_database(reporting_session_factory)
-    rows = [_do_transform(_base_row(cart_product_id=i, lead_id=i, cart_id=i)) for i in range(1, 1501)]
-    async with reporting_session_factory() as session:
-        async with session.begin():
-            await _upsert(session, rows)
-    async with reporting_engine.connect() as conn:
-        count = (await conn.execute(text("SELECT COUNT(*) FROM report_line_items"))).scalar()
-    assert count == 1500
-
-
-@pytest.mark.asyncio
-async def test_upsert_sets_is_active_false_for_cancelado(reporting_engine, reporting_session_factory, clean_reporting_db):
-    bind_test_reporting_database(reporting_session_factory)
-    row = _do_transform(_base_row(payment_status="Cancelado"))
-    async with reporting_session_factory() as session:
-        async with session.begin():
-            await _upsert(session, [row])
-    async with reporting_engine.connect() as conn:
-        is_active = (await conn.execute(text("SELECT is_active FROM report_line_items"))).scalar()
-    assert is_active is False
-
-
-@pytest.mark.asyncio
-async def test_upsert_sets_is_active_true_for_aprobado(reporting_engine, reporting_session_factory, clean_reporting_db):
-    bind_test_reporting_database(reporting_session_factory)
-    row = _do_transform(_base_row(payment_status="Aprobado"))
-    async with reporting_session_factory() as session:
-        async with session.begin():
-            await _upsert(session, [row])
-    async with reporting_engine.connect() as conn:
-        is_active = (await conn.execute(text("SELECT is_active FROM report_line_items"))).scalar()
-    assert is_active is True
-
-
-# ─────────────────────────────────────────────────────────────
-# Business status calculation tests (require Jones test DB)
-# ─────────────────────────────────────────────────────────────
-
-@pytest.mark.asyncio
-async def test_ganado_school_in_current_not_prior(ui_dev_db):
+async def test_business_status_classifies_seeded_leads(ui_dev_db):
     from tests.seeds.business_status_helpers import seed_lead_with_payment
-    lead_id = await seed_lead_with_payment(year_current=True, year_prior=False)
-    ganados, perdidos, mantenidos = await calculate_business_status({lead_id})
-    assert lead_id in ganados
-    assert lead_id not in perdidos
-    assert lead_id not in mantenidos
 
-
-@pytest.mark.asyncio
-async def test_perdido_school_in_prior_not_current(ui_dev_db):
-    from tests.seeds.business_status_helpers import seed_lead_with_payment
-    lead_id = await seed_lead_with_payment(year_current=False, year_prior=True)
-    ganados, perdidos, mantenidos = await calculate_business_status({lead_id})
-    assert lead_id in perdidos
-    assert lead_id not in ganados
-
-
-@pytest.mark.asyncio
-async def test_mantenido_school_in_both_years(ui_dev_db):
-    from tests.seeds.business_status_helpers import seed_lead_with_payment
-    lead_id = await seed_lead_with_payment(year_current=True, year_prior=True)
-    ganados, perdidos, mantenidos = await calculate_business_status({lead_id})
-    assert lead_id in mantenidos
-
-
-@pytest.mark.asyncio
-async def test_uncategorized_no_approved_payments(ui_dev_db):
-    from tests.seeds.business_status_helpers import seed_lead_with_payment
-    lead_id = await seed_lead_with_payment(year_current=False, year_prior=False)
-    ganados, perdidos, mantenidos = await calculate_business_status({lead_id})
-    assert lead_id not in ganados
-    assert lead_id not in perdidos
-    assert lead_id not in mantenidos
-
-
-@pytest.mark.asyncio
-async def test_cancelled_payment_does_not_count(ui_dev_db):
-    from tests.seeds.business_status_helpers import seed_lead_with_payment
-    lead_id = await seed_lead_with_payment(year_current=False, year_prior=True, cancelled_current=True)
-    ganados, perdidos, mantenidos = await calculate_business_status({lead_id})
-    assert lead_id in perdidos
-    assert lead_id not in ganados
-
-
-@pytest.mark.asyncio
-async def test_multiple_leads_classified_correctly(ui_dev_db):
-    from tests.seeds.business_status_helpers import seed_lead_with_payment
-    ganado_id   = await seed_lead_with_payment(year_current=True,  year_prior=False)
-    perdido_id  = await seed_lead_with_payment(year_current=False, year_prior=True)
+    ganado_id = await seed_lead_with_payment(year_current=True, year_prior=False)
+    perdido_id = await seed_lead_with_payment(year_current=False, year_prior=True)
     mantenido_id = await seed_lead_with_payment(year_current=True, year_prior=True)
+
     ganados, perdidos, mantenidos = await calculate_business_status({ganado_id, perdido_id, mantenido_id})
     assert ganado_id in ganados
     assert perdido_id in perdidos
     assert mantenido_id in mantenidos
-    assert len({ganado_id, perdido_id, mantenido_id} & ganados & perdidos) == 0
 
 
-# ─────────────────────────────────────────────────────────────
-# Job 2 integration tests
-# ─────────────────────────────────────────────────────────────
-
-@pytest.mark.asyncio
-async def test_job2_updates_school_name(ui_dev_db, reporting_engine, reporting_session_factory, clean_reporting_db):
-    from app.etl.dimensional_refresh import run_dimensional_refresh
-    bind_test_reporting_database(reporting_session_factory)
-    row = _do_transform(_base_row(lead_id=1, seller_id=1, school_name="Old Name"))
-    async with reporting_session_factory() as session:
-        async with session.begin():
-            await _upsert(session, [row])
-    await run_dimensional_refresh()
+@pytest.mark.asyncio(loop_scope="session")
+async def test_upsert_populates_all_three_reporting_tables(ui_dev_reporting_db, reporting_engine):
     async with reporting_engine.connect() as conn:
-        name = (await conn.execute(
-            text("SELECT school_name FROM report_line_items WHERE lead_id = 1 AND seller_id = 1")
-        )).scalar()
-    assert name != "Old Name"
+        payment_count = (await conn.execute(text("SELECT COUNT(*) FROM report_payments"))).scalar()
+        line_item_count = (await conn.execute(text("SELECT COUNT(*) FROM report_line_items"))).scalar()
+        allocation_count = (await conn.execute(text("SELECT COUNT(*) FROM report_payment_allocations"))).scalar()
+
+    assert payment_count == 14
+    assert line_item_count == 14
+    assert allocation_count > 0
 
 
-@pytest.mark.asyncio
-async def test_job2_does_not_touch_financials(ui_dev_db, reporting_engine, reporting_session_factory, clean_reporting_db):
-    from app.etl.dimensional_refresh import run_dimensional_refresh
-    bind_test_reporting_database(reporting_session_factory)
-    row = _do_transform(_base_row(lead_id=1, seller_id=1, total=9999))
-    async with reporting_session_factory() as session:
-        async with session.begin():
-            await _upsert(session, [row])
-    await run_dimensional_refresh()
+@pytest.mark.asyncio(loop_scope="session")
+async def test_line_items_include_unpaid_products_in_approved_payment_carts(ui_dev_reporting_db, reporting_engine):
     async with reporting_engine.connect() as conn:
-        total = (await conn.execute(text("SELECT total FROM report_line_items WHERE lead_id = 1"))).scalar()
-    assert float(total) == 9999.0
+        row = (
+            await conn.execute(
+                text("""
+                    SELECT expected_total, paid_total, include_in_product_breakdown, payment_status
+                    FROM report_line_items
+                    WHERE cart_product_id = 14
+                """)
+            )
+        ).fetchone()
 
-
-@pytest.mark.asyncio
-async def test_job2_does_not_touch_payment_status(ui_dev_db, reporting_engine, reporting_session_factory, clean_reporting_db):
-    from app.etl.dimensional_refresh import run_dimensional_refresh
-    bind_test_reporting_database(reporting_session_factory)
-    row = _do_transform(_base_row(lead_id=1, seller_id=1, payment_status="Aprobado"))
-    async with reporting_session_factory() as session:
-        async with session.begin():
-            await _upsert(session, [row])
-    await run_dimensional_refresh()
-    async with reporting_engine.connect() as conn:
-        status = (await conn.execute(text("SELECT payment_status FROM report_line_items WHERE lead_id = 1"))).scalar()
-    assert status == "Aprobado"
-
-
-@pytest.mark.asyncio
-async def test_job2_logs_success_to_etl_meta(ui_dev_db, reporting_engine, reporting_session_factory, clean_reporting_db):
-    from app.etl.dimensional_refresh import run_dimensional_refresh
-    bind_test_reporting_database(reporting_session_factory)
-    await run_dimensional_refresh()
-    async with reporting_engine.connect() as conn:
-        row = (await conn.execute(
-            text("SELECT status FROM etl_meta WHERE job_name = 'dimensional_refresh' ORDER BY id DESC LIMIT 1")
-        )).fetchone()
     assert row is not None
-    assert row.status == "success"
+    assert float(row.expected_total) == 500.0
+    assert float(row.paid_total) == 0.0
+    assert row.include_in_product_breakdown is False
+    assert row.payment_status == "Aprobado"
+
+
+@pytest.mark.asyncio(loop_scope="session")
+async def test_line_items_aggregate_paid_totals_without_duplication(ui_dev_reporting_db, reporting_engine):
+    async with reporting_engine.connect() as conn:
+        row = (
+            await conn.execute(
+                text("""
+                    SELECT paid_total, student_count, payment_count
+                    FROM report_line_items
+                    WHERE cart_product_id = 4
+                """)
+            )
+        ).fetchone()
+
+    assert row is not None
+    assert float(row.paid_total) == 2000.0
+    assert row.student_count == 2
+    assert row.payment_count == 1
+
+
+@pytest.mark.asyncio(loop_scope="session")
+async def test_payment_allocations_sum_back_to_payment_amount(ui_dev_reporting_db, reporting_engine):
+    async with reporting_engine.connect() as conn:
+        payment_total = (
+            await conn.execute(text("SELECT amount FROM report_payments WHERE payment_id = 5"))
+        ).scalar()
+        allocation_total = (
+            await conn.execute(
+                text("""
+                    SELECT COALESCE(SUM(allocated_amount), 0)
+                    FROM report_payment_allocations
+                    WHERE payment_id = 5
+                """)
+            )
+        ).scalar()
+
+    assert float(payment_total) == 1500.0
+    assert float(allocation_total) == pytest.approx(1500.0)
+
+
+@pytest.mark.asyncio
+async def test_deleted_cart_products_are_removed_on_rerun(
+    ui_dev_db,
+    reporting_engine,
+    reporting_session_factory,
+    session_factory,
+):
+    bind_test_reporting_database(reporting_session_factory)
+
+    async with reporting_engine.begin() as conn:
+        await conn.execute(
+            text("TRUNCATE report_payment_allocations, report_payments, report_line_items, exchange_rates, etl_meta RESTART IDENTITY")
+        )
+
+    async with reporting_session_factory() as session:
+        async with session.begin():
+            today = date.today()
+            for row in [
+                {"date": today, "from_currency": "MXN", "to_currency": "USD", "rate": 1.0},
+                {"date": today, "from_currency": "COP", "to_currency": "MXN", "rate": 1.0},
+                {"date": today, "from_currency": "COP", "to_currency": "USD", "rate": 1.0},
+                {"date": today, "from_currency": "PEN", "to_currency": "MXN", "rate": 1.0},
+                {"date": today, "from_currency": "PEN", "to_currency": "USD", "rate": 1.0},
+            ]:
+                await session.execute(
+                    text("""
+                        INSERT INTO exchange_rates (date, from_currency, to_currency, rate)
+                        VALUES (:date, :from_currency, :to_currency, :rate)
+                        ON CONFLICT (date, from_currency, to_currency) DO UPDATE
+                        SET rate = EXCLUDED.rate
+                    """),
+                    row,
+                )
+
+    await run_upsert(since=settings.payment_upsert_initial_since, job_name=ETLJobName.UPSERT)
+
+    async with session_factory() as session:
+        async with session.begin():
+            await session.execute(
+                text("UPDATE cart_product SET deletedAt = '2026-05-18 10:00:00' WHERE id = 4")
+            )
+
+    await run_upsert(since=datetime(2026, 5, 18, 0, 0, 0), job_name=ETLJobName.UPSERT)
+
+    async with reporting_engine.connect() as conn:
+        row = (
+            await conn.execute(text("SELECT COUNT(*) FROM report_line_items WHERE cart_product_id = 4"))
+        ).scalar()
+
+    assert row == 0
+
+
+@pytest.mark.asyncio
+async def test_dimensional_refresh_updates_both_main_tables(
+    ui_dev_db,
+    reporting_engine,
+    reporting_session_factory,
+    session_factory,
+):
+    bind_test_reporting_database(reporting_session_factory)
+
+    async with reporting_engine.begin() as conn:
+        await conn.execute(
+            text("TRUNCATE report_payment_allocations, report_payments, report_line_items, exchange_rates, etl_meta RESTART IDENTITY")
+        )
+
+    async with reporting_session_factory() as session:
+        async with session.begin():
+            today = date.today()
+            for row in [
+                {"date": today, "from_currency": "MXN", "to_currency": "USD", "rate": 1.0},
+                {"date": today, "from_currency": "COP", "to_currency": "MXN", "rate": 1.0},
+                {"date": today, "from_currency": "COP", "to_currency": "USD", "rate": 1.0},
+                {"date": today, "from_currency": "PEN", "to_currency": "MXN", "rate": 1.0},
+                {"date": today, "from_currency": "PEN", "to_currency": "USD", "rate": 1.0},
+            ]:
+                await session.execute(
+                    text("""
+                        INSERT INTO exchange_rates (date, from_currency, to_currency, rate)
+                        VALUES (:date, :from_currency, :to_currency, :rate)
+                        ON CONFLICT (date, from_currency, to_currency) DO UPDATE
+                        SET rate = EXCLUDED.rate
+                    """),
+                    row,
+                )
+
+    await run_upsert(since=settings.payment_upsert_initial_since, job_name=ETLJobName.UPSERT)
+
+    async with session_factory() as session:
+        async with session.begin():
+            await session.execute(text("UPDATE `lead` SET name = 'Colegio Renombrado' WHERE id = 1"))
+
+    await run_dimensional_refresh()
+
+    async with reporting_engine.connect() as conn:
+        payment_name = (
+            await conn.execute(text("SELECT school_name FROM report_payments WHERE lead_id = 1 LIMIT 1"))
+        ).scalar()
+        line_item_name = (
+            await conn.execute(text("SELECT school_name FROM report_line_items WHERE lead_id = 1 LIMIT 1"))
+        ).scalar()
+
+    assert payment_name == "Colegio Renombrado"
+    assert line_item_name == "Colegio Renombrado"
+
+
+@pytest.mark.asyncio
+async def test_startup_backfill_uses_floor_when_no_successful_payment_sync_runs(
+    reporting_engine,
+    reporting_session_factory,
+    clean_reporting_db,
+):
+    bind_test_reporting_database(reporting_session_factory)
+    async with reporting_engine.begin() as conn:
+        await conn.execute(
+            text("TRUNCATE report_payment_allocations, report_payments, report_line_items, exchange_rates, etl_meta RESTART IDENTITY")
+        )
+
+    since = await get_startup_backfill_since(now=datetime(2026, 5, 21, 12, 0, 0))
+
+    assert since == STARTUP_BACKFILL_FLOOR
+
+
+@pytest.mark.asyncio
+async def test_startup_backfill_skips_when_latest_upsert_is_recent(
+    reporting_engine,
+    reporting_session_factory,
+    clean_reporting_db,
+):
+    bind_test_reporting_database(reporting_session_factory)
+    current_time = datetime(2026, 5, 21, 12, 0, 0)
+    async with reporting_engine.begin() as conn:
+        await conn.execute(
+            text("TRUNCATE report_payment_allocations, report_payments, report_line_items, exchange_rates, etl_meta RESTART IDENTITY")
+        )
+
+    async with reporting_session_factory() as session:
+        async with session.begin():
+            await session.execute(
+                text("""
+                    INSERT INTO etl_meta (job_name, run_at, rows_processed, status, error, duration_seconds)
+                    VALUES (:job_name, :run_at, 10, 'success', NULL, 5)
+                """),
+                {
+                    "job_name": ETLJobName.UPSERT.value,
+                    "run_at": current_time - timedelta(hours=2, minutes=59),
+                },
+            )
+
+    since = await get_startup_backfill_since(now=current_time)
+
+    assert since is None
+
+
+@pytest.mark.asyncio
+async def test_startup_backfill_uses_latest_successful_payment_sync_run(
+    reporting_engine,
+    reporting_session_factory,
+    clean_reporting_db,
+):
+    bind_test_reporting_database(reporting_session_factory)
+    current_time = datetime(2026, 5, 21, 12, 0, 0)
+    expected_since = current_time - timedelta(hours=5)
+    async with reporting_engine.begin() as conn:
+        await conn.execute(
+            text("TRUNCATE report_payment_allocations, report_payments, report_line_items, exchange_rates, etl_meta RESTART IDENTITY")
+        )
+
+    async with reporting_session_factory() as session:
+        async with session.begin():
+            await session.execute(
+                text("""
+                    INSERT INTO etl_meta (job_name, run_at, rows_processed, status, error, duration_seconds)
+                    VALUES
+                        (:failed_job_name, :failed_run_at, 0, 'failed', 'boom', 5),
+                        (:dimensional_job_name, :dimensional_run_at, 10, 'success', NULL, 5),
+                        (:upsert_job_name, :upsert_run_at, 10, 'success', NULL, 5)
+                """),
+                {
+                    "failed_job_name": ETLJobName.UPSERT.value,
+                    "failed_run_at": current_time - timedelta(hours=1),
+                    "dimensional_job_name": ETLJobName.DIMENSIONAL_REFRESH.value,
+                    "dimensional_run_at": current_time - timedelta(minutes=30),
+                    "upsert_job_name": ETLJobName.STARTUP_BACKFILL.value,
+                    "upsert_run_at": expected_since,
+                },
+            )
+
+    since = await get_startup_backfill_since(now=current_time)
+
+    assert since == expected_since
+
+
+@pytest.mark.asyncio
+async def test_run_startup_backfill_if_needed_calls_run_upsert_with_startup_job_name(
+    reporting_engine,
+    reporting_session_factory,
+    clean_reporting_db,
+    monkeypatch,
+):
+    bind_test_reporting_database(reporting_session_factory)
+    async with reporting_engine.begin() as conn:
+        await conn.execute(
+            text("TRUNCATE report_payment_allocations, report_payments, report_line_items, exchange_rates, etl_meta RESTART IDENTITY")
+        )
+    calls: list[tuple[datetime, ETLJobName]] = []
+
+    async def fake_run_upsert(*, since: datetime | None = None, job_name: ETLJobName = ETLJobName.UPSERT) -> None:
+        calls.append((since, job_name))
+
+    monkeypatch.setattr("app.etl.startup_backfill.run_upsert", fake_run_upsert)
+
+    await run_startup_backfill_if_needed(now=datetime(2026, 5, 21, 12, 0, 0))
+
+    assert calls == [(STARTUP_BACKFILL_FLOOR, ETLJobName.STARTUP_BACKFILL)]

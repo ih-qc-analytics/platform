@@ -11,14 +11,15 @@ from app.schemas.reports import (
     PorPaisStatusRow,
     PorPaisSummaryRow,
 )
-from app.services.exports.pdf_helpers import build_pdf_header, format_integer
+from app.services.exports.pdf_helpers import build_pdf_header, format_currency, format_integer
 from app.services.exports.excel import ExcelColumn, ExcelWorksheetSpec
 from app.services.por_asesor.product_grouping import EXAM_NAME_ORDER, canonical_exam_name
 from app.services.por_pais.repository import (
+    fetch_country_allocated_revenue_rows,
     fetch_country_exam_rows,
     fetch_country_metric_rows,
+    fetch_country_payment_rows,
     fetch_country_presence_rows,
-    fetch_country_school_rows,
 )
 
 DETALLE_EXAM_NAME_ORDER = [*EXAM_NAME_ORDER, "Other"]
@@ -26,6 +27,8 @@ DETALLE_EXAM_NAME_ORDER = [*EXAM_NAME_ORDER, "Other"]
 POR_PAIS_SUMMARY_COLUMNS = [
     ExcelColumn("country", "Country"),
     ExcelColumn("total_schools", "Total Schools"),
+    ExcelColumn("total_revenue", "Total Revenue"),
+    ExcelColumn("uncategorized_revenue", "Uncategorized Revenue"),
     ExcelColumn("cambridge", "Cambridge"),
     ExcelColumn("ielts", "IELTS"),
     ExcelColumn("michigan", "Michigan"),
@@ -66,8 +69,10 @@ def summary_bucket_for_exam(exam_name: str) -> str:
     return "cambridge"
 
 
-def build_summary_rows(school_rows, exam_rows) -> list[PorPaisSummaryRow]:
-    schools_by_country = {row.country: int(row.total_schools or 0) for row in school_rows}
+def build_summary_rows(payment_rows, allocated_rows, exam_rows) -> list[PorPaisSummaryRow]:
+    schools_by_country = {row.country: int(row.total_schools or 0) for row in payment_rows}
+    payment_revenue_by_country = {row.country: float(row.total_revenue or 0) for row in payment_rows}
+    allocated_revenue_by_country = {row.country: float(row.allocated_revenue or 0) for row in allocated_rows}
     counts: dict[str, dict[str, int]] = {
         country: {"cambridge": 0, "ielts": 0, "michigan": 0, "tea": 0, "other": 0}
         for country in schools_by_country
@@ -80,6 +85,8 @@ def build_summary_rows(school_rows, exam_rows) -> list[PorPaisSummaryRow]:
         PorPaisSummaryRow(
             country=country,
             total_schools=schools_by_country.get(country, 0),
+            total_revenue=payment_revenue_by_country.get(country, 0.0),
+            uncategorized_revenue=payment_revenue_by_country.get(country, 0.0) - allocated_revenue_by_country.get(country, 0.0),
             cambridge=counts.get(country, {}).get("cambridge", 0),
             ielts=counts.get(country, {}).get("ielts", 0),
             michigan=counts.get(country, {}).get("michigan", 0),
@@ -139,26 +146,27 @@ async def getPorPaisReport(filters: PorPaisFilters) -> PorPaisReportResponse:
     prior_from, prior_to = _rewound_dates(filters)
 
     (
-        school_rows, exam_rows,
+        payment_rows, allocated_rows, exam_rows,
         current_presence, prior_presence,
         current_metrics,  prior_metrics,
     ) = await asyncio.gather(
-        fetch_country_school_rows(filters.date_from, filters.date_to),
-        fetch_country_exam_rows(filters.date_from, filters.date_to),
-        fetch_country_presence_rows(filters.date_from, filters.date_to),
-        fetch_country_presence_rows(prior_from, prior_to),
-        fetch_country_metric_rows(filters.date_from, filters.date_to),
-        fetch_country_metric_rows(prior_from, prior_to),
+        fetch_country_payment_rows(filters),
+        fetch_country_allocated_revenue_rows(filters),
+        fetch_country_exam_rows(filters),
+        fetch_country_presence_rows(filters),
+        fetch_country_presence_rows(PorPaisFilters(date_from=prior_from, date_to=prior_to)),
+        fetch_country_metric_rows(filters),
+        fetch_country_metric_rows(PorPaisFilters(date_from=prior_from, date_to=prior_to)),
     )
 
     return PorPaisReportResponse(
-        summary_rows=build_summary_rows(school_rows, exam_rows),
+        summary_rows=build_summary_rows(payment_rows, allocated_rows, exam_rows),
         status_rows=build_status_rows(current_presence, prior_presence, current_metrics, prior_metrics),
     )
 
 
 async def getPorPaisDetail(country: str, filters: PorPaisFilters) -> PorPaisDetailResponse:
-    exam_rows = await fetch_country_exam_rows(filters.date_from, filters.date_to)
+    exam_rows = await fetch_country_exam_rows(filters)
     return PorPaisDetailResponse(country=country, exam_counts=build_detail_counts(exam_rows, country))
 
 
@@ -197,6 +205,8 @@ async def build_por_pais_pdf_payload(filters: PorPaisFilters) -> PorPaisPDFPaylo
     report = await getPorPaisReport(filters)
 
     total_schools  = sum(r.total_schools for r in report.summary_rows)
+    total_revenue = sum(r.total_revenue for r in report.summary_rows)
+    total_uncategorized = sum(r.uncategorized_revenue for r in report.summary_rows)
     total_cambridge = sum(r.cambridge    for r in report.summary_rows)
     total_ielts    = sum(r.ielts         for r in report.summary_rows)
     total_met      = sum(r.michigan      for r in report.summary_rows)
@@ -207,19 +217,22 @@ async def build_por_pais_pdf_payload(filters: PorPaisFilters) -> PorPaisPDFPaylo
         kpis=[
             PDFKpiItem(label="Países",    value=format_integer(len(report.summary_rows))),
             PDFKpiItem(label="Colegios",  value=format_integer(total_schools)),
+            PDFKpiItem(label="Ingreso Total", value=format_currency(total_revenue)),
+            PDFKpiItem(label="Sin Categorizar", value=format_currency(total_uncategorized)),
             PDFKpiItem(label="Cambridge", value=format_integer(total_cambridge)),
             PDFKpiItem(label="IELTS",     value=format_integer(total_ielts)),
             PDFKpiItem(label="MET",       value=format_integer(total_met)),
             PDFKpiItem(label="Otros",     value=format_integer(total_otros)),
         ],
         summary_table=PDFTable(
-            headers=["País", "Colegios", "Cambridge", "IELTS", "MET", "TEA", "Otros"],
+            headers=["País", "Colegios", "Ingreso", "Sin Categorizar", "Cambridge", "IELTS", "MET", "TEA", "Otros"],
             rows=[PDFTableRow(cells=[
-                r.country, format_integer(r.total_schools), format_integer(r.cambridge),
+                r.country, format_integer(r.total_schools), format_currency(r.total_revenue),
+                format_currency(r.uncategorized_revenue), format_integer(r.cambridge),
                 format_integer(r.ielts), format_integer(r.michigan),
                 format_integer(r.tea),   format_integer(r.other),
             ]) for r in report.summary_rows],
-            column_widths=[3, 2, 2, 2, 2, 2, 2],
+            column_widths=[3, 2, 2, 2, 2, 2, 2, 2, 2],
         ),
         status_table=PDFTable(
             headers=["País", "Col. Ganados", "Col. Perdidos", "Col. Mantenidos", "Ex. Ganados", "Ex. Perdidos", "Ex. Mantenidos"],

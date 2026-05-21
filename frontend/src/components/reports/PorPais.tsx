@@ -18,15 +18,12 @@ import {
 } from "@/components/ui/table"
 import { usePorPaisReport } from "@/hooks/useReports"
 import { downloadPdf } from "@/lib/exportPdf"
-import { cn, formatInteger } from "@/lib/utils"
+import { getDefaultPorPaisFilters } from "@/lib/reportFilters"
+import { cn, formatCurrency, formatInteger } from "@/lib/utils"
 import type { PorPaisFilters, PorPaisStatusRow, PorPaisSummaryRow } from "@/types"
 
 export default function PorPais() {
-    const currentYear = new Date().getFullYear()
-    const [filters, setFilters] = useState<PorPaisFilters>({
-        date_from: `${currentYear}-01-01`,
-        date_to: `${currentYear}-12-31`,
-    })
+    const [filters, setFilters] = useState<PorPaisFilters>(getDefaultPorPaisFilters())
     const [selectedCountry, setSelectedCountry] = useState<string | null>(null)
     const [isExportingPdf, setIsExportingPdf] = useState(false)
     const [isExportingExcel, setIsExportingExcel] = useState(false)
@@ -113,7 +110,7 @@ export default function PorPais() {
                     )}
 
                     {isLoading ? (
-                        <PorPaisTableSkeleton columns={8} />
+                        <PorPaisTableSkeleton columns={10} />
                     ) : summaryRows.length === 0 ? (
                         <div className="px-6 py-10 text-sm text-muted-foreground">
                             No hay resultados para el período seleccionado.
@@ -127,6 +124,8 @@ export default function PorPais() {
                                             País
                                         </TableHeadCell>
                                         <TableHeadCell className="min-w-24 text-right">Colegios</TableHeadCell>
+                                        <TableHeadCell className="min-w-32 text-right">Valor Total</TableHeadCell>
+                                        <TableHeadCell className="min-w-32 text-right">Sin Categorizar</TableHeadCell>
                                         <TableHeadCell className="min-w-24 text-right">Cambridge</TableHeadCell>
                                         <TableHeadCell className="min-w-24 text-right">IELTS</TableHeadCell>
                                         <TableHeadCell className="min-w-24 text-right">MET</TableHeadCell>
@@ -226,6 +225,8 @@ function ClickableCountryRow({
                 {row.country}
             </TableBodyCell>
             <MetricCell value={row.total_schools} align="right" />
+            <MetricCell value={row.total_revenue} align="right" emphasize format={formatCurrency} />
+            <MetricCell value={row.uncategorized_revenue} align="right" format={formatCurrency} />
             <MetricCell value={row.cambridge} align="right" emphasize />
             <MetricCell value={row.ielts} align="right" emphasize />
             <MetricCell value={row.michigan} align="right" emphasize />
@@ -284,14 +285,16 @@ function MetricCell({
     value,
     align = "center",
     emphasize = false,
+    format = formatInteger,
 }: {
     value: number
     align?: "center" | "right"
     emphasize?: boolean
+    format?: (value: number) => string
 }) {
     return (
         <TableBodyCell className={align === "right" ? "text-right" : "text-center"}>
-            <span className={cn("tabular-nums text-slate-700", emphasize && "font-semibold")}>{formatInteger(value)}</span>
+            <span className={cn("tabular-nums text-slate-700", emphasize && "font-semibold")}>{format(value)}</span>
         </TableBodyCell>
     )
 }

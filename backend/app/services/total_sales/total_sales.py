@@ -1,9 +1,9 @@
+import asyncio
 from datetime import datetime
 
 from sqlalchemy import text
 
 from app.reporting.database import ReportingSessionLocal
-from app.enums import ProductType
 from app.schemas.pdf import PDFGeoPoint, PDFKpiItem, PDFTrendPoint, VentasTotalesPDFPayload
 from app.schemas.reports import GeoPoint, ProductMix, ReportFilters, TotalSalesResponse, TrendPoint
 from app.services.exports.excel import (
@@ -20,7 +20,7 @@ from app.services.exports.pdf_helpers import (
     scale_series,
 )
 from app.services.utils.date_utils import rewind_date_range_one_year
-from app.services.shared import build_geo_where_clause, coerce_iso_date_param, report_date_expr
+from app.services.shared import build_line_item_where_clause, build_payment_where_clause, line_item_date_expr, payment_date_expr
 
 TOTAL_SALES_SUMMARY_COLUMNS = [
     ExcelColumn("total_clients", "Total Clients"),
@@ -33,6 +33,11 @@ TOTAL_SALES_SUMMARY_COLUMNS = [
     ExcelColumn("total_otros", "Total Otros"),
     ExcelColumn("otros_revenue", "Otros Revenue"),
     ExcelColumn("total_revenue", "Total Revenue"),
+    ExcelColumn("expected_revenue", "Expected Revenue"),
+    ExcelColumn("expected_cost", "Expected Cost"),
+    ExcelColumn("uncategorized_revenue", "Uncategorized Revenue"),
+    ExcelColumn("unknown_site_revenue", "Unknown Site Revenue"),
+    ExcelColumn("unknown_site_expected_revenue", "Unknown Site Expected Revenue"),
     ExcelColumn("profit_margin", "Profit Margin"),
     ExcelColumn("prior_year_revenue", "Prior Year Revenue"),
     ExcelColumn("growth_pct", "Growth %"),
@@ -50,84 +55,115 @@ async def getTotalSalesData(
     filters: ReportFilters,
     country_rates: dict | None = None,
 ) -> TotalSalesResponse:
-    where_clause, params = build_geo_where_clause(filters)
+    payment_where, payment_params = build_payment_where_clause(filters)
+    line_where, line_params = build_line_item_where_clause(filters, require_product_breakdown=True)
 
-    async with ReportingSessionLocal() as session:
-        # Main summary
-        row = (await session.execute(text(f"""
-            SELECT
-                COUNT(DISTINCT lead_id)                                                      AS total_clients,
-                SUM(CASE WHEN product_type = 'exam' AND include_in_product_breakdown THEN quantity  ELSE 0 END) AS total_exams,
-                SUM(CASE WHEN product_type = 'exam' AND include_in_product_breakdown THEN total_mxn ELSE 0 END) AS exam_revenue,
-                SUM(CASE WHEN product_type = 'book' AND include_in_product_breakdown THEN quantity  ELSE 0 END) AS total_books,
-                SUM(CASE WHEN product_type = 'book' AND include_in_product_breakdown THEN total_mxn ELSE 0 END) AS book_revenue,
-                SUM(CASE WHEN product_type = 'course' AND include_in_product_breakdown THEN quantity  ELSE 0 END) AS total_courses,
-                SUM(CASE WHEN product_type = 'course' AND include_in_product_breakdown THEN total_mxn ELSE 0 END) AS course_revenue,
-                SUM(CASE WHEN product_type = 'UNCATEGORIZED' AND include_in_product_breakdown THEN quantity  ELSE 0 END) AS total_otros,
-                SUM(CASE WHEN product_type = 'UNCATEGORIZED' AND include_in_product_breakdown THEN total_mxn ELSE 0 END) AS otros_revenue,
-                SUM(total_mxn)                                                           AS total_revenue,
-                SUM(cost_mxn)                                                            AS total_cost
-            FROM report_line_items
-            WHERE {where_clause}
-        """), params)).fetchone()
+    async def fetch_payment_summary():
+        async with ReportingSessionLocal() as session:
+            return (await session.execute(text(f"""
+                SELECT
+                    COUNT(DISTINCT lead_id) AS total_clients,
+                    COALESCE(SUM(amount_mxn), 0) AS total_revenue,
+                    COALESCE(SUM(CASE WHEN base_currency = 'UNKNOWN' THEN amount ELSE 0 END), 0) AS unknown_site_revenue
+                FROM report_payments
+                WHERE {payment_where}
+            """), payment_params)).fetchone()
 
-        total_revenue = float(row.total_revenue or 0)
-        total_cost    = float(row.total_cost or 0)
-        profit_margin = ((total_revenue - total_cost) / total_revenue * 100) if total_revenue > 0 else 0
-
-        # Trend (monthly)
-        trend_rows = (await session.execute(text(f"""
-            SELECT
-                TO_CHAR({report_date_expr()}, 'YYYY-MM') AS month,
-                SUM(total_mxn)                 AS revenue
-            FROM report_line_items
-            WHERE {where_clause}
-            GROUP BY TO_CHAR({report_date_expr()}, 'YYYY-MM')
-            ORDER BY month ASC
-        """), params)).fetchall()
-
-        # Geo (by country/site)
-        geo_rows = (await session.execute(text(f"""
-            SELECT
-                site           AS dimension,
-                SUM(total_mxn) AS revenue
-            FROM report_line_items
-            WHERE {where_clause}
-            GROUP BY site
-            ORDER BY site ASC
-        """), params)).fetchall()
-
-        # Prior-year revenue (only when date range is provided)
-        prior_year_revenue = 0.0
-        if filters.date_from and filters.date_to:
-            prior_date_from, prior_date_to = rewind_date_range_one_year(filters.date_from, filters.date_to)
-            prior_filters = filters.model_copy(update={"date_from": prior_date_from, "date_to": prior_date_to})
-            prior_where, prior_params = build_geo_where_clause(prior_filters)
-            prior_row = (await session.execute(text(f"""
-                SELECT SUM(total_mxn) AS prior_revenue
+    async def fetch_line_summary():
+        async with ReportingSessionLocal() as session:
+            return (await session.execute(text(f"""
+                SELECT
+                    COALESCE(SUM(CASE WHEN product_type = 'exam' THEN quantity ELSE 0 END), 0) AS total_exams,
+                    COALESCE(SUM(CASE WHEN product_type = 'exam' THEN paid_total_mxn ELSE 0 END), 0) AS exam_revenue,
+                    COALESCE(SUM(CASE WHEN product_type = 'book' THEN quantity ELSE 0 END), 0) AS total_books,
+                    COALESCE(SUM(CASE WHEN product_type = 'book' THEN paid_total_mxn ELSE 0 END), 0) AS book_revenue,
+                    COALESCE(SUM(CASE WHEN product_type = 'course' THEN quantity ELSE 0 END), 0) AS total_courses,
+                    COALESCE(SUM(CASE WHEN product_type = 'course' THEN paid_total_mxn ELSE 0 END), 0) AS course_revenue,
+                    COALESCE(SUM(CASE WHEN product_type = 'UNCATEGORIZED' THEN quantity ELSE 0 END), 0) AS total_otros,
+                    COALESCE(SUM(CASE WHEN product_type = 'UNCATEGORIZED' THEN paid_total_mxn ELSE 0 END), 0) AS otros_revenue,
+                    COALESCE(SUM(paid_total_mxn), 0) AS allocated_paid_revenue,
+                    COALESCE(SUM(expected_total_mxn), 0) AS expected_revenue,
+                    COALESCE(SUM(expected_cost_mxn), 0) AS expected_cost,
+                    COALESCE(SUM(CASE WHEN base_currency = 'UNKNOWN' THEN expected_total ELSE 0 END), 0) AS unknown_site_expected_revenue
                 FROM report_line_items
+                WHERE {line_where}
+            """), line_params)).fetchone()
+
+    async def fetch_trend_rows():
+        async with ReportingSessionLocal() as session:
+            return (await session.execute(text(f"""
+                SELECT
+                    TO_CHAR({payment_date_expr()}, 'YYYY-MM') AS month,
+                    COALESCE(SUM(amount_mxn), 0) AS revenue
+                FROM report_payments
+                WHERE {payment_where}
+                GROUP BY TO_CHAR({payment_date_expr()}, 'YYYY-MM')
+                ORDER BY month ASC
+            """), payment_params)).fetchall()
+
+    async def fetch_geo_rows():
+        async with ReportingSessionLocal() as session:
+            return (await session.execute(text(f"""
+                SELECT
+                    site AS dimension,
+                    COALESCE(SUM(amount_mxn), 0) AS revenue
+                FROM report_payments
+                WHERE {payment_where}
+                AND site IS NOT NULL
+                GROUP BY site
+                ORDER BY site ASC
+            """), payment_params)).fetchall()
+
+    async def fetch_prior_year_revenue():
+        if not filters.date_from or not filters.date_to:
+            return 0.0
+        prior_date_from, prior_date_to = rewind_date_range_one_year(filters.date_from, filters.date_to)
+        prior_filters = filters.model_copy(update={"date_from": prior_date_from, "date_to": prior_date_to})
+        prior_where, prior_params = build_payment_where_clause(prior_filters)
+        async with ReportingSessionLocal() as session:
+            prior_row = (await session.execute(text(f"""
+                SELECT COALESCE(SUM(amount_mxn), 0) AS prior_revenue
+                FROM report_payments
                 WHERE {prior_where}
             """), prior_params)).fetchone()
-            prior_year_revenue = float(prior_row.prior_revenue or 0)
+            return float(prior_row.prior_revenue or 0)
+
+    payment_row, line_row, trend_rows, geo_rows, prior_year_revenue = await asyncio.gather(
+        fetch_payment_summary(),
+        fetch_line_summary(),
+        fetch_trend_rows(),
+        fetch_geo_rows(),
+        fetch_prior_year_revenue(),
+    )
 
     growth_pct = 0.0
+    total_revenue = float(payment_row.total_revenue or 0)
+    allocated_paid_revenue = float(line_row.allocated_paid_revenue or 0)
+    expected_cost = float(line_row.expected_cost or 0)
+    uncategorized_revenue = total_revenue - allocated_paid_revenue
     if prior_year_revenue > 0:
         growth_pct = (total_revenue - prior_year_revenue) / prior_year_revenue * 100
+    profit_margin = ((allocated_paid_revenue - expected_cost) / allocated_paid_revenue * 100) if allocated_paid_revenue > 0 else 0.0
 
     trend_points = _build_trend_points(filters, trend_rows)
     geo_points   = [GeoPoint(dimension=r.dimension, revenue=float(r.revenue or 0)) for r in geo_rows]
 
     response = TotalSalesResponse(
-        total_clients=int(row.total_clients or 0),
-        total_exams=int(row.total_exams or 0),
-        exam_revenue=float(row.exam_revenue or 0),
-        total_books=int(row.total_books or 0),
-        book_revenue=float(row.book_revenue or 0),
-        total_courses=int(row.total_courses or 0),
-        course_revenue=float(row.course_revenue or 0),
-        total_otros=int(row.total_otros or 0),
-        otros_revenue=float(row.otros_revenue or 0),
+        total_clients=int(payment_row.total_clients or 0),
+        total_exams=int(line_row.total_exams or 0),
+        exam_revenue=float(line_row.exam_revenue or 0),
+        total_books=int(line_row.total_books or 0),
+        book_revenue=float(line_row.book_revenue or 0),
+        total_courses=int(line_row.total_courses or 0),
+        course_revenue=float(line_row.course_revenue or 0),
+        total_otros=int(line_row.total_otros or 0),
+        otros_revenue=float(line_row.otros_revenue or 0),
         total_revenue=total_revenue,
+        expected_revenue=float(line_row.expected_revenue or 0),
+        expected_cost=expected_cost,
+        uncategorized_revenue=uncategorized_revenue,
+        unknown_site_revenue=float(payment_row.unknown_site_revenue or 0),
+        unknown_site_expected_revenue=float(line_row.unknown_site_expected_revenue or 0),
         profit_margin=profit_margin,
         prior_year_revenue=prior_year_revenue,
         growth_pct=growth_pct,
@@ -141,6 +177,7 @@ async def getTotalSalesData(
             exams_pct=round(response.exam_revenue / response.total_revenue * 100, 1),
             books_pct=round(response.book_revenue / response.total_revenue * 100, 1),
             courses_pct=round(response.course_revenue / response.total_revenue * 100, 1),
+            unknown_pct=round(response.uncategorized_revenue / response.total_revenue * 100, 1),
         )
 
     return response
@@ -191,6 +228,11 @@ async def build_ventas_totales_pdf_payload(
         PDFKpiItem(label="Ingreso por Cursos", value=format_currency(response.course_revenue)),
         PDFKpiItem(label="Otros", value=str(response.total_otros)),
         PDFKpiItem(label="Ingreso por Otros", value=format_currency(response.otros_revenue)),
+        PDFKpiItem(label="Ingreso Esperado", value=format_currency(response.expected_revenue)),
+        PDFKpiItem(label="Costo Esperado", value=format_currency(response.expected_cost)),
+        PDFKpiItem(label="Sin Categorizar", value=format_currency(response.uncategorized_revenue)),
+        PDFKpiItem(label="Ingreso Sitio Desconocido", value=format_currency(response.unknown_site_revenue)),
+        PDFKpiItem(label="Esperado Sitio Desconocido", value=format_currency(response.unknown_site_expected_revenue)),
         PDFKpiItem(
             label="Ingreso Total",
             value=format_currency(response.total_revenue),
@@ -250,6 +292,11 @@ def build_total_sales_export_worksheets(
         "total_otros": response.total_otros,
         "otros_revenue": response.otros_revenue,
         "total_revenue": response.total_revenue,
+        "expected_revenue": response.expected_revenue,
+        "expected_cost": response.expected_cost,
+        "uncategorized_revenue": response.uncategorized_revenue,
+        "unknown_site_revenue": response.unknown_site_revenue,
+        "unknown_site_expected_revenue": response.unknown_site_expected_revenue,
         "profit_margin": response.profit_margin,
         "prior_year_revenue": response.prior_year_revenue,
         "growth_pct": response.growth_pct,

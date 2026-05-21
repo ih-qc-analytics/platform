@@ -31,6 +31,7 @@ class ProductMix(BaseModel):
     exams_pct: float
     books_pct: float
     courses_pct: float
+    unknown_pct: float
 
 
 class GeoPoint(BaseModel):
@@ -49,6 +50,11 @@ class TotalSalesResponse(BaseModel):
     total_otros: int
     otros_revenue: float
     total_revenue: float
+    expected_revenue: float
+    expected_cost: float
+    uncategorized_revenue: float
+    unknown_site_revenue: float
+    unknown_site_expected_revenue: float
     profit_margin: float
     prior_year_revenue: float
     growth_pct: Optional[float] = None
@@ -91,6 +97,7 @@ class AsesorRow(BaseModel):
     perdidos: int
     mantenidos: int
     total_revenue: float
+    uncategorized_revenue: float
 
 
 class AsesorReportResponse(BaseModel):
@@ -121,6 +128,7 @@ class AsesorDetail(BaseModel):
     total_schools: int
     total_exams: int
     total_revenue: float
+    uncategorized_revenue: float
     exam_breakdown: dict[str, ExamBrandDetail | int]
     ganados: BusinessStatusDetail
     perdidos: BusinessStatusDetail
@@ -164,6 +172,8 @@ class PorPaisFilters(BaseModel):
 class PorPaisSummaryRow(BaseModel):
     country: str
     total_schools: int
+    total_revenue: float
+    uncategorized_revenue: float
     cambridge: int
     ielts: int
     michigan: int

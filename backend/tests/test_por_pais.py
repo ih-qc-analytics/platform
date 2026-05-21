@@ -14,6 +14,8 @@ async def test_por_pais_full_year_summary_and_status_rows_match_payment_based_mo
         {
             "country": "colombia",
             "total_schools": 2,
+            "total_revenue": 7100.0,
+            "uncategorized_revenue": 0.0,
             "cambridge": 2,
             "ielts": 0,
             "michigan": 1,
@@ -23,6 +25,8 @@ async def test_por_pais_full_year_summary_and_status_rows_match_payment_based_mo
         {
             "country": "mexico",
             "total_schools": 3,
+            "total_revenue": 5400.0,
+            "uncategorized_revenue": 500.0,
             "cambridge": 4,
             "ielts": 0,
             "michigan": 0,
@@ -32,6 +36,8 @@ async def test_por_pais_full_year_summary_and_status_rows_match_payment_based_mo
         {
             "country": "peru",
             "total_schools": 1,
+            "total_revenue": 1700.0,
+            "uncategorized_revenue": 0.0,
             "cambridge": 0,
             "ielts": 1,
             "michigan": 0,
@@ -101,6 +107,8 @@ async def test_por_pais_midyear_range_rewinds_exact_prior_period_for_statuses(ui
         {
             "country": "colombia",
             "total_schools": 1,
+            "total_revenue": 3500.0,
+            "uncategorized_revenue": 0.0,
             "cambridge": 0,
             "ielts": 0,
             "michigan": 1,
@@ -110,6 +118,8 @@ async def test_por_pais_midyear_range_rewinds_exact_prior_period_for_statuses(ui
         {
             "country": "mexico",
             "total_schools": 1,
+            "total_revenue": 1000.0,
+            "uncategorized_revenue": 500.0,
             "cambridge": 0,
             "ielts": 0,
             "michigan": 0,
@@ -119,6 +129,8 @@ async def test_por_pais_midyear_range_rewinds_exact_prior_period_for_statuses(ui
         {
             "country": "peru",
             "total_schools": 1,
+            "total_revenue": 1700.0,
+            "uncategorized_revenue": 0.0,
             "cambridge": 0,
             "ielts": 1,
             "michigan": 0,

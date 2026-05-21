@@ -52,6 +52,7 @@ async def test_build_por_asesor_pdf_payload_formats_summary():
                 perdidos=1,
                 mantenidos=3,
                 total_revenue=19200.0,
+                uncategorized_revenue=1200.0,
             )
         ],
         year=2025,
@@ -106,6 +107,8 @@ async def test_build_por_pais_pdf_payload_contains_summary_and_status_tables():
             PorPaisSummaryRow(
                 country="México",
                 total_schools=3,
+                total_revenue=12000.0,
+                uncategorized_revenue=800.0,
                 cambridge=10,
                 ielts=2,
                 michigan=1,
@@ -176,6 +179,7 @@ async def test_build_asesor_detail_pdf_payload_contains_drawer_sections():
         total_schools=3,
         total_exams=22,
         total_revenue=19200.0,
+        uncategorized_revenue=1200.0,
         exam_breakdown={
             category: ExamBrandDetail(
                 exams=10 if index == 0 else 0,

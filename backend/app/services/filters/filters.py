@@ -1,20 +1,30 @@
-from app.database import SessionLocal
+from app.reporting.database import ReportingSessionLocal
 from sqlalchemy import text
+from app.enums import PaymentStatus
 from app.schemas.reports import FilterOptionsResponse, SellerOptionsResponse
 
 # obtener los filtros geograficos disponibles en los datos, es decir todas las ciudades/zonas... donde
 # hay operaciones
 async def getFilters() -> FilterOptionsResponse:
-    async with SessionLocal() as session:
-        t = text("""SELECT DISTINCT 'country' as filter_type, site as value FROM `lead` WHERE site IS NOT NULL
-                    UNION ALL
-                    SELECT DISTINCT 'zone', name FROM zone WHERE name IS NOT NULL
-                    UNION ALL
-                    SELECT DISTINCT 'state', stateName FROM lead_address WHERE stateName IS NOT NULL
-                    UNION ALL
-                    SELECT DISTINCT 'city', city FROM lead_address WHERE city IS NOT NULL
-                 """)
-        result = await session.execute(t)
+    async with ReportingSessionLocal() as session:
+        t = text("""
+            SELECT DISTINCT 'country' AS filter_type, site AS value
+            FROM report_payments
+            WHERE site IS NOT NULL AND is_active = TRUE AND payment_status = :payment_status
+            UNION ALL
+            SELECT DISTINCT 'zone' AS filter_type, zone_name AS value
+            FROM report_payments
+            WHERE zone_name IS NOT NULL AND is_active = TRUE AND payment_status = :payment_status
+            UNION ALL
+            SELECT DISTINCT 'state' AS filter_type, unnest(all_states) AS value
+            FROM report_payments
+            WHERE is_active = TRUE AND payment_status = :payment_status
+            UNION ALL
+            SELECT DISTINCT 'city' AS filter_type, unnest(all_cities) AS value
+            FROM report_payments
+            WHERE is_active = TRUE AND payment_status = :payment_status
+        """)
+        result = await session.execute(t, {"payment_status": PaymentStatus.APROBADO.value})
         rows = result.fetchall()
         options = {"country": [], "zone": [], "state": [], "city": []}
         for row in rows: 
@@ -27,13 +37,13 @@ async def getFilters() -> FilterOptionsResponse:
 
 
 async def getSellerOptions() -> SellerOptionsResponse:
-    async with SessionLocal() as session:
+    async with ReportingSessionLocal() as session:
         t = text("""
-            SELECT DISTINCT CONCAT(name, ' ', lastName) AS seller_name
-            FROM seller
+            SELECT DISTINCT seller_name
+            FROM report_payments
+            WHERE is_active = TRUE AND payment_status = :payment_status
             ORDER BY seller_name ASC
         """)
-        result = await session.execute(t)
+        result = await session.execute(t, {"payment_status": PaymentStatus.APROBADO.value})
         rows = result.fetchall()
         return SellerOptionsResponse(sellers=[row.seller_name for row in rows])
-

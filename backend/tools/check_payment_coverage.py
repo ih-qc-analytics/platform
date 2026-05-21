@@ -26,13 +26,14 @@ def build_sync_url() -> str:
 
 
 QUERIES = {
-    "addresses": 
+    "ja": 
     """
-        SELECT COUNT(*) FROM lead_address
-    """,
-    "favorites": 
-    """
-    SELECT COUNT(*) FROM lead_address WHERE isFavorite = 1
+ SELECT COUNT(*) as mismatches
+FROM cart c
+WHERE ABS(
+    (SELECT COALESCE(SUM(total), 0) FROM cart_product WHERE cartId = c.id)
+    - (SELECT COALESCE(SUM(quantity), 0) FROM payment WHERE cartId = c.id AND status = 'Aprobado')
+) > 1;
     """
   
 }

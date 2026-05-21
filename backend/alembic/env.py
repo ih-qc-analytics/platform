@@ -14,19 +14,22 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# Mirror the prod/dev split from config.py
-_env = os.getenv("ENVIRONMENT", "dev").lower()
-_prefix = "PROD_REPORTING" if _env == "prod" else "DEV_REPORTING"
-_user = os.getenv(f"{_prefix}_DB_USER")
-_pass = os.getenv(f"{_prefix}_DB_PASS")
-_host = os.getenv(f"{_prefix}_DB_HOST")
-_port = os.getenv(f"{_prefix}_DB_PORT", "5432")
-_name = os.getenv(f"{_prefix}_DB_NAME")
-_safe_pass = quote_plus(_pass) if _pass else ""
-_reporting_url = f"postgresql://{_user}:{_safe_pass}@{_host}:{_port}/{_name}"
+# Prefer an explicitly configured Alembic URL (used by tests), and fall back to
+# the environment-derived reporting DB only when the config does not provide one.
+_configured_url = config.get_main_option("sqlalchemy.url")
+if not _configured_url:
+    _env = os.getenv("ENVIRONMENT", "dev").lower()
+    _prefix = "PROD_REPORTING" if _env == "prod" else "DEV_REPORTING"
+    _user = os.getenv(f"{_prefix}_DB_USER")
+    _pass = os.getenv(f"{_prefix}_DB_PASS")
+    _host = os.getenv(f"{_prefix}_DB_HOST")
+    _port = os.getenv(f"{_prefix}_DB_PORT", "5432")
+    _name = os.getenv(f"{_prefix}_DB_NAME")
+    _safe_pass = quote_plus(_pass) if _pass else ""
+    _reporting_url = f"postgresql://{_user}:{_safe_pass}@{_host}:{_port}/{_name}"
 
-# configparser interprets % as interpolation syntax, so escape any % in the URL
-config.set_main_option("sqlalchemy.url", _reporting_url.replace("%", "%%"))
+    # configparser interprets % as interpolation syntax, so escape any % in the URL
+    config.set_main_option("sqlalchemy.url", _reporting_url.replace("%", "%%"))
 
 target_metadata = None
 

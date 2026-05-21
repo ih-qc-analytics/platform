@@ -16,6 +16,16 @@ def report_date_expr(alias: str = "") -> str:
     return f"COALESCE({prefix}payment_day, {prefix}payment_date, DATE({prefix}created_at))"
 
 
+def payment_date_expr(alias: str = "") -> str:
+    prefix = f"{alias}." if alias else ""
+    return f"COALESCE({prefix}payment_date, DATE({prefix}created_at))"
+
+
+def line_item_date_expr(alias: str = "") -> str:
+    prefix = f"{alias}." if alias else ""
+    return f"COALESCE({prefix}payment_day, {prefix}payment_date, DATE({prefix}created_at))"
+
+
 def build_geo_where_clause(filters) -> tuple[str, dict]:
     """
     Build a WHERE clause for report_line_items (single-table, no joins).
@@ -54,6 +64,87 @@ def build_geo_where_clause(filters) -> tuple[str, dict]:
         params["date_to"] = coerce_iso_date_param(filters.date_to)
     if getattr(filters, "year", None):
         conditions.append("year = :year")
+        params["year"] = filters.year
+
+    return " AND ".join(conditions), params
+
+
+def build_payment_where_clause(filters, *, alias: str = "") -> tuple[str, dict]:
+    prefix = f"{alias}." if alias else ""
+    conditions = [
+        f"{prefix}is_active = TRUE",
+        f"{prefix}payment_status = :payment_status",
+    ]
+    params: dict = {"payment_status": PaymentStatus.APROBADO.value}
+
+    if getattr(filters, "countries", None):
+        conditions.append(f"{prefix}site = ANY(:countries)")
+        params["countries"] = list(filters.countries)
+    if getattr(filters, "zones", None):
+        conditions.append(f"{prefix}zone_name = ANY(:zones)")
+        params["zones"] = list(filters.zones)
+    if getattr(filters, "states", None):
+        conditions.append(
+            f"COALESCE({prefix}all_states, ARRAY[]::text[]) && CAST(:states AS text[])"
+        )
+        params["states"] = list(filters.states)
+    if getattr(filters, "cities", None):
+        conditions.append(
+            f"COALESCE({prefix}all_cities, ARRAY[]::text[]) && CAST(:cities AS text[])"
+        )
+        params["cities"] = list(filters.cities)
+    if getattr(filters, "date_from", None):
+        conditions.append(f"{payment_date_expr(alias)} >= :date_from")
+        params["date_from"] = coerce_iso_date_param(filters.date_from)
+    if getattr(filters, "date_to", None):
+        conditions.append(f"{payment_date_expr(alias)} <= :date_to")
+        params["date_to"] = coerce_iso_date_param(filters.date_to)
+    if getattr(filters, "year", None):
+        conditions.append(f"{prefix}year = :year")
+        params["year"] = filters.year
+
+    return " AND ".join(conditions), params
+
+
+def build_line_item_where_clause(
+    filters,
+    *,
+    alias: str = "",
+    require_product_breakdown: bool = False,
+) -> tuple[str, dict]:
+    prefix = f"{alias}." if alias else ""
+    conditions = [
+        f"{prefix}is_active = TRUE",
+        f"{prefix}payment_status = :payment_status",
+    ]
+    if require_product_breakdown:
+        conditions.append(f"{prefix}include_in_product_breakdown = TRUE")
+    params: dict = {"payment_status": PaymentStatus.APROBADO.value}
+
+    if getattr(filters, "countries", None):
+        conditions.append(f"{prefix}site = ANY(:countries)")
+        params["countries"] = list(filters.countries)
+    if getattr(filters, "zones", None):
+        conditions.append(f"{prefix}zone_name = ANY(:zones)")
+        params["zones"] = list(filters.zones)
+    if getattr(filters, "states", None):
+        conditions.append(
+            f"COALESCE({prefix}all_states, ARRAY[]::text[]) && CAST(:states AS text[])"
+        )
+        params["states"] = list(filters.states)
+    if getattr(filters, "cities", None):
+        conditions.append(
+            f"COALESCE({prefix}all_cities, ARRAY[]::text[]) && CAST(:cities AS text[])"
+        )
+        params["cities"] = list(filters.cities)
+    if getattr(filters, "date_from", None):
+        conditions.append(f"{line_item_date_expr(alias)} >= :date_from")
+        params["date_from"] = coerce_iso_date_param(filters.date_from)
+    if getattr(filters, "date_to", None):
+        conditions.append(f"{line_item_date_expr(alias)} <= :date_to")
+        params["date_to"] = coerce_iso_date_param(filters.date_to)
+    if getattr(filters, "year", None):
+        conditions.append(f"{prefix}year = :year")
         params["year"] = filters.year
 
     return " AND ".join(conditions), params

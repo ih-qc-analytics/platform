@@ -1,6 +1,6 @@
 import GeoFilters from "@/components/filters/GeoFilters"
-import ExportButtons from "@/components/filters/ExportButtons"
-import SingleSelectField, { cleanOptions } from "@/components/filters/SingleSelectField"
+import MultiSelectField, { cleanOptions } from "@/components/filters/MultiSelectField"
+import ReportFilterBarShell from "@/components/filters/ReportFilterBarShell"
 import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
 import type { AsesorFilters, FilterOptionsResponse } from "@/types"
@@ -33,8 +33,7 @@ const GEO_FILTERS: Array<{ key: Exclude<FilterKey, "sellers">; label: string }> 
     { key: "cities", label: "Ciudad" },
 ]
 
-const triggerClassName =
-    "h-14 min-w-40 rounded-2xl border-transparent bg-muted/70 px-5 text-left text-base font-medium text-slate-600 shadow-none hover:bg-muted"
+const triggerClassName = "min-w-40"
 
 export default function AsesorFilterBar({
     filters,
@@ -54,17 +53,38 @@ export default function AsesorFilterBar({
 }: AsesorFilterBarProps) {
     const cleanedSellerOptions = useMemo(() => cleanOptions(sellerOptions), [sellerOptions])
 
-    const handleSelectChange = (key: FilterKey, value: string) => {
+    const handleSelectChange = (key: FilterKey, value: string[]) => {
         const updated = {
             ...filters,
-            [key]: value === "all" ? [] : [value],
+            [key]: value,
         }
         onFiltersChange(updated)
     }
 
     return (
         <div className="flex flex-col gap-6">
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <ReportFilterBarShell
+                onClear={() =>
+                    {
+                        onToggleComparison(false)
+                        onFiltersChange({
+                            year: new Date().getFullYear(),
+                            countries: [],
+                            zones: [],
+                            states: [],
+                            cities: [],
+                            sellers: [],
+                        })
+                    }
+                }
+                onExportPdf={onExportPdf}
+                onExportExcelWithFilters={onExportExcelWithFilters}
+                onExportExcelWithoutFilters={onExportExcelWithoutFilters}
+                isExportingPdf={isExportingPdf}
+                isExportingExcel={isExportingExcel}
+                exportingExcelVariant={exportingExcelVariant}
+                exportError={exportError}
+            >
                 <div className="grid flex-1 grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
                     <GeoFilters
                         filters={filters}
@@ -73,24 +93,15 @@ export default function AsesorFilterBar({
                         triggerClassName={triggerClassName}
                         onChange={handleSelectChange}
                     />
-                    <SingleSelectField
+                    <MultiSelectField
                         label="Asesor"
-                        value={filters.sellers?.[0] ?? "all"}
+                        values={filters.sellers ?? []}
                         options={cleanedSellerOptions}
                         triggerClassName={triggerClassName}
                         onChange={value => handleSelectChange("sellers", value)}
                     />
                 </div>
-                <ExportButtons
-                    onExportPdf={onExportPdf}
-                    onExportExcelWithFilters={onExportExcelWithFilters}
-                    onExportExcelWithoutFilters={onExportExcelWithoutFilters}
-                    isExportingPdf={isExportingPdf}
-                    isExportingExcel={isExportingExcel}
-                    exportingExcelVariant={exportingExcelVariant}
-                    exportError={exportError}
-                />
-            </div>
+            </ReportFilterBarShell>
 
             <div className="rounded-3xl border border-border bg-card px-6 py-5 shadow-sm">
                 <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">

@@ -8,12 +8,12 @@ from sqlalchemy import text
 
 from app.config import settings
 from app.database import SessionLocal
+from app.etl.frankfurter import fetch_frankfurter_time_series
 from app.reporting.database import ReportingSessionLocal
 import logging
 
 logger = logging.getLogger(__name__)
 
-FRANKFURTER_RATES_URL = "https://api.frankfurter.dev/v2/rates"
 RATE_TARGETS = ("MXN", "USD")
 SUPPORTED_BASE_CURRENCIES = ("MXN", "COP", "PEN")
 
@@ -43,24 +43,26 @@ async def ensure_exchange_rates_for_range(
     if start_date > end_date:
         return
 
-    target_date = date.today()
-    missing_pairs = await _missing_pairs_for_date(target_date)
-    if not missing_pairs:
+    missing_quotes_by_base = await _missing_quotes_by_base_for_range(start_date, end_date)
+    if not missing_quotes_by_base:
         return
 
-    async with httpx.AsyncClient(timeout=30) as client:
-        for base_currency, quotes in missing_pairs.items():
+    all_rows: list[dict[str, object]] = []
+    async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
+        for base_currency, quotes in missing_quotes_by_base.items():
             if not quotes:
                 continue
-
-            rows = await _fetch_daily_rates(
-                client,
-                base_currency=base_currency,
-                for_date=target_date,
-                quotes=quotes,
+            rows = await fetch_frankfurter_time_series(
+                base_currency,
+                quotes,
+                start_date,
+                end_date,
+                client=client,
             )
-            if rows:
-                await _upsert_exchange_rates(rows)
+            all_rows.extend(rows)
+
+    if all_rows:
+        await _upsert_exchange_rates(all_rows)
 
 
 async def run_historical_exchange_rate_backfill() -> date | None:
@@ -72,7 +74,8 @@ async def run_historical_exchange_rate_backfill() -> date | None:
     return earliest_date
 
 
-async def _missing_pairs_for_date(for_date: date) -> dict[str, list[str]]:
+async def _missing_quotes_by_base_for_range(start_date: date, end_date: date) -> dict[str, list[str]]:
+    total_days = (end_date - start_date).days + 1
     expected_pairs = [
         (base_currency, target_currency)
         for base_currency in SUPPORTED_BASE_CURRENCIES
@@ -82,65 +85,35 @@ async def _missing_pairs_for_date(for_date: date) -> dict[str, list[str]]:
 
     async with ReportingSessionLocal() as session:
         rows = (await session.execute(text("""
-            SELECT from_currency, to_currency
+            SELECT from_currency, to_currency, COUNT(DISTINCT date) AS day_count
             FROM exchange_rates
-            WHERE date = :for_date
-        """), {"for_date": for_date})).fetchall()
+            WHERE date BETWEEN :start_date AND :end_date
+            GROUP BY from_currency, to_currency
+        """), {"start_date": start_date, "end_date": end_date})).fetchall()
 
-    existing_pairs = {(row.from_currency, row.to_currency) for row in rows}
+    existing_pairs = {
+        (row.from_currency, row.to_currency): int(row.day_count)
+        for row in rows
+    }
     missing_pairs: dict[str, list[str]] = {}
     for base_currency, target_currency in expected_pairs:
-        if (base_currency, target_currency) not in existing_pairs:
+        if existing_pairs.get((base_currency, target_currency), 0) < total_days:
             missing_pairs.setdefault(base_currency, []).append(target_currency)
     return missing_pairs
-
-
-async def _fetch_daily_rates(
-    client: httpx.AsyncClient,
-    *,
-    base_currency: str,
-    for_date: date,
-    quotes: list[str],
-) -> list[dict[str, object]]:
-    response = await client.get(
-        FRANKFURTER_RATES_URL,
-        params={
-            "base": base_currency,
-            "quotes": ",".join(quotes),
-        },
-    )
-    response.raise_for_status()
-    data = response.json()
-
-    if not isinstance(data, list):
-        raise ValueError("Unexpected Frankfurter response shape for daily rates")
-
-    rows: list[dict[str, object]] = []
-    for item in data:
-        rows.append(
-            {
-                "date": for_date,
-                "from_currency": item["base"],
-                "to_currency": item["quote"],
-                "rate": float(item["rate"]),
-            }
-        )
-    return rows
 
 
 async def _upsert_exchange_rates(rows: list[dict[str, object]]) -> None:
     async with ReportingSessionLocal() as session:
         async with session.begin():
-            for row in rows:
-                await session.execute(
-                    text("""
-                        INSERT INTO exchange_rates (date, from_currency, to_currency, rate)
-                        VALUES (:date, :from_currency, :to_currency, :rate)
-                        ON CONFLICT (date, from_currency, to_currency) DO UPDATE
-                        SET rate = EXCLUDED.rate
-                    """),
-                    row,
-                )
+            await session.execute(
+                text("""
+                    INSERT INTO exchange_rates (date, from_currency, to_currency, rate)
+                    VALUES (:date, :from_currency, :to_currency, :rate)
+                    ON CONFLICT (date, from_currency, to_currency) DO UPDATE
+                    SET rate = EXCLUDED.rate
+                """),
+                rows,
+            )
 
 
 def _main() -> None:

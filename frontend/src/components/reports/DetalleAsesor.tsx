@@ -123,6 +123,7 @@ export default function DetalleAsesor({
                                 <SummaryInfoCard label="Ciudad" value={joinValues(data.cities)} />
                                 <SummaryInfoCard label="Total Colegios" value={formatInteger(data.total_schools)} />
                                 <SummaryInfoCard label="Total Exámenes" value={formatInteger(data.total_exams)} />
+                                <SummaryInfoCard label="Sin Categorizar" value={formatCurrency(data.uncategorized_revenue)} />
                                 <SummaryInfoCard label="Valor Total" value={formatCurrency(data.total_revenue)} wide />
                             </div>
 

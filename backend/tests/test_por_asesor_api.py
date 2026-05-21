@@ -29,6 +29,7 @@ SUMMARY_RESPONSE = AsesorReportResponse(
             perdidos=0,
             mantenidos=1,
             total_revenue=19200.0,
+            uncategorized_revenue=1200.0,
         )
     ],
     year=2025,
@@ -46,6 +47,7 @@ DETAIL_RESPONSE = AsesorDetail(
     total_schools=3,
     total_exams=22,
     total_revenue=19200.0,
+    uncategorized_revenue=1200.0,
     exam_breakdown={
         "Cambridge English (Main Suite)": ExamBrandDetail(exams=18, schools=3, revenue=18000.0),
         "Cambridge Teaching & Skills": ExamBrandDetail(exams=0, schools=0, revenue=0.0),

@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { Users, FileText, BookOpen, GraduationCap, DollarSign, TrendingUp, Percent, Calendar } from "lucide-react"
+import { Users, FileText, BookOpen, GraduationCap, DollarSign, TrendingUp, Percent, Calendar, PackageSearch, Landmark } from "lucide-react"
 import VentasTotalesPDF from "@/components/pdf/VentasTotalesPDF"
 import { exportTotalSalesExcel, exportTotalSalesExcelAll, fetchVentasTotalesPdfPayload } from "@/api/reports"
 import FilterBar from "@/components/filters/FilterBar"
@@ -7,17 +7,14 @@ import KpiCard from "@/components/ui/KpiCard"
 import TrendLine from "@/components/charts/TrendLine"
 import GeoBar from "@/components/charts/GeoBar"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Skeleton } from "@/components/ui/skeleton"
 import { useTotalSalesData } from "@/hooks/useReports"
 import { downloadPdf } from "@/lib/exportPdf"
+import { getDefaultReportFilters } from "@/lib/reportFilters"
 import type { ReportFilters } from "@/types"
 
 export default function VentasTotales() {
-    const [filters, setFilters] = useState<ReportFilters>({
-        countries: [],
-        zones: [],
-        states: [],
-        cities: [],
-    })
+    const [filters, setFilters] = useState<ReportFilters>(getDefaultReportFilters())
     const [isExportingPdf, setIsExportingPdf] = useState(false)
     const [isExportingExcel, setIsExportingExcel] = useState(false)
     const [exportingExcelVariant, setExportingExcelVariant] = useState<"filtered" | "all" | null>(null)
@@ -97,7 +94,7 @@ export default function VentasTotales() {
                     )}
 
                     {isLoading ? (
-                        <div className="text-sm text-muted-foreground">Cargando...</div>
+                        <VentasTotalesSkeleton />
                     ) : data ? (
                         <>
                             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -158,6 +155,36 @@ export default function VentasTotales() {
                                     growth={data.growth_pct ?? undefined}
                                 />
                                 <KpiCard
+                                    title="Ingreso Esperado"
+                                    icon={<Landmark className="size-6" />}
+                                    value={data.expected_revenue}
+                                    prefix="$"
+                                />
+                                <KpiCard
+                                    title="Costo Esperado"
+                                    icon={<PackageSearch className="size-6" />}
+                                    value={data.expected_cost}
+                                    prefix="$"
+                                />
+                                <KpiCard
+                                    title="Ingreso Sin Categorizar"
+                                    icon={<DollarSign className="size-6" />}
+                                    value={data.uncategorized_revenue}
+                                    prefix="$"
+                                />
+                                <KpiCard
+                                    title="Ingreso Sitio Desconocido"
+                                    icon={<FileText className="size-6" />}
+                                    value={data.unknown_site_revenue}
+                                    prefix="$"
+                                />
+                                <KpiCard
+                                    title="Esperado Sitio Desconocido"
+                                    icon={<FileText className="size-6" />}
+                                    value={data.unknown_site_expected_revenue}
+                                    prefix="$"
+                                />
+                                <KpiCard
                                     title="Margen de Utilidad"
                                     icon={<Percent className="size-6" />}
                                     value={data.profit_margin}
@@ -182,6 +209,39 @@ export default function VentasTotales() {
                     ) : null}
                 </CardContent>
             </Card>
+        </div>
+    )
+}
+
+function VentasTotalesSkeleton() {
+    return (
+        <div className="space-y-6">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+                {Array.from({ length: 15 }).map((_, index) => (
+                    <Card key={index}>
+                        <CardContent className="flex items-start justify-between pt-6">
+                            <div className="flex flex-col gap-3">
+                                <Skeleton className="h-4 w-28" />
+                                <Skeleton className="h-9 w-36" />
+                                <Skeleton className="h-3 w-24" />
+                            </div>
+                            <Skeleton className="size-12 rounded-xl" />
+                        </CardContent>
+                    </Card>
+                ))}
+            </div>
+            <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+                {Array.from({ length: 2 }).map((_, index) => (
+                    <Card key={index}>
+                        <CardHeader>
+                            <Skeleton className="h-5 w-32" />
+                        </CardHeader>
+                        <CardContent>
+                            <Skeleton className="h-64 w-full rounded-2xl" />
+                        </CardContent>
+                    </Card>
+                ))}
+            </div>
         </div>
     )
 }

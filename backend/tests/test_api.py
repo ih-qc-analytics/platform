@@ -23,6 +23,11 @@ MOCK_RESPONSE = TotalSalesResponse(
     total_otros=0,
     otros_revenue=0.0,
     total_revenue=7400.0,
+    expected_revenue=7200.0,
+    expected_cost=3500.0,
+    uncategorized_revenue=1000.0,
+    unknown_site_revenue=0.0,
+    unknown_site_expected_revenue=0.0,
     profit_margin=52.7,
     prior_year_revenue=0.0,
     growth_pct=0.0,
@@ -34,7 +39,7 @@ MOCK_RESPONSE = TotalSalesResponse(
         GeoPoint(dimension="mexico", revenue=3900.0),
         GeoPoint(dimension="colombia", revenue=3500.0),
     ],
-    product_mix=ProductMix(exams_pct=81.1, books_pct=12.2, courses_pct=6.8),
+    product_mix=ProductMix(exams_pct=81.1, books_pct=12.2, courses_pct=6.8, unknown_pct=13.5),
 )
 
 
@@ -68,7 +73,8 @@ async def test_response_has_required_fields():
         "total_clients", "total_exams", "exam_revenue",
         "total_books", "book_revenue", "total_courses", "course_revenue",
         "total_otros", "otros_revenue",
-        "total_revenue", "profit_margin", "prior_year_revenue",
+        "total_revenue", "expected_revenue", "expected_cost", "uncategorized_revenue",
+        "unknown_site_revenue", "unknown_site_expected_revenue", "profit_margin", "prior_year_revenue",
         "trend_points", "geo_points", "product_mix",
     }
     assert required.issubset(data.keys())
@@ -93,7 +99,7 @@ async def test_product_mix_shape():
     data = (await post()).json()
     mix = data["product_mix"]
     assert mix is not None
-    assert {"exams_pct", "books_pct", "courses_pct"}.issubset(mix.keys())
+    assert {"exams_pct", "books_pct", "courses_pct", "unknown_pct"}.issubset(mix.keys())
 
 
 # ─────────────────────────────────────────────

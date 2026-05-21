@@ -1,3 +1,5 @@
+import FilterFieldShell from "@/components/filters/FilterFieldShell"
+
 type DateRangePickerProps = {
     dateFrom: string | undefined
     dateTo: string | undefined
@@ -8,24 +10,22 @@ type DateRangePickerProps = {
 export default function DateRangePicker({ dateFrom, dateTo, onDateFromChange, onDateToChange }: DateRangePickerProps) {
     return (
         <>
-            <div className="flex flex-col gap-1">
-                <label className="text-sm text-muted-foreground">Fecha desde</label>
+            <FilterFieldShell label="Fecha desde">
                 <input
                     type="date"
                     value={dateFrom ?? ""}
                     onChange={e => onDateFromChange(e.target.value)}
-                    className="border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                    className="h-14 rounded-2xl border border-transparent bg-muted/70 px-4 text-sm text-slate-700 shadow-none outline-none transition focus:border-primary/20 focus:ring-2 focus:ring-primary/20"
                 />
-            </div>
-            <div className="flex flex-col gap-1">
-                <label className="text-sm text-muted-foreground">Fecha hasta</label>
+            </FilterFieldShell>
+            <FilterFieldShell label="Fecha hasta">
                 <input
                     type="date"
                     value={dateTo ?? ""}
                     onChange={e => onDateToChange(e.target.value)}
-                    className="border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                    className="h-14 rounded-2xl border border-transparent bg-muted/70 px-4 text-sm text-slate-700 shadow-none outline-none transition focus:border-primary/20 focus:ring-2 focus:ring-primary/20"
                 />
-            </div>
+            </FilterFieldShell>
         </>
     )
 }

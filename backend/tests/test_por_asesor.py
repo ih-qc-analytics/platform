@@ -36,6 +36,7 @@ async def test_por_asesor_2025_summary_uses_allocated_exam_breakdowns_and_paymen
         "ganados": 1,
         "perdidos": 0,
         "mantenidos": 1,
+        "uncategorized_revenue": 0.0,
         "total_revenue": 7100.0,
     }
     assert by_name["Ana Garcia"].model_dump() == {
@@ -52,6 +53,7 @@ async def test_por_asesor_2025_summary_uses_allocated_exam_breakdowns_and_paymen
         "ganados": 1,
         "perdidos": 0,
         "mantenidos": 1,
+        "uncategorized_revenue": 0.0,
         "total_revenue": 4400.0,
     }
 
@@ -118,6 +120,7 @@ async def test_por_asesor_detail_for_ana_matches_expected_paid_geo_breakdown_and
         "cities": ["Guadalajara", "Mexico City"],
         "total_schools": 2,
         "total_exams": 4,
+        "uncategorized_revenue": 0.0,
         "total_revenue": 4400.0,
         "exam_breakdown": {
             "Cambridge English (Main Suite)": {"exams": 3, "schools": 2, "revenue": 3200.0},
@@ -145,6 +148,7 @@ async def test_por_asesor_detail_for_carlos_matches_expected_paid_geo_breakdown_
         "cities": ["Bogota", "Medellin"],
         "total_schools": 2,
         "total_exams": 5,
+        "uncategorized_revenue": 0.0,
         "total_revenue": 7100.0,
         "exam_breakdown": {
             "Cambridge English (Main Suite)": {"exams": 2, "schools": 1, "revenue": 3000.0},
@@ -172,6 +176,7 @@ async def test_por_asesor_detail_for_miguel_keeps_unallocated_payment_gap_visibl
     result = await getAsesorDetail(4, AsesorFilters(year=2025))
 
     assert result.total_revenue == 1000.0
+    assert result.uncategorized_revenue == 500.0
     assert result.ganados.revenue == 500.0
     assert result.total_revenue - result.ganados.revenue == 500.0
     assert result.exam_breakdown["Placement & Otros"].model_dump() == {
@@ -192,6 +197,7 @@ async def test_por_asesor_detail_for_year_with_no_rows_returns_zero_breakdowns(u
     assert result.cities == []
     assert result.total_schools == 0
     assert result.total_exams == 0
+    assert result.uncategorized_revenue == 0.0
     assert result.total_revenue == 0.0
     assert result.ganados.model_dump() == {"schools": 0, "exams": 0, "revenue": 0.0}
     assert result.perdidos.model_dump() == {"schools": 0, "exams": 0, "revenue": 0.0}

@@ -18,6 +18,7 @@ import {
     TableRow,
 } from "@/components/ui/table"
 import { useAsesorReport, useFilterOptions, useSellerOptions } from "@/hooks/useReports"
+import useDebouncedValue from "@/hooks/useDebouncedValue"
 import useCursorPagination from "@/hooks/useCursorPagination"
 import type { AsesorFilters, AsesorRow } from "@/types"
 import { downloadPdf } from "@/lib/exportPdf"
@@ -51,9 +52,10 @@ export default function PorAsesor() {
     const sellerOptions = useMemo(() => sellerOptionsResponse?.sellers ?? [], [sellerOptionsResponse?.sellers])
     const normalizedFilters = useMemo(
         () =>
-            filters.sellers?.[0] && !sellerOptions.includes(filters.sellers[0])
-                ? { ...filters, sellers: [] }
-                : filters,
+            ({
+                ...filters,
+                sellers: (filters.sellers ?? []).filter(seller => sellerOptions.includes(seller)),
+            }),
         [filters, sellerOptions],
     )
     const requestFilters = useMemo(
@@ -69,7 +71,7 @@ export default function PorAsesor() {
         () => (data?.rows ?? []).map(row => row.seller_name),
         [data?.rows],
     )
-    const { data: comparisonData } = useAsesorReport(
+    const debouncedComparisonFilters = useDebouncedValue(
         {
             ...normalizedFilters,
             year: normalizedFilters.year - 1,
@@ -77,8 +79,17 @@ export default function PorAsesor() {
             limit: PAGE_SIZE,
             cursor: null,
         },
-        showComparison && normalizedFilters.year > 0 && visibleSellerNames.length > 0,
+        350,
     )
+    const {
+        data: comparisonData,
+        isLoading: isComparisonLoading,
+        isFetching: isComparisonFetching,
+    } = useAsesorReport(
+        debouncedComparisonFilters,
+        showComparison && debouncedComparisonFilters.year > 0 && debouncedComparisonFilters.sellers.length > 0,
+    )
+    const showComparisonValues = showComparison && !isComparisonLoading && !isComparisonFetching
 
     const comparisonRowsBySeller = useMemo(
         () => new Map((comparisonData?.rows ?? []).map(row => [row.seller_id, row])),
@@ -179,6 +190,7 @@ export default function PorAsesor() {
                                             <TableHeadCell className="min-w-24 whitespace-nowrap text-center">Ganados</TableHeadCell>
                                             <TableHeadCell className="min-w-24 whitespace-nowrap text-center">Perdidos</TableHeadCell>
                                             <TableHeadCell className="min-w-28 whitespace-nowrap text-center">Mantenidos</TableHeadCell>
+                                            <TableHeadCell className="min-w-36 whitespace-nowrap text-right">Sin Categorizar</TableHeadCell>
                                             <TableHeadCell className="min-w-36 whitespace-nowrap text-right">Valor Total</TableHeadCell>
                                             <TableHeadCell className="w-10" />
                                         </TableRow>
@@ -221,7 +233,7 @@ export default function PorAsesor() {
                                                                 value={value}
                                                                 previousValue={previousValue}
                                                                 align="right"
-                                                                showComparison={showComparison}
+                                                                showComparison={showComparisonValues}
                                                             />
                                                         )
                                                     })}
@@ -229,19 +241,26 @@ export default function PorAsesor() {
                                                         value={row.ganados}
                                                         previousValue={previousRow?.ganados}
                                                         tone="success"
-                                                        showComparison={showComparison}
+                                                        showComparison={showComparisonValues}
                                                     />
                                                     <TableBadgeCell
                                                         value={row.perdidos}
                                                         previousValue={previousRow?.perdidos}
                                                         tone="danger"
-                                                        showComparison={showComparison}
+                                                        showComparison={showComparisonValues}
                                                     />
                                                     <TableBadgeCell
                                                         value={row.mantenidos}
                                                         previousValue={previousRow?.mantenidos}
                                                         tone="info"
-                                                        showComparison={showComparison}
+                                                        showComparison={showComparisonValues}
+                                                    />
+                                                    <TableMetricCell
+                                                        value={row.uncategorized_revenue}
+                                                        previousValue={previousRow?.uncategorized_revenue}
+                                                        format={formatCurrency}
+                                                        align="right"
+                                                        showComparison={showComparisonValues}
                                                     />
                                                     <TableMetricCell
                                                         value={row.total_revenue}
@@ -249,7 +268,7 @@ export default function PorAsesor() {
                                                         format={formatCurrency}
                                                         align="right"
                                                         emphasize
-                                                        showComparison={showComparison}
+                                                        showComparison={showComparisonValues}
                                                     />
                                                     <TableBodyCell className="w-12 text-right text-slate-400">
                                                         <ChevronRight className="ml-auto size-5" />
@@ -375,14 +394,14 @@ function TableBadgeCell({
 function SummaryTableSkeleton() {
     return (
         <div className="space-y-4 px-6 py-6">
-            <div className="grid grid-cols-6 gap-4">
-                {Array.from({ length: 6 }).map((_, index) => (
+            <div className="grid grid-cols-8 gap-4">
+                {Array.from({ length: 8 }).map((_, index) => (
                     <Skeleton key={index} className="h-5 w-full" />
                 ))}
             </div>
             {Array.from({ length: 6 }).map((_, rowIndex) => (
-                <div key={rowIndex} className="grid grid-cols-6 gap-4 border-t border-border pt-4">
-                    {Array.from({ length: 6 }).map((_, colIndex) => (
+                <div key={rowIndex} className="grid grid-cols-8 gap-4 border-t border-border pt-4">
+                    {Array.from({ length: 8 }).map((_, colIndex) => (
                         <Skeleton key={colIndex} className="h-8 w-full" />
                     ))}
                 </div>
@@ -393,11 +412,7 @@ function SummaryTableSkeleton() {
 
 function ComparisonText({ value, center = false }: { value: number | null; center?: boolean }) {
     if (value === null) {
-        return (
-            <span className={cn("text-xs text-muted-foreground", center && "text-center")}>
-                Sin base
-            </span>
-        )
+        return null
     }
 
     return (

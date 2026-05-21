@@ -17,6 +17,8 @@ REPORT_RESPONSE = PorPaisReportResponse(
         PorPaisSummaryRow(
             country="mexico",
             total_schools=3,
+            total_revenue=12000.0,
+            uncategorized_revenue=800.0,
             cambridge=19,
             ielts=1,
             michigan=0,

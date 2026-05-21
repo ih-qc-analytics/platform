@@ -25,6 +25,11 @@ MOCK_RESPONSE = TotalSalesResponse(
     total_otros=2,
     otros_revenue=400.0,
     total_revenue=7800.0,
+    expected_revenue=7300.0,
+    expected_cost=3200.0,
+    uncategorized_revenue=800.0,
+    unknown_site_revenue=0.0,
+    unknown_site_expected_revenue=0.0,
     profit_margin=52.7,
     prior_year_revenue=7400.0,
     growth_pct=5.4054054054,
@@ -36,7 +41,7 @@ MOCK_RESPONSE = TotalSalesResponse(
         GeoPoint(dimension="México", revenue=3900.0),
         GeoPoint(dimension="Colombia", revenue=1950.0),
     ],
-    product_mix=ProductMix(exams_pct=76.9, books_pct=11.5, courses_pct=6.4),
+    product_mix=ProductMix(exams_pct=76.9, books_pct=11.5, courses_pct=6.4, unknown_pct=10.3),
 )
 
 
@@ -70,6 +75,8 @@ async def test_build_ventas_totales_pdf_payload_formats_kpis_and_scales_series()
     ]
     assert any(item.label == "Otros" and item.value == "2" for item in payload.kpis)
     assert any(item.label == "Ingreso por Otros" and item.value == "$400" for item in payload.kpis)
+    assert any(item.label == "Ingreso Esperado" and item.value == "$7,300" for item in payload.kpis)
+    assert any(item.label == "Sin Categorizar" and item.value == "$800" for item in payload.kpis)
     assert any(
         item.label == "Ingreso Total"
         and item.growth == "+5.4%"
@@ -101,6 +108,11 @@ async def test_build_ventas_totales_pdf_payload_handles_empty_dataset():
             "total_otros": 0,
             "otros_revenue": 0.0,
             "total_revenue": 0.0,
+            "expected_revenue": 0.0,
+            "expected_cost": 0.0,
+            "uncategorized_revenue": 0.0,
+            "unknown_site_revenue": 0.0,
+            "unknown_site_expected_revenue": 0.0,
             "profit_margin": 0.0,
             "prior_year_revenue": 0.0,
             "growth_pct": 0.0,

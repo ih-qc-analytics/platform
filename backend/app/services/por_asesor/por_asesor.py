@@ -20,9 +20,11 @@ from app.services.exports.excel import ExcelColumn, ExcelWorksheetSpec
 from app.services.por_asesor.product_grouping import EXAM_CATEGORY_ORDER
 from app.services.por_asesor.repository import (
     fetch_paginated_summary_rows,
+    fetch_school_exam_metric_rows,
+    fetch_school_allocated_revenue_metric_rows,
     fetch_summary_exam_breakdown_rows_by_seller_ids,
+    fetch_summary_allocated_revenue_rows_by_seller_ids,
     fetch_school_presence_rows,
-    fetch_school_metric_rows,
 )
 
 ASESOR_SUMMARY_COLUMNS = [
@@ -31,6 +33,7 @@ ASESOR_SUMMARY_COLUMNS = [
     ExcelColumn("ganados", "Ganados"),
     ExcelColumn("perdidos", "Perdidos"),
     ExcelColumn("mantenidos", "Mantenidos"),
+    ExcelColumn("uncategorized_revenue", "Uncategorized Revenue"),
     ExcelColumn("total_revenue", "Total Revenue"),
 ]
 
@@ -42,6 +45,7 @@ ASESOR_DETAIL_COLUMNS = [
     ExcelColumn("cities", "Cities"),
     ExcelColumn("total_schools", "Total Schools"),
     ExcelColumn("total_exams", "Total Exams"),
+    ExcelColumn("uncategorized_revenue", "Uncategorized Revenue"),
     ExcelColumn("total_revenue", "Total Revenue"),
 ]
 for _cat in EXAM_CATEGORY_ORDER:
@@ -70,41 +74,52 @@ ASESOR_DETAIL_COLUMNS.extend([
 async def fetch_seller_name(seller_id: int) -> str | None:
     async with ReportingSessionLocal() as session:
         row = (await session.execute(
-            text("SELECT seller_name FROM report_line_items WHERE seller_id = :id LIMIT 1"),
+            text("SELECT seller_name FROM report_payments WHERE seller_id = :id LIMIT 1"),
             {"id": seller_id},
         )).fetchone()
         return row.seller_name if row else None
 
 
 async def fetch_detail_aggregate_row(seller_id: int, filters: AsesorFilters):
-    from app.services.por_asesor.repository import _base_where
-    where, params = _base_where(filters, seller_id=seller_id)
-    async with ReportingSessionLocal() as session:
-        payment_row = (await session.execute(text(f"""
-            SELECT
-                COUNT(DISTINCT lead_id) AS total_schools,
-                SUM(total_mxn)          AS total_revenue
-            FROM report_line_items
-            WHERE {where}
-        """), params)).fetchone()
+    from app.services.por_asesor.repository import _line_where, _payment_where
 
-        exam_row = (await session.execute(text(f"""
-            SELECT SUM(quantity) AS total_exams
-            FROM report_line_items
-            WHERE {where} AND product_type = 'exam' AND include_in_product_breakdown = TRUE
-        """), params)).fetchone()
+    payment_where, payment_params = _payment_where(filters, seller_id=seller_id)
+    line_where, line_params = _line_where(filters, seller_id=seller_id, require_product_breakdown=True)
+
+    async def fetch_payment_row():
+        async with ReportingSessionLocal() as session:
+            return (await session.execute(text(f"""
+                SELECT
+                    COUNT(DISTINCT lead_id) AS total_schools,
+                    COALESCE(SUM(amount_mxn), 0) AS total_revenue
+                FROM report_payments
+                WHERE {payment_where}
+            """), payment_params)).fetchone()
+
+    async def fetch_line_row():
+        async with ReportingSessionLocal() as session:
+            return (await session.execute(text(f"""
+                SELECT
+                    COALESCE(SUM(CASE WHEN product_type = 'exam' THEN quantity ELSE 0 END), 0) AS total_exams,
+                    COALESCE(SUM(paid_total_mxn), 0) AS allocated_revenue
+                FROM report_line_items
+                WHERE {line_where}
+            """), line_params)).fetchone()
+
+    payment_row, line_row = await asyncio.gather(fetch_payment_row(), fetch_line_row())
 
     from types import SimpleNamespace
     return SimpleNamespace(
         total_schools=int((payment_row.total_schools or 0) if payment_row else 0),
         total_revenue=float((payment_row.total_revenue or 0) if payment_row else 0),
-        total_exams=int((exam_row.total_exams or 0) if exam_row else 0),
+        total_exams=int((line_row.total_exams or 0) if line_row else 0),
+        uncategorized_revenue=float((payment_row.total_revenue or 0) if payment_row else 0) - float((line_row.allocated_revenue or 0) if line_row else 0),
     )
 
 
 async def fetch_detail_geo_rows(seller_id: int, filters: AsesorFilters) -> list:
-    from app.services.por_asesor.repository import _base_where
-    where, params = _base_where(filters, seller_id=seller_id)
+    from app.services.por_asesor.repository import _payment_where
+    where, params = _payment_where(filters, seller_id=seller_id)
     async with ReportingSessionLocal() as session:
         return (await session.execute(text(f"""
             SELECT DISTINCT
@@ -112,23 +127,23 @@ async def fetch_detail_geo_rows(seller_id: int, filters: AsesorFilters) -> list:
                 zone_name   AS zone,
                 state_name  AS state,
                 city        AS city
-            FROM report_line_items
+            FROM report_payments
             WHERE {where}
         """), params)).fetchall()
 
 
 async def fetch_detail_exam_breakdown_rows(seller_id: int, filters: AsesorFilters) -> list:
-    from app.services.por_asesor.repository import _base_where
-    where, params = _base_where(filters, seller_id=seller_id)
+    from app.services.por_asesor.repository import _line_where
+    where, params = _line_where(filters, seller_id=seller_id, require_product_breakdown=True)
     async with ReportingSessionLocal() as session:
         return (await session.execute(text(f"""
             SELECT
                 exam_category,
                 SUM(quantity)           AS exams,
                 COUNT(DISTINCT lead_id) AS schools,
-                SUM(total_mxn)          AS revenue
+                SUM(paid_total_mxn)     AS revenue
             FROM report_line_items
-            WHERE {where} AND product_type = 'exam' AND include_in_product_breakdown = TRUE
+            WHERE {where} AND product_type = 'exam'
             GROUP BY exam_category
         """), params)).fetchall()
 
@@ -178,20 +193,33 @@ def empty_status() -> BusinessStatusDetail:
 # Status calculation
 # ─────────────────────────────────────────────────────────────
 
-def build_status_map_from_year_sets(current_rows, prior_rows, current_metric_rows, prior_metric_rows):
+def build_status_map_from_year_sets(
+    current_rows,
+    prior_rows,
+    current_allocated_metric_rows,
+    prior_allocated_metric_rows,
+    current_exam_metric_rows,
+    prior_exam_metric_rows,
+):
     current_by_seller: dict[int, set[int]] = defaultdict(set)
     prior_by_seller:   dict[int, set[int]] = defaultdict(set)
-    current_metrics:   dict[tuple, tuple]  = {}
-    prior_metrics:     dict[tuple, tuple]  = {}
+    current_allocated_metrics: dict[tuple, float] = {}
+    prior_allocated_metrics: dict[tuple, float] = {}
+    current_exam_metrics: dict[tuple, int] = {}
+    prior_exam_metrics: dict[tuple, int] = {}
 
     for row in current_rows:
         current_by_seller[int(row.seller_id)].add(int(row.lead_id))
     for row in prior_rows:
         prior_by_seller[int(row.seller_id)].add(int(row.lead_id))
-    for row in current_metric_rows:
-        current_metrics[(int(row.seller_id), int(row.lead_id))] = (int(row.exams or 0), float(row.revenue or 0))
-    for row in prior_metric_rows:
-        prior_metrics[(int(row.seller_id), int(row.lead_id))]   = (int(row.exams or 0), float(row.revenue or 0))
+    for row in current_allocated_metric_rows:
+        current_allocated_metrics[(int(row.seller_id), int(row.lead_id))] = float(row.revenue or 0)
+    for row in prior_allocated_metric_rows:
+        prior_allocated_metrics[(int(row.seller_id), int(row.lead_id))] = float(row.revenue or 0)
+    for row in current_exam_metric_rows:
+        current_exam_metrics[(int(row.seller_id), int(row.lead_id))] = int(row.exams or 0)
+    for row in prior_exam_metric_rows:
+        prior_exam_metrics[(int(row.seller_id), int(row.lead_id))] = int(row.exams or 0)
 
     seller_ids = set(current_by_seller) | set(prior_by_seller)
     status_map: dict[int, dict[str, BusinessStatusDetail]] = {}
@@ -201,9 +229,10 @@ def build_status_map_from_year_sets(current_rows, prior_rows, current_metric_row
         buckets = {"ganado": current - prior, "perdido": prior - current, "mantenido": current & prior}
         seller_statuses: dict[str, BusinessStatusDetail] = {}
         for status, lead_ids in buckets.items():
-            src = prior_metrics if status == "perdido" else current_metrics
-            exams   = sum(src.get((sid, lid), (0, 0.0))[0] for lid in lead_ids)
-            revenue = sum(src.get((sid, lid), (0, 0.0))[1] for lid in lead_ids)
+            exam_src = prior_exam_metrics if status == "perdido" else current_exam_metrics
+            revenue_src = prior_allocated_metrics if status == "perdido" else current_allocated_metrics
+            exams = sum(exam_src.get((sid, lid), 0) for lid in lead_ids)
+            revenue = sum(revenue_src.get((sid, lid), 0.0) for lid in lead_ids)
             seller_statuses[status] = BusinessStatusDetail(schools=len(lead_ids), exams=exams, revenue=revenue)
         status_map[sid] = seller_statuses
 
@@ -213,13 +242,22 @@ def build_status_map_from_year_sets(current_rows, prior_rows, current_metric_row
 
 
 async def fetch_detail_status_rows(seller_id: int, filters: AsesorFilters):
-    current_rows, prior_rows, current_metric_rows, prior_metric_rows = await asyncio.gather(
+    current_rows, prior_rows, current_allocated_rows, prior_allocated_rows, current_exam_rows, prior_exam_rows = await asyncio.gather(
         fetch_school_presence_rows(filters, filters.year,     seller_id=seller_id),
         fetch_school_presence_rows(filters, filters.year - 1, seller_id=seller_id),
-        fetch_school_metric_rows(filters,   filters.year,     seller_id=seller_id),
-        fetch_school_metric_rows(filters,   filters.year - 1, seller_id=seller_id),
+        fetch_school_allocated_revenue_metric_rows(filters, filters.year, seller_id=seller_id),
+        fetch_school_allocated_revenue_metric_rows(filters, filters.year - 1, seller_id=seller_id),
+        fetch_school_exam_metric_rows(filters, filters.year, seller_id=seller_id),
+        fetch_school_exam_metric_rows(filters, filters.year - 1, seller_id=seller_id),
     )
-    return build_status_map_from_year_sets(current_rows, prior_rows, current_metric_rows, prior_metric_rows)
+    return build_status_map_from_year_sets(
+        current_rows,
+        prior_rows,
+        current_allocated_rows,
+        prior_allocated_rows,
+        current_exam_rows,
+        prior_exam_rows,
+    )
 
 
 async def fetch_summary_status_counts(filters: AsesorFilters, seller_ids: list[int]) -> dict[int, dict[str, int]]:
@@ -267,6 +305,7 @@ def build_asesor_report_response(
             perdidos=int(status_counts.get(int(row.seller_id), {}).get("perdido", 0)),
             mantenidos=int(status_counts.get(int(row.seller_id), {}).get("mantenido", 0)),
             total_revenue=float(row.total_revenue or 0),
+            uncategorized_revenue=float(getattr(row, "uncategorized_revenue", 0) or 0),
         )
         for row in summary_rows
     ]
@@ -296,6 +335,7 @@ def build_asesor_detail_response(
         total_schools=int((aggregate_row.total_schools or 0) if aggregate_row else 0),
         total_exams=int((aggregate_row.total_exams or 0) if aggregate_row else 0),
         total_revenue=float((aggregate_row.total_revenue or 0) if aggregate_row else 0),
+        uncategorized_revenue=float((aggregate_row.uncategorized_revenue or 0) if aggregate_row else 0),
         exam_breakdown=exam_breakdown if has_data else {cat: ExamBrandDetail(exams=0, schools=0, revenue=0.0) for cat in EXAM_CATEGORY_ORDER},
         ganados=status_map.get("ganado", empty_status()),
         perdidos=status_map.get("perdido", empty_status()),
@@ -315,9 +355,26 @@ async def getAsesorReport(
         filters, limit=filters.limit, cursor=filters.cursor
     )
     seller_ids = [int(row.seller_id) for row in summary_rows]
-    breakdown_rows = await fetch_summary_exam_breakdown_rows_by_seller_ids(seller_ids, filters)
+    breakdown_rows, allocated_rows, status_counts = await asyncio.gather(
+        fetch_summary_exam_breakdown_rows_by_seller_ids(seller_ids, filters),
+        fetch_summary_allocated_revenue_rows_by_seller_ids(seller_ids, filters),
+        fetch_summary_status_counts(filters, seller_ids),
+    )
     exam_breakdowns = map_summary_exam_breakdowns(breakdown_rows)
-    status_counts   = await fetch_summary_status_counts(filters, seller_ids)
+    allocated_by_seller = {
+        int(row.seller_id): float(row.allocated_revenue or 0)
+        for row in allocated_rows
+    }
+    from types import SimpleNamespace
+    summary_rows = [
+        SimpleNamespace(
+            seller_id=row.seller_id,
+            seller_name=row.seller_name,
+            total_revenue=row.total_revenue,
+            uncategorized_revenue=float(row.total_revenue or 0) - allocated_by_seller.get(int(row.seller_id), 0.0),
+        )
+        for row in summary_rows
+    ]
     return build_asesor_report_response(summary_rows, exam_breakdowns, status_counts, filters.year, next_cursor, has_more)
 
 
@@ -379,6 +436,7 @@ def build_asesor_export_worksheets(report: AsesorReportResponse, details: list[A
             "ganados": row.ganados,
             "perdidos": row.perdidos,
             "mantenidos": row.mantenidos,
+            "uncategorized_revenue": row.uncategorized_revenue,
             "total_revenue": row.total_revenue,
         }
         for cat in EXAM_CATEGORY_ORDER:
@@ -395,6 +453,7 @@ def build_asesor_export_worksheets(report: AsesorReportResponse, details: list[A
             "cities": ", ".join(detail.cities),
             "total_schools": detail.total_schools,
             "total_exams": detail.total_exams,
+            "uncategorized_revenue": detail.uncategorized_revenue,
             "total_revenue": detail.total_revenue,
             "ganados_schools": detail.ganados.schools,
             "ganados_exams": detail.ganados.exams,
@@ -431,6 +490,7 @@ async def build_por_asesor_pdf_payload(
     report = await getAllAsesorReportRows(build_asesor_export_filters_for_all(filters), country_rates=country_rates)
 
     total_revenue  = sum(row.total_revenue for row in report.rows)
+    total_uncategorized = sum(row.uncategorized_revenue for row in report.rows)
     total_exams    = sum(sum(row.exam_breakdown.values()) for row in report.rows)
     total_ganados  = sum(row.ganados  for row in report.rows)
     total_perdidos = sum(row.perdidos for row in report.rows)
@@ -457,6 +517,7 @@ async def build_por_asesor_pdf_payload(
             format_integer(row.ganados),
             format_integer(row.perdidos),
             format_integer(row.mantenidos),
+            format_currency(row.uncategorized_revenue),
             format_currency(row.total_revenue),
         ]))
 
@@ -468,12 +529,13 @@ async def build_por_asesor_pdf_payload(
             PDFKpiItem(label="Ganados",     value=format_integer(total_ganados)),
             PDFKpiItem(label="Perdidos",    value=format_integer(total_perdidos)),
             PDFKpiItem(label="Mantenidos",  value=format_integer(total_mantenidos)),
+            PDFKpiItem(label="Sin Categorizar", value=format_currency(total_uncategorized)),
             PDFKpiItem(label="Valor Total", value=format_currency(total_revenue)),
         ],
         table=PDFTable(
-            headers=["Asesor", "Cambridge", "IELTS", "MET", "Otros", "Ganados", "Perdidos", "Mantenidos", "Valor Total"],
+            headers=["Asesor", "Cambridge", "IELTS", "MET", "Otros", "Ganados", "Perdidos", "Mantenidos", "Sin Categorizar", "Valor Total"],
             rows=table_rows,
-            column_widths=[4, 2, 2, 2, 2, 2, 2, 2, 3],
+            column_widths=[4, 2, 2, 2, 2, 2, 2, 2, 3, 3],
         ),
     )
 
@@ -505,6 +567,7 @@ async def build_asesor_detail_pdf_payload(
         kpis=[
             PDFKpiItem(label="Total Colegios", value=format_integer(detail.total_schools)),
             PDFKpiItem(label="Total Exámenes", value=format_integer(detail.total_exams)),
+            PDFKpiItem(label="Sin Categorizar", value=format_currency(detail.uncategorized_revenue)),
             PDFKpiItem(label="Valor Total",    value=format_currency(detail.total_revenue)),
         ],
         geo_table=PDFTable(

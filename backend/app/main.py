@@ -1,57 +1,33 @@
 from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.config import settings
-from app.validator import validate_schema
-from app.routers import detalle_asesor, filters, por_asesor, por_pais, total_sales
-from app.etl.scheduler import start_etl_scheduler
-from app.etl.payment_upsert import run_payment_upsert, run_startup_payment_upsert
-from app.etl.dimensional_refresh import run_dimensional_refresh
 import logging
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
-import httpx
+
+from app.config import settings
+from app.etl.dimensional_refresh import run_dimensional_refresh
+from app.etl.exchange_rates import fetch_and_store_rates
+from app.etl.scheduler import start_scheduler
+from app.etl.startup_backfill import run_startup_backfill_if_needed
+from app.etl.upsert import run_upsert
+from app.routers import detalle_asesor, filters, por_asesor, por_pais, total_sales
+from app.validator import validate_schema
 
 logging.basicConfig(
     level=logging.INFO,
     format="%(levelname)s: %(message)s"
 )
-
-
-async def refresh_rates(app: FastAPI):
-    url = "https://api.frankfurter.dev/v2/rates?base=MXN&quotes=COP,PEN"
-    async with httpx.AsyncClient() as client:
-        try:
-            response = await client.get(url)
-            response.raise_for_status()
-            data = response.json()
-            app.state.rates = {item['quote']: item['rate'] for item in data}
-            print(f"Rates refreshed successfully at {data[0]['date']}")
-        except Exception as e:
-            print(f"Failed to refresh rates: {e}")
-
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     if settings.source_db_url or settings.host:
         print(f"--- Starting app in {settings.env_mode} mode ---")
         await validate_schema()
 
-    await refresh_rates(app)
-    scheduler = AsyncIOScheduler()
-    scheduler.add_job(
-        refresh_rates,
-        'cron',
-        hour=8,
-        minute=0,
-        args=[app]
-    )
-    scheduler.start()
-
     if settings.reporting_db_url:
-        start_etl_scheduler()
+        await run_startup_backfill_if_needed()
+        start_scheduler()
 
     yield
-    scheduler.shutdown()
 
 app = FastAPI(
     title="IH-QC Analytics",
@@ -75,17 +51,17 @@ async def health():
 # Admin ETL triggers — protect with API key before production
 @app.post("/admin/etl/payment-upsert")
 async def trigger_payment_upsert():
-    await run_payment_upsert()
-    return {"status": "ok"}
-
-@app.post("/admin/etl/payment-upsert-backfill")
-async def trigger_payment_upsert_backfill():
-    await run_startup_payment_upsert()
+    await run_upsert()
     return {"status": "ok"}
 
 @app.post("/admin/etl/dimensional-refresh")
 async def trigger_dimensional_refresh():
     await run_dimensional_refresh()
+    return {"status": "ok"}
+
+@app.post("/admin/etl/fetch-rates")
+async def trigger_fetch_rates():
+    await fetch_and_store_rates()
     return {"status": "ok"}
 
 app.include_router(filters.router, prefix="/filters", tags=["filters"])

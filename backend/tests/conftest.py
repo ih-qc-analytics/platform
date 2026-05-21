@@ -9,7 +9,8 @@ from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, Asyn
 from sqlalchemy import text
 import importlib
 from app.config import settings
-from app.etl.payment_upsert import run_payment_upsert
+from app.etl.upsert import run_upsert
+from app.enums import ETLJobName
 from tests.conftest_reporting import bind_test_reporting_database
 
 pytest_plugins = ["conftest_reporting"]
@@ -95,7 +96,9 @@ async def truncate_all(engine):
 
 async def truncate_reporting_all(engine):
     async with engine.begin() as conn:
-        await conn.execute(text("TRUNCATE report_line_items, exchange_rates, etl_meta RESTART IDENTITY"))
+        await conn.execute(text(
+            "TRUNCATE report_payment_allocations, report_payments, report_line_items, exchange_rates, etl_meta RESTART IDENTITY"
+        ))
 
 
 async def seed_identity_exchange_rates(session_factory):
@@ -121,14 +124,22 @@ async def seed_identity_exchange_rates(session_factory):
 def bind_test_database(session_factory, engine):
     import app.database as db
     import app.etl.dimensional_refresh as dr
+    import app.etl.exchange_rates as er
     import app.etl.exchange_rate_backfill as erb
     import app.etl.payment_upsert as pu
+    import app.etl.startup_backfill as sb
+    import app.etl.shared as shared
+    import app.etl.upsert as up
 
     db.SessionLocal = session_factory
     db.engine = engine
     dr.SessionLocal = session_factory
+    er.SessionLocal = session_factory
     erb.SessionLocal = session_factory
     pu.SessionLocal = session_factory
+    sb.run_upsert = up.run_upsert
+    shared.SessionLocal = session_factory
+    up.SessionLocal = session_factory
 
     module_names = [
         "app.services.total_sales.total_sales",
@@ -184,9 +195,9 @@ async def ui_dev_reporting_db(ui_dev_db, reporting_engine, reporting_session_fac
     await truncate_reporting_all(reporting_engine)
     bind_test_reporting_database(reporting_session_factory)
     await seed_identity_exchange_rates(reporting_session_factory)
-    await run_payment_upsert(
+    await run_upsert(
         since=settings.payment_upsert_initial_since,
-        job_name="payment_upsert_test",
+        job_name=ETLJobName.UPSERT,
     )
     yield
     await truncate_reporting_all(reporting_engine)

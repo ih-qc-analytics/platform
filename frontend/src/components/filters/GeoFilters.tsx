@@ -1,6 +1,6 @@
 import { useMemo } from "react"
 
-import SingleSelectField, { cleanOptions } from "@/components/filters/SingleSelectField"
+import MultiSelectField, { cleanOptions } from "@/components/filters/MultiSelectField"
 import type { FilterOptionsResponse } from "@/types"
 
 export type GeoFilterKey = "countries" | "zones" | "states" | "cities"
@@ -15,7 +15,7 @@ type GeoFiltersProps<TFilters extends Partial<Record<GeoFilterKey, string[]>>> =
     options?: FilterOptionsResponse
     configs: GeoFilterConfig[]
     triggerClassName?: string
-    onChange: (key: GeoFilterKey, value: string) => void
+    onChange: (key: GeoFilterKey, value: string[]) => void
 }
 
 export default function GeoFilters<TFilters extends Partial<Record<GeoFilterKey, string[]>>>({
@@ -38,10 +38,10 @@ export default function GeoFilters<TFilters extends Partial<Record<GeoFilterKey,
     return (
         <>
             {configs.map(({ key, label }) => (
-                <SingleSelectField
+                <MultiSelectField
                     key={key}
                     label={label}
-                    value={filters[key]?.[0] ?? "all"}
+                    values={filters[key] ?? []}
                     options={optionMap[key]}
                     triggerClassName={triggerClassName}
                     onChange={value => onChange(key, value)}

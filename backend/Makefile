@@ -1,5 +1,6 @@
 PYTEST   = .venv/bin/pytest
 UVICORN  = .venv/bin/uvicorn
+PYTHON   = .venv/bin/python
 
 run:
 	$(UVICORN) app.main:app --host 0.0.0.0 --port 8000 --reload
@@ -33,3 +34,6 @@ migrate-down:
 
 migrate-status:
 	.venv/bin/alembic current
+
+exchange-rate-backfill:
+	$(PYTHON) tools/backfill_exchange_rates.py

@@ -20,20 +20,14 @@ import {
 import useCursorPagination from "@/hooks/useCursorPagination"
 import { useDetalleAsesorReport } from "@/hooks/useReports"
 import { downloadPdf } from "@/lib/exportPdf"
+import { getDefaultReportFilters } from "@/lib/reportFilters"
 import { cn, formatInteger } from "@/lib/utils"
 import type { DetalleAsesorFilters, ReportFilters } from "@/types"
 
 const PAGE_SIZE = 8
 
 export default function DetallePorAsesor() {
-    const [filters, setFilters] = useState<ReportFilters>({
-        countries: [],
-        zones: [],
-        states: [],
-        cities: [],
-        date_from: undefined,
-        date_to: undefined,
-    })
+    const [filters, setFilters] = useState<ReportFilters>(getDefaultReportFilters())
     const [searchInput, setSearchInput] = useState("")
     const [search, setSearch] = useState("")
     const [isExportingPdf, setIsExportingPdf] = useState(false)

@@ -1,9 +1,10 @@
 import { useState } from "react"
 import GeoFilters from "@/components/filters/GeoFilters"
+import ReportFilterBarShell from "@/components/filters/ReportFilterBarShell"
 import { useFilterOptions } from "@/hooks/useReports"
+import { getDefaultReportFilters } from "@/lib/reportFilters"
 import type { ReportFilters } from "@/types"
 import DateRangePicker from "./DateRangePicker"
-import ExportButtons from "./ExportButtons"
 
 type FilterBarProps = {
     value?: ReportFilters
@@ -19,14 +20,7 @@ type FilterBarProps = {
 
 export default function FilterBar(props: FilterBarProps) {
     const { data: options, isLoading } = useFilterOptions()
-    const [internalSelected, setInternalSelected] = useState<ReportFilters>({
-        countries: [],
-        zones: [],
-        states: [],
-        cities: [],
-        date_from: undefined,
-        date_to: undefined,
-    })
+    const [internalSelected, setInternalSelected] = useState<ReportFilters>(getDefaultReportFilters())
     const selected = props.value ?? internalSelected
 
     const commitChange = (updated: ReportFilters) => {
@@ -36,8 +30,8 @@ export default function FilterBar(props: FilterBarProps) {
         props.onChange(updated)
     }
 
-    const handleSelectChange = (key: string, value: string) => {
-        const updated = { ...selected, [key]: value === "all" ? [] : [value] }
+    const handleSelectChange = (key: string, value: string[]) => {
+        const updated = { ...selected, [key]: value }
         commitChange(updated)
     }
 
@@ -51,40 +45,38 @@ export default function FilterBar(props: FilterBarProps) {
         commitChange(updated)
     }
 
-    if (isLoading) return <div className="text-sm text-muted-foreground">Cargando filtros...</div>
+    if (isLoading) return null
 
     return (
-        <div className="overflow-x-auto">
-            <div className="flex flex-nowrap items-end gap-4">
-                <DateRangePicker
-                    dateFrom={selected.date_from}
-                    dateTo={selected.date_to}
-                    onDateFromChange={handleDateFromChange}
-                    onDateToChange={handleDateToChange}
-                />
+        <ReportFilterBarShell
+            onClear={() => commitChange(getDefaultReportFilters())}
+            onExportPdf={props.onExportPdf}
+            onExportExcelWithFilters={props.onExportExcelWithFilters}
+            onExportExcelWithoutFilters={props.onExportExcelWithoutFilters}
+            isExportingPdf={props.isExportingPdf}
+            isExportingExcel={props.isExportingExcel}
+            exportingExcelVariant={props.exportingExcelVariant}
+            exportError={props.exportError}
+        >
+            <DateRangePicker
+                dateFrom={selected.date_from}
+                dateTo={selected.date_to}
+                onDateFromChange={handleDateFromChange}
+                onDateToChange={handleDateToChange}
+            />
 
-                <GeoFilters
-                    filters={selected}
-                    options={options}
-                    configs={[
-                        { key: "countries", label: "País" },
-                        { key: "zones", label: "Sede" },
-                        { key: "states", label: "Estado" },
-                        { key: "cities", label: "Ciudad" },
-                    ]}
-                    triggerClassName="min-w-32"
-                    onChange={handleSelectChange}
-                />
-                <ExportButtons
-                    onExportPdf={props.onExportPdf}
-                    onExportExcelWithFilters={props.onExportExcelWithFilters}
-                    onExportExcelWithoutFilters={props.onExportExcelWithoutFilters}
-                    isExportingPdf={props.isExportingPdf}
-                    isExportingExcel={props.isExportingExcel}
-                    exportingExcelVariant={props.exportingExcelVariant}
-                    exportError={props.exportError}
-                />
-            </div>
-        </div>
+            <GeoFilters
+                filters={selected}
+                options={options}
+                configs={[
+                    { key: "countries", label: "País" },
+                    { key: "zones", label: "Sede" },
+                    { key: "states", label: "Estado" },
+                    { key: "cities", label: "Ciudad" },
+                ]}
+                triggerClassName="min-w-40"
+                onChange={handleSelectChange}
+            />
+        </ReportFilterBarShell>
     )
 }

@@ -1,14 +1,14 @@
 """create_exchange_rates
 
 Revision ID: 8f5db224fc05
-Revises: 291b0f8d9562
+Revises:
 Create Date: 2026-05-14
 """
 from typing import Sequence, Union
 from alembic import op
 
 revision: str = '8f5db224fc05'
-down_revision: Union[str, Sequence[str], None] = '291b0f8d9562'
+down_revision: Union[str, Sequence[str], None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
