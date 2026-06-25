@@ -5,6 +5,7 @@ Seed rows directly into report_line_items — no Jones DB needed.
 Each row IS one cart_product (no grouping). Cursor is cart_product_id.
 The detalle WHERE always includes product_type = 'exam'.
 """
+
 import pytest
 from datetime import datetime, date
 from sqlalchemy import text
@@ -18,51 +19,54 @@ from tests.conftest_reporting import bind_test_reporting_database
 # Helpers
 # ─────────────────────────────────────────────────────────────
 
+
 def make_row(**overrides) -> dict:
     created_at = overrides.get("created_at", datetime(2025, 1, 15))
     payment_date = overrides.get("payment_date", created_at.date())
     defaults = {
-        "cart_product_id":      1,
-        "etl_date":             date.today(),
-        "seller_id":            1,
-        "seller_name":          "Ana Garcia",
-        "lead_id":              1,
-        "school_name":          "Colegio Test",
-        "site":                 "mexico",
-        "zone_name":            "IH Mexico",
-        "state_name":           "CDMX",
-        "state_names":          ["CDMX"],
-        "city":                 "Ciudad de Mexico",
-        "city_names":           ["Ciudad de Mexico"],
-        "business_status":      "ganado",
-        "cart_id":              1,
-        "created_at":           created_at,
-        "year":                 2025,
-        "month":                1,
-        "payment_status":       "Aprobado",
-        "payment_date":         payment_date,
-        "payment_day":          payment_date,
-        "billing_status":       "Aprobado",
-        "product_id":           1,
-        "product_type":         "exam",
-        "exam_cat_name":        "KET",
-        "exam_category":        "Cambridge English (Main Suite)",
-        "exam_canonical_name":  "A2 Key",
-        "exam_date_type":       "fixed",
-        "quantity":             5,
-        "total":                5000.00,
-        "cost":                 2000.00,
-        "discount":             0,
-        "book_commission":      0,
-        "exam_commission":      0,
-        "base_currency":        "MXN",
+        "cart_product_id": 1,
+        "etl_date": date.today(),
+        "seller_id": 1,
+        "seller_name": "Ana Garcia",
+        "lead_id": 1,
+        "school_name": "Colegio Test",
+        "site": "mexico",
+        "zone_name": "IH Mexico",
+        "state_name": "CDMX",
+        "state_names": ["CDMX"],
+        "city": "Ciudad de Mexico",
+        "city_names": ["Ciudad de Mexico"],
+        "business_status": "ganado",
+        "cart_id": 1,
+        "created_at": created_at,
+        "year": 2025,
+        "month": 1,
+        "payment_status": "Aprobado",
+        "payment_date": payment_date,
+        "payment_day": payment_date,
+        "billing_status": "Aprobado",
+        "product_id": 1,
+        "product_type": "exam",
+        "exam_cat_name": "KET",
+        "exam_category": "Cambridge English (Main Suite)",
+        "exam_canonical_name": "A2 Key",
+        "exam_date_type": "fixed",
+        "quantity": 5,
+        "total": 5000.00,
+        "cost": 2000.00,
+        "discount": 0,
+        "book_commission": 0,
+        "exam_commission": 0,
+        "base_currency": "MXN",
         "include_in_product_breakdown": True,
-        "total_mxn":            5000.00,
-        "cost_mxn":             2000.00,
-        "is_active":            True,
+        "total_mxn": 5000.00,
+        "cost_mxn": 2000.00,
+        "is_active": True,
     }
     row = {**defaults, **overrides}
-    row["state_names"] = overrides.get("state_names", [row["state_name"]] if row.get("state_name") else [])
+    row["state_names"] = overrides.get(
+        "state_names", [row["state_name"]] if row.get("state_name") else []
+    )
     row["city_names"] = overrides.get("city_names", [row["city"]] if row.get("city") else [])
     row["payment_day"] = overrides.get("payment_day", row["payment_date"])
     return row
@@ -82,6 +86,7 @@ async def _insert(session_factory, *rows):
 def _bind(session_factory):
     bind_test_reporting_database(session_factory)
     import app.services.detalle_asesor.detalle_asesor as svc
+
     svc.ReportingSessionLocal = session_factory
 
 
@@ -94,13 +99,14 @@ def _filters(**overrides) -> DetalleFilters:
 # Basic row structure
 # ─────────────────────────────────────────────────────────────
 
+
 @pytest.mark.asyncio
 async def test_returns_one_row_per_cart_product(reporting_session_factory, clean_reporting_db):
     _bind(reporting_session_factory)
     await _insert(
         reporting_session_factory,
-        make_row(cart_product_id=1, exam_canonical_name="A2 Key",      quantity=3),
-        make_row(cart_product_id=2, exam_canonical_name="B2 First",    quantity=7, lead_id=2),
+        make_row(cart_product_id=1, exam_canonical_name="A2 Key", quantity=3),
+        make_row(cart_product_id=2, exam_canonical_name="B2 First", quantity=7, lead_id=2),
         make_row(cart_product_id=3, exam_canonical_name="C1 Advanced", quantity=2, lead_id=3),
     )
     result = await getDetalleData(_filters())
@@ -139,12 +145,13 @@ async def test_total_equals_sum_of_exam_counts(reporting_session_factory, clean_
 # Search
 # ─────────────────────────────────────────────────────────────
 
+
 @pytest.mark.asyncio
 async def test_search_by_seller_name(reporting_session_factory, clean_reporting_db):
     _bind(reporting_session_factory)
     await _insert(
         reporting_session_factory,
-        make_row(cart_product_id=1, seller_name="Ana Garcia",    quantity=3),
+        make_row(cart_product_id=1, seller_name="Ana Garcia", quantity=3),
         make_row(cart_product_id=2, seller_name="Luis Rodriguez", quantity=5, lead_id=2),
     )
     result = await getDetalleData(_filters(search="Ana"))
@@ -158,7 +165,7 @@ async def test_search_by_school_name(reporting_session_factory, clean_reporting_
     await _insert(
         reporting_session_factory,
         make_row(cart_product_id=1, school_name="Colegio Americano", quantity=3),
-        make_row(cart_product_id=2, school_name="Instituto Moderno",  quantity=5, lead_id=2),
+        make_row(cart_product_id=2, school_name="Instituto Moderno", quantity=5, lead_id=2),
     )
     result = await getDetalleData(_filters(search="Instituto"))
     assert len(result.rows) == 1
@@ -184,7 +191,7 @@ async def test_search_partial_match(reporting_session_factory, clean_reporting_d
     _bind(reporting_session_factory)
     await _insert(
         reporting_session_factory,
-        make_row(cart_product_id=1, seller_name="Ana Garcia",    quantity=3),
+        make_row(cart_product_id=1, seller_name="Ana Garcia", quantity=3),
         make_row(cart_product_id=2, seller_name="Luis Rodriguez", quantity=5, lead_id=2),
     )
     result = await getDetalleData(_filters(search="Garc"))
@@ -195,6 +202,7 @@ async def test_search_partial_match(reporting_session_factory, clean_reporting_d
 # ─────────────────────────────────────────────────────────────
 # Cursor pagination
 # ─────────────────────────────────────────────────────────────
+
 
 @pytest.mark.asyncio
 async def test_cursor_pagination_first_page(reporting_session_factory, clean_reporting_db):
@@ -240,7 +248,9 @@ async def test_cursor_pagination_has_more_true(reporting_session_factory, clean_
 
 
 @pytest.mark.asyncio
-async def test_cursor_pagination_has_more_false_on_last_page(reporting_session_factory, clean_reporting_db):
+async def test_cursor_pagination_has_more_false_on_last_page(
+    reporting_session_factory, clean_reporting_db
+):
     _bind(reporting_session_factory)
     for i in range(1, 4):
         await _insert(
@@ -253,7 +263,9 @@ async def test_cursor_pagination_has_more_false_on_last_page(reporting_session_f
 
 
 @pytest.mark.asyncio
-async def test_cursor_pagination_no_duplicates_across_pages(reporting_session_factory, clean_reporting_db):
+async def test_cursor_pagination_no_duplicates_across_pages(
+    reporting_session_factory, clean_reporting_db
+):
     _bind(reporting_session_factory)
     for i in range(1, 8):
         await _insert(
@@ -273,6 +285,7 @@ async def test_cursor_pagination_no_duplicates_across_pages(reporting_session_fa
 # Date & country filters
 # ─────────────────────────────────────────────────────────────
 
+
 @pytest.mark.asyncio
 async def test_date_filter(reporting_session_factory, clean_reporting_db):
     _bind(reporting_session_factory)
@@ -291,7 +304,7 @@ async def test_country_filter(reporting_session_factory, clean_reporting_db):
     _bind(reporting_session_factory)
     await _insert(
         reporting_session_factory,
-        make_row(cart_product_id=1, site="mexico",   quantity=3),
+        make_row(cart_product_id=1, site="mexico", quantity=3),
         make_row(cart_product_id=2, site="colombia", quantity=5, lead_id=2),
     )
     result = await getDetalleData(_filters(countries=["colombia"]))

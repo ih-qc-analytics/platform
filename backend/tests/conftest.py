@@ -83,9 +83,19 @@ async def apply_schema(engine):
 
 async def truncate_all(engine):
     tables = [
-        "student_payments", "student", "cart_product", "cart", "seller_lead",
-        "payment", "lead_address", "`lead`", "seller",
-        "product", "exam_cat", "auth", "zone"
+        "student_payments",
+        "student",
+        "cart_product",
+        "cart",
+        "seller_lead",
+        "payment",
+        "lead_address",
+        "`lead`",
+        "seller",
+        "product",
+        "exam_cat",
+        "auth",
+        "zone",
     ]
     async with engine.begin() as conn:
         await conn.execute(text("SET FOREIGN_KEY_CHECKS = 0"))
@@ -96,9 +106,11 @@ async def truncate_all(engine):
 
 async def truncate_reporting_all(engine):
     async with engine.begin() as conn:
-        await conn.execute(text(
-            "TRUNCATE report_payment_allocations, report_payments, report_line_items, exchange_rates, etl_meta RESTART IDENTITY"
-        ))
+        await conn.execute(
+            text(
+                "TRUNCATE report_payment_allocations, report_payments, report_line_items, exchange_rates, etl_meta RESTART IDENTITY"
+            )
+        )
 
 
 async def seed_identity_exchange_rates(session_factory):
@@ -113,12 +125,15 @@ async def seed_identity_exchange_rates(session_factory):
     async with session_factory() as session:
         async with session.begin():
             for row in rows:
-                await session.execute(text("""
+                await session.execute(
+                    text("""
                     INSERT INTO exchange_rates (date, from_currency, to_currency, rate)
                     VALUES (:date, :from_currency, :to_currency, :rate)
                     ON CONFLICT (date, from_currency, to_currency) DO UPDATE
                     SET rate = EXCLUDED.rate
-                """), row)
+                """),
+                    row,
+                )
 
 
 def bind_test_database(session_factory, engine):

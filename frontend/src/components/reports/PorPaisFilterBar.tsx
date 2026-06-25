@@ -30,7 +30,7 @@ export default function PorPaisFilterBar({
         <ReportFilterBarShell
             onClear={() => onChange(getDefaultPorPaisFilters())}
             comparison={filters}
-            onApplyComparison={next => onChange({ ...filters, ...next })}
+            onApplyComparison={(next) => onChange({ ...filters, ...next })}
             onExportPdf={onExportPdf}
             onExportExcelWithFilters={onExportExcelWithFilters}
             onExportExcelWithoutFilters={onExportExcelWithoutFilters}
@@ -42,8 +42,8 @@ export default function PorPaisFilterBar({
             <DateRangePicker
                 dateFrom={filters.date_from}
                 dateTo={filters.date_to}
-                onDateFromChange={value => onChange({ ...filters, date_from: value })}
-                onDateToChange={value => onChange({ ...filters, date_to: value })}
+                onDateFromChange={(value) => onChange({ ...filters, date_from: value })}
+                onDateToChange={(value) => onChange({ ...filters, date_to: value })}
             />
         </ReportFilterBarShell>
     )

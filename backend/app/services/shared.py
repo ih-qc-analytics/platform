@@ -47,14 +47,10 @@ def build_geo_where_clause(filters) -> tuple[str, dict]:
         conditions.append("zone_name = ANY(:zones)")
         params["zones"] = list(filters.zones)
     if getattr(filters, "states", None):
-        conditions.append(
-            "COALESCE(state_names, ARRAY[]::text[]) && CAST(:states AS text[])"
-        )
+        conditions.append("COALESCE(state_names, ARRAY[]::text[]) && CAST(:states AS text[])")
         params["states"] = list(filters.states)
     if getattr(filters, "cities", None):
-        conditions.append(
-            "COALESCE(city_names, ARRAY[]::text[]) && CAST(:cities AS text[])"
-        )
+        conditions.append("COALESCE(city_names, ARRAY[]::text[]) && CAST(:cities AS text[])")
         params["cities"] = list(filters.cities)
     if getattr(filters, "date_from", None):
         conditions.append(f"{report_date_expr()} >= :date_from")

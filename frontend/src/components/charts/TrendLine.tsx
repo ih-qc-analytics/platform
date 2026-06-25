@@ -22,21 +22,22 @@ const chartConfig = {
 
 export default function TrendLine({ data, comparisonData }: TrendLineProps) {
     const chartData = useMemo(() => {
-        const comparisonByMonth = new Map((comparisonData ?? []).map(point => [point.month, point.revenue]))
-        return data.map(point => ({
+        const comparisonByMonth = new Map((comparisonData ?? []).map((point) => [point.month, point.revenue]))
+        return data.map((point) => ({
             month: point.month,
             revenue: point.revenue,
             comparison_revenue: comparisonByMonth.get(point.month) ?? null,
         }))
     }, [comparisonData, data])
 
-    if (!data.length) return (
-        <Card>
-            <CardContent className="flex items-center justify-center min-h-48">
-                <p className="text-sm text-muted-foreground">Sin datos para el período seleccionado</p>
-            </CardContent>
-        </Card>
-    )
+    if (!data.length)
+        return (
+            <Card>
+                <CardContent className="flex items-center justify-center min-h-48">
+                    <p className="text-sm text-muted-foreground">Sin datos para el período seleccionado</p>
+                </CardContent>
+            </Card>
+        )
 
     return (
         <Card>
@@ -48,9 +49,22 @@ export default function TrendLine({ data, comparisonData }: TrendLineProps) {
                     <LineChart data={chartData}>
                         <CartesianGrid strokeDasharray="3 3" vertical={false} />
                         <XAxis dataKey="month" tickLine={false} axisLine={false} />
-                        <YAxis tickFormatter={(value) => formatRevenue(value as number)} tickLine={false} axisLine={false} width={Y_AXIS_WIDTH} />
-                        <ChartTooltip content={<ChartTooltipContent formatter={(val) => formatRevenue(val as number)} />} />
-                        <Line type="monotone" dataKey="revenue" stroke="var(--color-revenue)" strokeWidth={LINE_STROKE_WIDTH} dot={false} />
+                        <YAxis
+                            tickFormatter={(value) => formatRevenue(value as number)}
+                            tickLine={false}
+                            axisLine={false}
+                            width={Y_AXIS_WIDTH}
+                        />
+                        <ChartTooltip
+                            content={<ChartTooltipContent formatter={(val) => formatRevenue(val as number)} />}
+                        />
+                        <Line
+                            type="monotone"
+                            dataKey="revenue"
+                            stroke="var(--color-revenue)"
+                            strokeWidth={LINE_STROKE_WIDTH}
+                            dot={false}
+                        />
                         {comparisonData?.length ? (
                             <Line
                                 type="monotone"

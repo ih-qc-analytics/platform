@@ -7,14 +7,7 @@ import PorPaisFilterBar from "@/components/reports/PorPaisFilterBar"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
-import {
-    Table,
-    TableBody,
-    TableCell,
-    TableHead,
-    TableHeader,
-    TableRow,
-} from "@/components/ui/table"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { usePorPaisReport } from "@/hooks/useReports"
 import { getDefaultPorPaisFilters } from "@/lib/reportFilters"
 import { cn, formatCurrency, formatInteger } from "@/lib/utils"
@@ -33,7 +26,7 @@ export default function PorPais() {
     const summaryRows = data?.current.summary_rows ?? []
     const statusRows = data?.current.status_rows ?? []
     const comparisonRowsByCountry = useMemo(
-        () => new Map((data?.comparison?.data.summary_rows ?? []).map(row => [row.country, row])),
+        () => new Map((data?.comparison?.data.summary_rows ?? []).map((row) => [row.country, row])),
         [data?.comparison?.data.summary_rows],
     )
 
@@ -81,7 +74,7 @@ export default function PorPais() {
         <div className="flex flex-col gap-8 p-6">
             <PorPaisFilterBar
                 filters={filters}
-                onChange={nextFilters => {
+                onChange={(nextFilters) => {
                     setExportError(null)
                     setFilters(nextFilters)
                 }}
@@ -99,9 +92,7 @@ export default function PorPais() {
                     <CardTitle className="text-4xl font-semibold tracking-tight text-slate-900">
                         Resultado por País
                     </CardTitle>
-                    <p className="text-sm text-muted-foreground">
-                        Resumen por país y detalle por familia de exámenes.
-                    </p>
+                    <p className="text-sm text-muted-foreground">Resumen por país y detalle por familia de exámenes.</p>
                 </CardHeader>
                 <CardContent className="px-0 pb-4">
                     {isError && (
@@ -136,7 +127,7 @@ export default function PorPais() {
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                    {summaryRows.map(row => (
+                                    {summaryRows.map((row) => (
                                         <ClickableCountryRow
                                             key={row.country}
                                             row={row}
@@ -174,15 +165,23 @@ export default function PorPais() {
                                             País
                                         </TableHeadCell>
                                         <TableHeadCell className="min-w-24 text-center">Colegios Ganados</TableHeadCell>
-                                        <TableHeadCell className="min-w-24 text-center">Colegios Perdidos</TableHeadCell>
-                                        <TableHeadCell className="min-w-24 text-center">Colegios Mantenidos</TableHeadCell>
+                                        <TableHeadCell className="min-w-24 text-center">
+                                            Colegios Perdidos
+                                        </TableHeadCell>
+                                        <TableHeadCell className="min-w-24 text-center">
+                                            Colegios Mantenidos
+                                        </TableHeadCell>
                                         <TableHeadCell className="min-w-24 text-center">Exámenes Ganados</TableHeadCell>
-                                        <TableHeadCell className="min-w-24 text-center">Exámenes Perdidos</TableHeadCell>
-                                        <TableHeadCell className="min-w-24 text-center">Exámenes Mantenidos</TableHeadCell>
+                                        <TableHeadCell className="min-w-24 text-center">
+                                            Exámenes Perdidos
+                                        </TableHeadCell>
+                                        <TableHeadCell className="min-w-24 text-center">
+                                            Exámenes Mantenidos
+                                        </TableHeadCell>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                    {statusRows.map(row => (
+                                    {statusRows.map((row) => (
                                         <StatusRowView key={row.country} row={row} />
                                     ))}
                                 </TableBody>
@@ -195,7 +194,7 @@ export default function PorPais() {
             <PorPaisDetail
                 country={selectedCountry}
                 open={selectedCountry !== null}
-                onOpenChange={open => {
+                onOpenChange={(open) => {
                     if (!open) setSelectedCountry(null)
                 }}
                 filters={filters}
@@ -220,7 +219,7 @@ function ClickableCountryRow({
             tabIndex={0}
             role="button"
             onClick={onSelect}
-            onKeyDown={event => {
+            onKeyDown={(event) => {
                 if (event.key === "Enter" || event.key === " ") {
                     event.preventDefault()
                     onSelect()
@@ -231,14 +230,62 @@ function ClickableCountryRow({
             <TableBodyCell className="sticky left-0 z-10 bg-card font-semibold text-slate-900 group-hover:bg-muted/30 group-focus-visible:bg-muted/30">
                 {row.country}
             </TableBodyCell>
-            <MetricCell value={row.total_schools} comparisonValue={comparisonRow?.total_schools} showComparison={showComparison} align="right" />
-            <MetricCell value={row.total_revenue} comparisonValue={comparisonRow?.total_revenue} showComparison={showComparison} align="right" emphasize format={formatCurrency} />
-            <MetricCell value={row.uncategorized_revenue} comparisonValue={comparisonRow?.uncategorized_revenue} showComparison={showComparison} align="right" format={formatCurrency} />
-            <MetricCell value={row.cambridge} comparisonValue={comparisonRow?.cambridge} showComparison={showComparison} align="right" emphasize />
-            <MetricCell value={row.ielts} comparisonValue={comparisonRow?.ielts} showComparison={showComparison} align="right" emphasize />
-            <MetricCell value={row.michigan} comparisonValue={comparisonRow?.michigan} showComparison={showComparison} align="right" emphasize />
-            <MetricCell value={row.tea} comparisonValue={comparisonRow?.tea} showComparison={showComparison} align="right" emphasize />
-            <MetricCell value={row.other} comparisonValue={comparisonRow?.other} showComparison={showComparison} align="right" emphasize />
+            <MetricCell
+                value={row.total_schools}
+                comparisonValue={comparisonRow?.total_schools}
+                showComparison={showComparison}
+                align="right"
+            />
+            <MetricCell
+                value={row.total_revenue}
+                comparisonValue={comparisonRow?.total_revenue}
+                showComparison={showComparison}
+                align="right"
+                emphasize
+                format={formatCurrency}
+            />
+            <MetricCell
+                value={row.uncategorized_revenue}
+                comparisonValue={comparisonRow?.uncategorized_revenue}
+                showComparison={showComparison}
+                align="right"
+                format={formatCurrency}
+            />
+            <MetricCell
+                value={row.cambridge}
+                comparisonValue={comparisonRow?.cambridge}
+                showComparison={showComparison}
+                align="right"
+                emphasize
+            />
+            <MetricCell
+                value={row.ielts}
+                comparisonValue={comparisonRow?.ielts}
+                showComparison={showComparison}
+                align="right"
+                emphasize
+            />
+            <MetricCell
+                value={row.michigan}
+                comparisonValue={comparisonRow?.michigan}
+                showComparison={showComparison}
+                align="right"
+                emphasize
+            />
+            <MetricCell
+                value={row.tea}
+                comparisonValue={comparisonRow?.tea}
+                showComparison={showComparison}
+                align="right"
+                emphasize
+            />
+            <MetricCell
+                value={row.other}
+                comparisonValue={comparisonRow?.other}
+                showComparison={showComparison}
+                align="right"
+                emphasize
+            />
             <TableBodyCell className="w-12 text-right text-slate-400">
                 <ChevronRight className="ml-auto size-5" />
             </TableBodyCell>
@@ -262,30 +309,25 @@ function StatusRowView({ row }: { row: PorPaisStatusRow }) {
     )
 }
 
-function TableHeadCell({
-    className,
-    children,
-}: {
-    className?: string
-    children?: React.ReactNode
-}) {
+function TableHeadCell({ className, children }: { className?: string; children?: React.ReactNode }) {
     return (
         <TableHead
-            className={cn("border-b border-border px-3 py-3 text-xs font-semibold uppercase tracking-wide text-slate-700", className)}
+            className={cn(
+                "border-b border-border px-3 py-3 text-xs font-semibold uppercase tracking-wide text-slate-700",
+                className,
+            )}
         >
             {children}
         </TableHead>
     )
 }
 
-function TableBodyCell({
-    className,
-    children,
-}: {
-    className?: string
-    children: React.ReactNode
-}) {
-    return <TableCell className={cn("border-b border-border px-3 py-3 text-sm text-slate-700", className)}>{children}</TableCell>
+function TableBodyCell({ className, children }: { className?: string; children: React.ReactNode }) {
+    return (
+        <TableCell className={cn("border-b border-border px-3 py-3 text-sm text-slate-700", className)}>
+            {children}
+        </TableCell>
+    )
 }
 
 function MetricCell({
@@ -315,13 +357,7 @@ function MetricCell({
     )
 }
 
-function StatusMetricCell({
-    value,
-    tone,
-}: {
-    value: number
-    tone: "success" | "danger" | "info"
-}) {
+function StatusMetricCell({ value, tone }: { value: number; tone: "success" | "danger" | "info" }) {
     return (
         <TableBodyCell>
             <div className="flex justify-center">
@@ -336,10 +372,7 @@ function StatusMetricCell({
 function PorPaisTableSkeleton({ columns }: { columns: number }) {
     return (
         <div className="space-y-4 px-6 py-6">
-            <div
-                className="grid gap-4"
-                style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}
-            >
+            <div className="grid gap-4" style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}>
                 {Array.from({ length: columns }).map((_, index) => (
                     <Skeleton key={index} className="h-5 w-full" />
                 ))}

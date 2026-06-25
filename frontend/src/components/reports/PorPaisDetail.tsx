@@ -19,7 +19,7 @@ type PorPaisDetailProps = {
 }
 
 const FAMILY_EXAM_TYPES = {
-    Cambridge: DETALLE_ASESOR_EXAM_TYPES.filter(name => !["IELTS", "MET", "MET Go!", "TEA", "Other"].includes(name)),
+    Cambridge: DETALLE_ASESOR_EXAM_TYPES.filter((name) => !["IELTS", "MET", "MET Go!", "TEA", "Other"].includes(name)),
     IELTS: ["IELTS"],
     MET: ["MET", "MET Go!"],
     TEA: ["TEA"],
@@ -27,12 +27,7 @@ const FAMILY_EXAM_TYPES = {
     Total: DETALLE_ASESOR_EXAM_TYPES,
 } as const
 
-export default function PorPaisDetail({
-    country,
-    open,
-    onOpenChange,
-    filters,
-}: PorPaisDetailProps) {
+export default function PorPaisDetail({ country, open, onOpenChange, filters }: PorPaisDetailProps) {
     const [isExportingPdf, setIsExportingPdf] = useState(false)
     const [exportError, setExportError] = useState<string | null>(null)
     const { data, isLoading, isError } = usePorPaisDetail(country, filters, open)
@@ -41,7 +36,10 @@ export default function PorPaisDetail({
         () => [
             {
                 title: "Cambridge",
-                value: FAMILY_EXAM_TYPES.Cambridge.reduce((sum, examType) => sum + (data?.exam_counts[examType] ?? 0), 0),
+                value: FAMILY_EXAM_TYPES.Cambridge.reduce(
+                    (sum, examType) => sum + (data?.exam_counts[examType] ?? 0),
+                    0,
+                ),
             },
             {
                 title: "IELTS",
@@ -95,7 +93,11 @@ export default function PorPaisDetail({
                             className="shrink-0 rounded-2xl"
                             disabled={!country || isLoading || isExportingPdf}
                         >
-                            {isExportingPdf ? <Loader2 className="size-4 animate-spin" /> : <FileDown className="size-4" />}
+                            {isExportingPdf ? (
+                                <Loader2 className="size-4 animate-spin" />
+                            ) : (
+                                <FileDown className="size-4" />
+                            )}
                             {isExportingPdf ? "Generando PDF..." : "Exportar PDF"}
                         </Button>
                     </div>
@@ -114,7 +116,7 @@ export default function PorPaisDetail({
                                     Familias de exámenes
                                 </h2>
                                 <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-6">
-                                    {categoryTiles.map(tile => (
+                                    {categoryTiles.map((tile) => (
                                         <Card key={tile.title} className="rounded-2xl shadow-none">
                                             <CardContent className="flex min-h-28 flex-col justify-between gap-4 p-4">
                                                 <span className="text-sm font-medium text-slate-600">{tile.title}</span>
@@ -132,7 +134,7 @@ export default function PorPaisDetail({
                                     Desglose por examen
                                 </h2>
                                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                                    {DETALLE_ASESOR_EXAM_TYPES.map(examType => (
+                                    {DETALLE_ASESOR_EXAM_TYPES.map((examType) => (
                                         <Card key={examType} className="rounded-2xl shadow-none">
                                             <CardContent className="flex items-center justify-between gap-4 p-4">
                                                 <span className="text-sm font-medium text-slate-700">{examType}</span>

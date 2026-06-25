@@ -79,7 +79,7 @@ def coerce_to_date(value, fallback: date | None = None) -> date | None:
     """
     if value is None:
         return fallback
-    if isinstance(value, datetime):   # must come before date check
+    if isinstance(value, datetime):  # must come before date check
         return value.date()
     if isinstance(value, date):
         return value
@@ -151,7 +151,9 @@ async def calculate_business_status(lead_ids: set[int]) -> tuple[set[int], set[i
     return current - prior, prior - current, current & prior
 
 
-def resolve_business_status(lead_id: int, ganados: set[int], perdidos: set[int], mantenidos: set[int]) -> str:
+def resolve_business_status(
+    lead_id: int, ganados: set[int], perdidos: set[int], mantenidos: set[int]
+) -> str:
     if lead_id in ganados:
         return BusinessStatus.GANADO.value
     if lead_id in perdidos:
@@ -227,7 +229,9 @@ async def fetch_live_rate(rate_date: date, from_cur: str, to_cur: str) -> float:
     return rate
 
 
-async def get_rate(rate_date: date, from_cur: str, to_cur: str, rates: dict[tuple[date, str, str], float]) -> float:
+async def get_rate(
+    rate_date: date, from_cur: str, to_cur: str, rates: dict[tuple[date, str, str], float]
+) -> float:
     if from_cur == to_cur:
         return 1.0
     exact_rate = rates.get((rate_date, from_cur, to_cur))
@@ -247,7 +251,9 @@ async def convert_currency(
     base_currency = SITE_CURRENCY.get(site, UNKNOWN_CURRENCY)
     if base_currency == UNKNOWN_CURRENCY:
         return None, None
-    rate_to_mxn = await get_rate(rate_date, base_currency, "MXN", rates) if base_currency != "MXN" else 1.0
+    rate_to_mxn = (
+        await get_rate(rate_date, base_currency, "MXN", rates) if base_currency != "MXN" else 1.0
+    )
     rate_to_usd = await get_rate(rate_date, base_currency, "USD", rates)
     return round(amount * rate_to_mxn, 2), round(amount * rate_to_usd, 2)
 

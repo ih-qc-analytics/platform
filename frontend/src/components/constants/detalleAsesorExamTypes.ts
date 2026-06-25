@@ -21,7 +21,6 @@ export const DETALLE_ASESOR_EXAM_TYPES = [
     "Other",
 ] as const
 
-
 export const EXAM_TYPE_LABELS = [
     "STA",
     "MOV",

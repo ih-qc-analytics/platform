@@ -2,9 +2,7 @@ import pytest
 from unittest.mock import patch, AsyncMock
 from httpx import AsyncClient, ASGITransport
 from app.main import app
-from app.schemas.reports import (
-    TotalSalesResponse, TrendPoint, GeoPoint, ProductMix
-)
+from app.schemas.reports import TotalSalesResponse, TrendPoint, GeoPoint, ProductMix
 
 BASE = "/reports/ventas-totales"
 
@@ -47,10 +45,10 @@ MOCK_RESPONSE = TotalSalesResponse(
 # HELPER
 # ─────────────────────────────────────────────
 
+
 async def post(body: dict = {}):
     with patch(
-        "app.routers.total_sales.getTotalSalesData",
-        new=AsyncMock(return_value=MOCK_RESPONSE)
+        "app.routers.total_sales.getTotalSalesData", new=AsyncMock(return_value=MOCK_RESPONSE)
     ):
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:  # type: ignore[arg-type]
             return await client.post(BASE, json=body)
@@ -59,6 +57,7 @@ async def post(body: dict = {}):
 # ─────────────────────────────────────────────
 # STATUS + SHAPE
 # ─────────────────────────────────────────────
+
 
 @pytest.mark.asyncio(loop_scope="session")
 async def test_endpoint_returns_200():
@@ -70,12 +69,26 @@ async def test_endpoint_returns_200():
 async def test_response_has_required_fields():
     data = (await post()).json()
     required = {
-        "total_clients", "total_exams", "exam_revenue",
-        "total_books", "book_revenue", "total_courses", "course_revenue",
-        "total_otros", "otros_revenue",
-        "total_revenue", "expected_revenue", "expected_cost", "uncategorized_revenue",
-        "unknown_site_revenue", "unknown_site_expected_revenue", "profit_margin", "prior_year_revenue",
-        "trend_points", "geo_points", "product_mix",
+        "total_clients",
+        "total_exams",
+        "exam_revenue",
+        "total_books",
+        "book_revenue",
+        "total_courses",
+        "course_revenue",
+        "total_otros",
+        "otros_revenue",
+        "total_revenue",
+        "expected_revenue",
+        "expected_cost",
+        "uncategorized_revenue",
+        "unknown_site_revenue",
+        "unknown_site_expected_revenue",
+        "profit_margin",
+        "prior_year_revenue",
+        "trend_points",
+        "geo_points",
+        "product_mix",
     }
     assert required.issubset(data.keys())
 
@@ -106,6 +119,7 @@ async def test_product_mix_shape():
 # BODY PARSING
 # verifies FastAPI correctly deserializes the JSON body into ReportFilters
 # ─────────────────────────────────────────────
+
 
 @pytest.mark.asyncio(loop_scope="session")
 async def test_single_country_parsed():
@@ -154,6 +168,7 @@ async def test_empty_body_uses_defaults():
 # SERIALIZATION
 # ─────────────────────────────────────────────
 
+
 @pytest.mark.asyncio(loop_scope="session")
 async def test_numeric_fields_are_numbers():
     data = (await post()).json()
@@ -173,8 +188,7 @@ async def test_trend_points_are_list():
 async def test_product_mix_null_when_service_returns_none():
     empty_response = MOCK_RESPONSE.model_copy(update={"product_mix": None, "total_revenue": 0.0})
     with patch(
-        "app.routers.total_sales.getTotalSalesData",
-        new=AsyncMock(return_value=empty_response)
+        "app.routers.total_sales.getTotalSalesData", new=AsyncMock(return_value=empty_response)
     ):
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:  # type: ignore[arg-type]
             data = (await client.post(BASE, json={})).json()

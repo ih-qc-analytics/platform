@@ -4,6 +4,7 @@ from app.schemas.reports import FilterOptionsResponse, SellerOptionsResponse
 
 router = APIRouter()
 
+
 @router.get("/options", response_model=FilterOptionsResponse)
 async def get_filter_options():
     return await getFilters()

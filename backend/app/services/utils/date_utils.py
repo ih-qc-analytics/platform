@@ -38,7 +38,9 @@ def resolve_comparison_range(filters) -> ComparisonMeta | None:
         comparison_from = getattr(filters, "comparison_date_from", None)
         comparison_to = getattr(filters, "comparison_date_to", None)
         if not comparison_from or not comparison_to:
-            raise ValueError("Custom comparison mode requires comparison_date_from and comparison_date_to")
+            raise ValueError(
+                "Custom comparison mode requires comparison_date_from and comparison_date_to"
+            )
     elif mode == ComparisonMode.PREVIOUS_PERIOD:
         comparison_from, comparison_to = previous_period_date_range(current_from, current_to)
     else:
@@ -56,7 +58,9 @@ def current_year_to_date_range(today: date | None = None) -> tuple[str, str]:
     return date(current_day.year, 1, 1).isoformat(), current_day.isoformat()
 
 
-def percent_change(current_value: float | int, comparison_value: float | int | None) -> float | None:
+def percent_change(
+    current_value: float | int, comparison_value: float | int | None
+) -> float | None:
     if comparison_value is None:
         return None
     comparison_number = float(comparison_value)

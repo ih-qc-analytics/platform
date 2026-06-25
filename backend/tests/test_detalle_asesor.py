@@ -16,7 +16,9 @@ async def test_detalle_asesor_2025_returns_only_paid_exam_cart_products(ui_dev_r
 
 
 @pytest.mark.asyncio(loop_scope="session")
-async def test_detalle_asesor_dedupes_multi_student_allocations_to_single_cart_product_quantities(ui_dev_reporting_db):
+async def test_detalle_asesor_dedupes_multi_student_allocations_to_single_cart_product_quantities(
+    ui_dev_reporting_db,
+):
     result = await getDetalleData(
         DetalleFilters(date_from="2025-01-01", date_to="2025-12-31", page_size=20)
     )
@@ -35,8 +37,8 @@ async def test_detalle_asesor_excludes_non_exam_pending_and_deleted_rows(ui_dev_
     )
 
     ids = [row.id for row in result.rows]
-    assert 6 not in ids   # book
-    assert 9 not in ids   # course
+    assert 6 not in ids  # book
+    assert 9 not in ids  # course
     assert 14 not in ids  # other fee with no allocation
     assert 15 not in ids  # pending payment
     assert 16 not in ids  # deleted cart

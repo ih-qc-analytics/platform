@@ -78,9 +78,7 @@ def build_country_rates_derived_table(
     for index, (country, rate) in enumerate(normalized_rates.items()):
         country_param = f"fx_country_{index}"
         rate_param = f"fx_rate_{index}"
-        rows.append(
-            f"SELECT :{country_param} AS country_key, :{rate_param} AS rate_to_base"
-        )
+        rows.append(f"SELECT :{country_param} AS country_key, :{rate_param} AS rate_to_base")
         params[country_param] = country
         params[rate_param] = rate
 

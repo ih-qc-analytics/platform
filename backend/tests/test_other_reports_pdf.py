@@ -30,7 +30,10 @@ from app.services.por_asesor.product_grouping import EXAM_CATEGORY_ORDER
 from app.services.por_asesor.por_asesor import build_asesor_detail_pdf_payload
 from app.services.detalle_asesor.detalle_asesor import build_detalle_asesor_pdf_payload
 from app.services.por_asesor.por_asesor import build_por_asesor_pdf_payload
-from app.services.por_pais.por_pais import build_por_pais_detail_pdf_payload, build_por_pais_pdf_payload
+from app.services.por_pais.por_pais import (
+    build_por_pais_detail_pdf_payload,
+    build_por_pais_pdf_payload,
+)
 
 
 @pytest.mark.asyncio(loop_scope="session")
@@ -207,59 +210,120 @@ async def test_build_asesor_detail_pdf_payload_contains_drawer_sections():
 
 @pytest.mark.asyncio(loop_scope="session")
 async def test_pdf_endpoints_return_payload_shapes():
-    with patch(
-        "app.routers.por_asesor.build_por_asesor_pdf_payload",
-        new=AsyncMock(
-            return_value=PorAsesorPDFPayload(
-                header={"title": "Por Asesor", "subtitle": "x", "generated_at": "12/05/2026 10:00", "filters_summary": {}},
-                kpis=[{"label": "Asesores", "value": "1"}],
-                table={"headers": ["A"], "rows": [{"cells": ["b"]}], "column_widths": [1]},
-            )
+    with (
+        patch(
+            "app.routers.por_asesor.build_por_asesor_pdf_payload",
+            new=AsyncMock(
+                return_value=PorAsesorPDFPayload(
+                    header={
+                        "title": "Por Asesor",
+                        "subtitle": "x",
+                        "generated_at": "12/05/2026 10:00",
+                        "filters_summary": {},
+                    },
+                    kpis=[{"label": "Asesores", "value": "1"}],
+                    table={"headers": ["A"], "rows": [{"cells": ["b"]}], "column_widths": [1]},
+                )
+            ),
         ),
-    ), patch(
-        "app.routers.por_asesor.build_asesor_detail_pdf_payload",
-        new=AsyncMock(
-            return_value=AsesorDetailPDFPayload(
-                header={"title": "Ana Garcia", "subtitle": "x", "generated_at": "12/05/2026 10:00", "filters_summary": {}},
-                kpis=[{"label": "Total Colegios", "value": "3"}],
-                geo_table={"headers": ["A"], "rows": [{"cells": ["b"]}], "column_widths": [1]},
-                categories_table={"headers": ["A"], "rows": [{"cells": ["b"]}], "column_widths": [1]},
-                status_table={"headers": ["A"], "rows": [{"cells": ["b"]}], "column_widths": [1]},
-            )
+        patch(
+            "app.routers.por_asesor.build_asesor_detail_pdf_payload",
+            new=AsyncMock(
+                return_value=AsesorDetailPDFPayload(
+                    header={
+                        "title": "Ana Garcia",
+                        "subtitle": "x",
+                        "generated_at": "12/05/2026 10:00",
+                        "filters_summary": {},
+                    },
+                    kpis=[{"label": "Total Colegios", "value": "3"}],
+                    geo_table={"headers": ["A"], "rows": [{"cells": ["b"]}], "column_widths": [1]},
+                    categories_table={
+                        "headers": ["A"],
+                        "rows": [{"cells": ["b"]}],
+                        "column_widths": [1],
+                    },
+                    status_table={
+                        "headers": ["A"],
+                        "rows": [{"cells": ["b"]}],
+                        "column_widths": [1],
+                    },
+                )
+            ),
         ),
-    ), patch(
-        "app.routers.detalle_asesor.build_detalle_asesor_pdf_payload",
-        new=AsyncMock(
-            return_value=DetalleAsesorPDFPayload(
-                header={"title": "Detalle", "subtitle": "x", "generated_at": "12/05/2026 10:00", "filters_summary": {}},
-                table_identity={"headers": ["A"], "rows": [{"cells": ["b"]}], "column_widths": [1]},
-                table_exams={"headers": ["A"], "rows": [{"cells": ["b"]}], "column_widths": [1]},
-                orientation="landscape",
-            )
+        patch(
+            "app.routers.detalle_asesor.build_detalle_asesor_pdf_payload",
+            new=AsyncMock(
+                return_value=DetalleAsesorPDFPayload(
+                    header={
+                        "title": "Detalle",
+                        "subtitle": "x",
+                        "generated_at": "12/05/2026 10:00",
+                        "filters_summary": {},
+                    },
+                    table_identity={
+                        "headers": ["A"],
+                        "rows": [{"cells": ["b"]}],
+                        "column_widths": [1],
+                    },
+                    table_exams={
+                        "headers": ["A"],
+                        "rows": [{"cells": ["b"]}],
+                        "column_widths": [1],
+                    },
+                    orientation="landscape",
+                )
+            ),
         ),
-    ), patch(
-        "app.routers.por_pais.build_por_pais_pdf_payload",
-        new=AsyncMock(
-            return_value=PorPaisPDFPayload(
-                header={"title": "Por Pais", "subtitle": "x", "generated_at": "12/05/2026 10:00", "filters_summary": {}},
-                kpis=[{"label": "Países", "value": "1"}],
-                summary_table={"headers": ["A"], "rows": [{"cells": ["b"]}], "column_widths": [1]},
-                status_table={"headers": ["A"], "rows": [{"cells": ["b"]}], "column_widths": [1]},
-            )
+        patch(
+            "app.routers.por_pais.build_por_pais_pdf_payload",
+            new=AsyncMock(
+                return_value=PorPaisPDFPayload(
+                    header={
+                        "title": "Por Pais",
+                        "subtitle": "x",
+                        "generated_at": "12/05/2026 10:00",
+                        "filters_summary": {},
+                    },
+                    kpis=[{"label": "Países", "value": "1"}],
+                    summary_table={
+                        "headers": ["A"],
+                        "rows": [{"cells": ["b"]}],
+                        "column_widths": [1],
+                    },
+                    status_table={
+                        "headers": ["A"],
+                        "rows": [{"cells": ["b"]}],
+                        "column_widths": [1],
+                    },
+                )
+            ),
         ),
-    ), patch(
-        "app.routers.por_pais.build_por_pais_detail_pdf_payload",
-        new=AsyncMock(
-            return_value=PorPaisDetailPDFPayload(
-                header={"title": "México", "subtitle": "x", "generated_at": "12/05/2026 10:00", "filters_summary": {}},
-                kpis=[{"label": "País", "value": "México"}],
-                detail_table={"headers": ["A"], "rows": [{"cells": ["b"]}], "column_widths": [1]},
-            )
+        patch(
+            "app.routers.por_pais.build_por_pais_detail_pdf_payload",
+            new=AsyncMock(
+                return_value=PorPaisDetailPDFPayload(
+                    header={
+                        "title": "México",
+                        "subtitle": "x",
+                        "generated_at": "12/05/2026 10:00",
+                        "filters_summary": {},
+                    },
+                    kpis=[{"label": "País", "value": "México"}],
+                    detail_table={
+                        "headers": ["A"],
+                        "rows": [{"cells": ["b"]}],
+                        "column_widths": [1],
+                    },
+                )
+            ),
         ),
     ):
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:  # type: ignore[arg-type]
             por_asesor = await client.post("/reports/por-asesor/export/pdf", json={"year": 2025})
-            asesor_detail = await client.post("/reports/por-asesor/1/export/pdf", json={"year": 2025})
+            asesor_detail = await client.post(
+                "/reports/por-asesor/1/export/pdf", json={"year": 2025}
+            )
             detalle = await client.post(
                 "/reports/detalle-asesor/export/pdf",
                 json={"date_from": "2025-01-01", "date_to": "2025-12-31"},

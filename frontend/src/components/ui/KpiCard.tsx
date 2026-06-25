@@ -14,10 +14,11 @@ type KpiCardProps = {
     comparisonLabel?: string
 }
 
-const formatNumber = (value: number, decimals: number) => value.toLocaleString(undefined, {
-    minimumFractionDigits: decimals,
-    maximumFractionDigits: decimals,
-})
+const formatNumber = (value: number, decimals: number) =>
+    value.toLocaleString(undefined, {
+        minimumFractionDigits: decimals,
+        maximumFractionDigits: decimals,
+    })
 
 export default function KpiCard({
     title,
@@ -32,9 +33,8 @@ export default function KpiCard({
     comparisonLabel = "Periodo comparativo",
 }: KpiCardProps) {
     const formatted = formatNumber(value, decimals)
-    const comparisonFormatted = comparisonValue === null || comparisonValue === undefined
-        ? null
-        : formatNumber(comparisonValue, decimals)
+    const comparisonFormatted =
+        comparisonValue === null || comparisonValue === undefined ? null : formatNumber(comparisonValue, decimals)
 
     return (
         <Card>
@@ -42,16 +42,23 @@ export default function KpiCard({
                 <div className="flex flex-col gap-2">
                     <span className="text-sm font-medium text-muted-foreground">{title}</span>
                     <span className="text-3xl font-bold">
-                        {prefix}{formatted}{suffix}
+                        {prefix}
+                        {formatted}
+                        {suffix}
                     </span>
                     {showComparison && comparisonFormatted !== null ? (
                         <div className="flex flex-col gap-1">
                             <span className="text-xs text-muted-foreground">
-                                {comparisonLabel}: {prefix}{comparisonFormatted}{suffix}
+                                {comparisonLabel}: {prefix}
+                                {comparisonFormatted}
+                                {suffix}
                             </span>
                             {comparisonPct !== null && comparisonPct !== undefined ? (
-                                <span className={`text-sm font-medium ${comparisonPct >= 0 ? "text-success" : "text-destructive"}`}>
-                                    {comparisonPct >= 0 ? "+" : ""}{comparisonPct.toFixed(1)}%
+                                <span
+                                    className={`text-sm font-medium ${comparisonPct >= 0 ? "text-success" : "text-destructive"}`}
+                                >
+                                    {comparisonPct >= 0 ? "+" : ""}
+                                    {comparisonPct.toFixed(1)}%
                                 </span>
                             ) : null}
                         </div>

@@ -11,8 +11,12 @@ def _payment_where(filters: PorPaisFilters) -> tuple[str, dict]:
     return build_payment_where_clause(filters)
 
 
-def _line_where(filters: PorPaisFilters, *, require_product_breakdown: bool = False) -> tuple[str, dict]:
-    return build_line_item_where_clause(filters, require_product_breakdown=require_product_breakdown)
+def _line_where(
+    filters: PorPaisFilters, *, require_product_breakdown: bool = False
+) -> tuple[str, dict]:
+    return build_line_item_where_clause(
+        filters, require_product_breakdown=require_product_breakdown
+    )
 
 
 async def fetch_country_payment_rows(
@@ -22,7 +26,9 @@ async def fetch_country_payment_rows(
     where, params = _payment_where(filters)
     payment_amount = payment_amount_column(base_currency)
     async with ReportingSessionLocal() as session:
-        return (await session.execute(text(f"""
+        return (
+            await session.execute(
+                text(f"""
             SELECT
                 site AS country,
                 COUNT(DISTINCT lead_id) AS total_schools,
@@ -31,7 +37,10 @@ async def fetch_country_payment_rows(
             WHERE {where}
             GROUP BY site
             ORDER BY site ASC
-        """), params)).fetchall()
+        """),
+                params,
+            )
+        ).fetchall()
 
 
 async def fetch_country_allocated_revenue_rows(
@@ -41,7 +50,9 @@ async def fetch_country_allocated_revenue_rows(
     where, params = _line_where(filters, require_product_breakdown=True)
     paid_total = line_paid_total_column(base_currency)
     async with ReportingSessionLocal() as session:
-        return (await session.execute(text(f"""
+        return (
+            await session.execute(
+                text(f"""
             SELECT
                 site AS country,
                 COALESCE(SUM({paid_total}), 0) AS allocated_revenue
@@ -49,13 +60,18 @@ async def fetch_country_allocated_revenue_rows(
             WHERE {where}
             GROUP BY site
             ORDER BY site ASC
-        """), params)).fetchall()
+        """),
+                params,
+            )
+        ).fetchall()
 
 
 async def fetch_country_exam_rows(filters: PorPaisFilters) -> list:
     where, params = _line_where(filters, require_product_breakdown=True)
     async with ReportingSessionLocal() as session:
-        return (await session.execute(text(f"""
+        return (
+            await session.execute(
+                text(f"""
             SELECT
                 site AS country,
                 exam_canonical_name AS exam_name,
@@ -64,26 +80,36 @@ async def fetch_country_exam_rows(filters: PorPaisFilters) -> list:
             WHERE {where} AND product_type = 'exam'
             GROUP BY site, exam_canonical_name
             ORDER BY site ASC, exam_canonical_name ASC
-        """), params)).fetchall()
+        """),
+                params,
+            )
+        ).fetchall()
 
 
 async def fetch_country_presence_rows(filters: PorPaisFilters) -> list:
     where, params = _payment_where(filters)
     async with ReportingSessionLocal() as session:
-        return (await session.execute(text(f"""
+        return (
+            await session.execute(
+                text(f"""
             SELECT DISTINCT
                 site AS country,
                 lead_id
             FROM report_payments
             WHERE {where}
             ORDER BY country ASC, lead_id ASC
-        """), params)).fetchall()
+        """),
+                params,
+            )
+        ).fetchall()
 
 
 async def fetch_country_metric_rows(filters: PorPaisFilters) -> list:
     where, params = _line_where(filters, require_product_breakdown=True)
     async with ReportingSessionLocal() as session:
-        return (await session.execute(text(f"""
+        return (
+            await session.execute(
+                text(f"""
             SELECT
                 site AS country,
                 lead_id,
@@ -92,4 +118,7 @@ async def fetch_country_metric_rows(filters: PorPaisFilters) -> list:
             WHERE {where} AND product_type = 'exam'
             GROUP BY site, lead_id
             ORDER BY country ASC, lead_id ASC
-        """), params)).fetchall()
+        """),
+                params,
+            )
+        ).fetchall()

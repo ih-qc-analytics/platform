@@ -22,7 +22,7 @@ export default function SingleSelectField({
             </SelectTrigger>
             <SelectContent>
                 <SelectItem value="all">{label}</SelectItem>
-                {cleanOptions(options).map(option => (
+                {cleanOptions(options).map((option) => (
                     <SelectItem key={option} value={option}>
                         {option}
                     </SelectItem>
@@ -32,6 +32,7 @@ export default function SingleSelectField({
     )
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function cleanOptions(options: string[]) {
-    return [...new Set(options.map(option => option.trim()).filter(Boolean))]
+    return [...new Set(options.map((option) => option.trim()).filter(Boolean))]
 }

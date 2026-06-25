@@ -52,7 +52,7 @@ export default function FilterBar({ hideComparison, ...props }: FilterBarProps) 
         <ReportFilterBarShell
             onClear={() => commitChange(getDefaultReportFilters())}
             comparison={selected}
-            onApplyComparison={next => commitChange({ ...selected, ...next })}
+            onApplyComparison={(next) => commitChange({ ...selected, ...next })}
             hideComparison={hideComparison}
             onExportPdf={props.onExportPdf}
             onExportExcelWithFilters={props.onExportExcelWithFilters}

@@ -298,7 +298,9 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Dump advisor sales/payment coverage data for report debugging.",
     )
-    parser.add_argument("--seller", required=True, help='Exact advisor full name, e.g. "Laura López cdmx"')
+    parser.add_argument(
+        "--seller", required=True, help='Exact advisor full name, e.g. "Laura López cdmx"'
+    )
     parser.add_argument("--year", required=True, type=int, help="Report year to inspect")
     parser.add_argument(
         "--output",
@@ -330,7 +332,9 @@ def main() -> None:
         payment_summary_by_lead = run_query(conn, PAYMENT_SUMMARY_BY_LEAD_SQL, params)
         raw_allocations = run_query(conn, RAW_ALLOCATIONS_SQL, params)
         allocation_summary_by_exam = run_query(conn, ALLOCATION_SUMMARY_BY_EXAM_SQL, params)
-        payment_allocation_reconciliation = run_query(conn, PAYMENT_ALLOCATION_RECONCILIATION_SQL, params)
+        payment_allocation_reconciliation = run_query(
+            conn, PAYMENT_ALLOCATION_RECONCILIATION_SQL, params
+        )
         current_year_status_inputs = run_query(conn, CURRENT_YEAR_STATUS_INPUTS_SQL, params)
 
     output = build_output(

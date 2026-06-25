@@ -119,9 +119,18 @@ async def test_por_pais_detail_parses_body_and_country():
 @pytest.mark.asyncio(loop_scope="session")
 async def test_por_pais_detail_pdf_returns_200():
     payload = PorPaisDetailPDFPayload(
-        header={"title": "México", "subtitle": "x", "generated_at": "12/05/2026 10:00", "filters_summary": {}},
+        header={
+            "title": "México",
+            "subtitle": "x",
+            "generated_at": "12/05/2026 10:00",
+            "filters_summary": {},
+        },
         kpis=[{"label": "País", "value": "México"}],
-        detail_table={"headers": ["Examen", "Cantidad"], "rows": [{"cells": ["IELTS", "2"]}], "column_widths": [1, 1]},
+        detail_table={
+            "headers": ["Examen", "Cantidad"],
+            "rows": [{"cells": ["IELTS", "2"]}],
+            "column_widths": [1, 1],
+        },
     )
     with patch(
         "app.routers.por_pais.build_por_pais_detail_pdf_payload",

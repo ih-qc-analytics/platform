@@ -8,14 +8,7 @@ import ReportPagination from "@/components/reports/ReportPagination"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
-import {
-    Table,
-    TableBody,
-    TableCell,
-    TableHead,
-    TableHeader,
-    TableRow,
-} from "@/components/ui/table"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import useCursorPagination from "@/hooks/useCursorPagination"
 import { useDetalleAsesorReport } from "@/hooks/useReports"
 import { getDefaultReportFilters } from "@/lib/reportFilters"
@@ -104,7 +97,7 @@ export default function DetallePorAsesor() {
             <FilterBar
                 hideComparison
                 value={filters}
-                onChange={nextFilters => {
+                onChange={(nextFilters) => {
                     reset()
                     setExportError(null)
                     setFilters(nextFilters)
@@ -127,7 +120,7 @@ export default function DetallePorAsesor() {
                     <Input
                         id="detalle-asesor-search"
                         value={searchInput}
-                        onChange={event => setSearchInput(event.target.value)}
+                        onChange={(event) => setSearchInput(event.target.value)}
                         placeholder="Escribe un nombre de asesor o escuela"
                         className="h-14 rounded-2xl border-border bg-card pl-11 pr-4 text-sm shadow-sm"
                     />
@@ -140,13 +133,9 @@ export default function DetallePorAsesor() {
                         <CardTitle className="text-4xl font-semibold tracking-tight text-slate-900">
                             Detalle por Asesor
                         </CardTitle>
-                        <p className="text-sm text-muted-foreground">
-                            Desglose por asesor, escuela y fecha de examen.
-                        </p>
+                        <p className="text-sm text-muted-foreground">Desglose por asesor, escuela y fecha de examen.</p>
                     </div>
-                    <p className="text-sm font-medium text-slate-500">
-                        {rows.length} registros encontrados
-                    </p>
+                    <p className="text-sm font-medium text-slate-500">{rows.length} registros encontrados</p>
                 </CardHeader>
                 <CardContent className="p-0">
                     {isError && (
@@ -170,7 +159,7 @@ export default function DetallePorAsesor() {
                                             <DetalleHeadCell className="text-left">Asesor</DetalleHeadCell>
                                             <DetalleHeadCell className="text-left">Escuela</DetalleHeadCell>
                                             <DetalleHeadCell className="text-left">Fecha</DetalleHeadCell>
-                                            {EXAM_TYPE_LABELS.map(examType => (
+                                            {EXAM_TYPE_LABELS.map((examType) => (
                                                 <DetalleHeadCell key={examType} className="text-center">
                                                     {examType}
                                                 </DetalleHeadCell>
@@ -179,15 +168,18 @@ export default function DetallePorAsesor() {
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
-                                        {rows.map(row => (
+                                        {rows.map((row) => (
                                             <TableRow key={row.id}>
                                                 <DetalleBodyCell className="font-semibold text-slate-900">
                                                     {row.seller_name}
                                                 </DetalleBodyCell>
                                                 <DetalleBodyCell>{row.school_name}</DetalleBodyCell>
                                                 <DetalleBodyCell>{formatExamDate(row.exam_date)}</DetalleBodyCell>
-                                                {DETALLE_ASESOR_EXAM_TYPES.map(examType => (
-                                                    <DetalleBodyCell key={`${row.id}-${examType}`} className="text-center tabular-nums">
+                                                {DETALLE_ASESOR_EXAM_TYPES.map((examType) => (
+                                                    <DetalleBodyCell
+                                                        key={`${row.id}-${examType}`}
+                                                        className="text-center tabular-nums"
+                                                    >
                                                         {formatInteger(row.exam_counts[examType] ?? 0)}
                                                     </DetalleBodyCell>
                                                 ))}
@@ -215,13 +207,7 @@ export default function DetallePorAsesor() {
     )
 }
 
-function DetalleHeadCell({
-    className,
-    children,
-}: {
-    className?: string
-    children: React.ReactNode
-}) {
+function DetalleHeadCell({ className, children }: { className?: string; children: React.ReactNode }) {
     return (
         <TableHead
             className={cn(
@@ -234,15 +220,11 @@ function DetalleHeadCell({
     )
 }
 
-function DetalleBodyCell({
-    className,
-    children,
-}: {
-    className?: string
-    children: React.ReactNode
-}) {
+function DetalleBodyCell({ className, children }: { className?: string; children: React.ReactNode }) {
     return (
-        <TableCell className={cn("px-2 py-2 text-xs leading-tight text-slate-700 whitespace-normal break-words", className)}>
+        <TableCell
+            className={cn("px-2 py-2 text-xs leading-tight text-slate-700 whitespace-normal break-words", className)}
+        >
             {children}
         </TableCell>
     )
@@ -253,10 +235,7 @@ function DetalleTableSkeleton() {
 
     return (
         <div className="space-y-4 px-6 py-6">
-            <div
-                className="grid gap-3"
-                style={{ gridTemplateColumns: `repeat(${columnCount}, minmax(0, 1fr))` }}
-            >
+            <div className="grid gap-3" style={{ gridTemplateColumns: `repeat(${columnCount}, minmax(0, 1fr))` }}>
                 {Array.from({ length: columnCount }).map((_, index) => (
                     <Skeleton key={index} className="h-5 w-full" />
                 ))}

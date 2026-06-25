@@ -29,7 +29,9 @@ async def get_por_pais_detail(country: str, filters: PorPaisFilters):
 
 @router.post("/por-pais/export/pdf")
 async def export_por_pais_pdf(filters: PorPaisFilters, request: Request):
-    payload = await build_por_pais_pdf_payload(filters, base_currency=get_request_base_currency(request))
+    payload = await build_por_pais_pdf_payload(
+        filters, base_currency=get_request_base_currency(request)
+    )
     return await render_por_pais_pdf(payload)
 
 
@@ -52,7 +54,9 @@ async def export_por_pais_excel(filters: PorPaisFilters, request: Request):
 @router.post("/por-pais/export/excel/all")
 async def export_por_pais_excel_all(filters: PorPaisFilters, request: Request):
     export_filters = build_por_pais_export_filters_for_all(filters)
-    report = await getPorPaisReport(export_filters, base_currency=get_request_base_currency(request))
+    report = await getPorPaisReport(
+        export_filters, base_currency=get_request_base_currency(request)
+    )
     details = await getPorPaisDetailsForReport(report, export_filters)
     return generate_excel_response(
         "por-pais-all",

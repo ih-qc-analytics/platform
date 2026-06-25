@@ -10,7 +10,7 @@ export const ASESOR_EXAM_CATEGORIES = [
 export type AsesorExamCategory = (typeof ASESOR_EXAM_CATEGORIES)[number]
 
 export function createEmptyAsesorExamBreakdown<TValue>(valueFactory: () => TValue) {
-    return Object.fromEntries(ASESOR_EXAM_CATEGORIES.map(category => [category, valueFactory()])) as Record<
+    return Object.fromEntries(ASESOR_EXAM_CATEGORIES.map((category) => [category, valueFactory()])) as Record<
         AsesorExamCategory,
         TValue
     >

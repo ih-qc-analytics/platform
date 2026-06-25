@@ -5,7 +5,7 @@ import type { BaseCurrency } from "@/types"
 import { getStoredBaseCurrency } from "@/lib/reportPreferences"
 
 export function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs))
+    return twMerge(clsx(inputs))
 }
 
 const currencySymbol = (currency: BaseCurrency) => (currency === "USD" ? "US$" : "$")
@@ -16,10 +16,7 @@ export const formatRevenue = (value: number, currency: BaseCurrency = getStoredB
     return `${currencySymbol(currency)}${value}`
 }
 
-export const formatCurrency = (
-    value: number,
-    currency: BaseCurrency = getStoredBaseCurrency(),
-) =>
+export const formatCurrency = (value: number, currency: BaseCurrency = getStoredBaseCurrency()) =>
     new Intl.NumberFormat(currency === "USD" ? "en-US" : "es-MX", {
         style: "currency",
         currency,

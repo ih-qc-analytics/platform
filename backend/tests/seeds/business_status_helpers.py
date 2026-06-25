@@ -27,25 +27,31 @@ async def seed_lead_with_payment(
 
     async with SessionLocal() as session:
         async with session.begin():
-            await session.execute(text("""
+            await session.execute(
+                text("""
                 INSERT INTO `lead` (id, name, site, zoneId, campaign)
                 VALUES (:id, :name, :site, :zone_id, :campaign)
-            """), {
-                "id": lead_id,
-                "name": f"Business Status Lead {lead_id}",
-                "site": "mexico",
-                "zone_id": 1,
-                "campaign": "business-status-tests",
-            })
-            await session.execute(text("""
+            """),
+                {
+                    "id": lead_id,
+                    "name": f"Business Status Lead {lead_id}",
+                    "site": "mexico",
+                    "zone_id": 1,
+                    "campaign": "business-status-tests",
+                },
+            )
+            await session.execute(
+                text("""
                 INSERT INTO seller_lead (id, sellerId, leadId, businessStatus)
                 VALUES (:id, :seller_id, :lead_id, :business_status)
-            """), {
-                "id": seller_lead_id,
-                "seller_id": 1,
-                "lead_id": lead_id,
-                "business_status": "Carga de lead",
-            })
+            """),
+                {
+                    "id": seller_lead_id,
+                    "seller_id": 1,
+                    "lead_id": lead_id,
+                    "business_status": "Carga de lead",
+                },
+            )
 
             if year_prior:
                 await _insert_cart_with_payment(
@@ -87,7 +93,8 @@ async def _insert_cart_with_payment(
     cart_id = _next_id()
     payment_id = _next_id()
 
-    await session.execute(text("""
+    await session.execute(
+        text("""
         INSERT INTO cart (
             id, sellerLeadId, total, cost, createdAt, updatedAt, deletedAt,
             billingStatus, bookCommission, examCommission
@@ -95,18 +102,21 @@ async def _insert_cart_with_payment(
             :id, :seller_lead_id, :total, :cost, :created_at, :updated_at, NULL,
             :billing_status, :book_commission, :exam_commission
         )
-    """), {
-        "id": cart_id,
-        "seller_lead_id": seller_lead_id,
-        "total": 1000,
-        "cost": 500,
-        "created_at": created_at,
-        "updated_at": created_at,
-        "billing_status": "Aprobado",
-        "book_commission": 0,
-        "exam_commission": 0,
-    })
-    await session.execute(text("""
+    """),
+        {
+            "id": cart_id,
+            "seller_lead_id": seller_lead_id,
+            "total": 1000,
+            "cost": 500,
+            "created_at": created_at,
+            "updated_at": created_at,
+            "billing_status": "Aprobado",
+            "book_commission": 0,
+            "exam_commission": 0,
+        },
+    )
+    await session.execute(
+        text("""
         INSERT INTO payment (
             id, quantity, status, createdAt, updatedAt, cartId, `use`, comments,
             billingStatus, studentId, paymentDate
@@ -114,16 +124,18 @@ async def _insert_cart_with_payment(
             :id, :quantity, :status, :created_at, :updated_at, :cart_id, :use_value, :comments,
             :billing_status, :student_id, :payment_date
         )
-    """), {
-        "id": payment_id,
-        "quantity": 1000,
-        "status": status,
-        "created_at": created_at,
-        "updated_at": created_at,
-        "cart_id": cart_id,
-        "use_value": "",
-        "comments": "",
-        "billing_status": "",
-        "student_id": 0,
-        "payment_date": payment_date,
-    })
+    """),
+        {
+            "id": payment_id,
+            "quantity": 1000,
+            "status": status,
+            "created_at": created_at,
+            "updated_at": created_at,
+            "cart_id": cart_id,
+            "use_value": "",
+            "comments": "",
+            "billing_status": "",
+            "student_id": 0,
+            "payment_date": payment_date,
+        },
+    )

@@ -56,23 +56,21 @@ export default function AsesorFilterBar({
     return (
         <div className="flex flex-col gap-6">
             <ReportFilterBarShell
-                onClear={() =>
-                    {
-                        onFiltersChange({
-                            date_from: `${new Date().getFullYear()}-01-01`,
-                            date_to: new Date().toISOString().slice(0, 10),
-                            countries: [],
-                            zones: [],
-                            states: [],
-                            cities: [],
-                            sellers: [],
-                            show_comparison: false,
-                            comparison_mode: "PREVIOUS_YEAR",
-                        })
-                    }
-                }
+                onClear={() => {
+                    onFiltersChange({
+                        date_from: `${new Date().getFullYear()}-01-01`,
+                        date_to: new Date().toISOString().slice(0, 10),
+                        countries: [],
+                        zones: [],
+                        states: [],
+                        cities: [],
+                        sellers: [],
+                        show_comparison: false,
+                        comparison_mode: "PREVIOUS_YEAR",
+                    })
+                }}
                 comparison={filters}
-                onApplyComparison={next => onFiltersChange({ ...filters, ...next })}
+                onApplyComparison={(next) => onFiltersChange({ ...filters, ...next })}
                 onExportPdf={onExportPdf}
                 onExportExcelWithFilters={onExportExcelWithFilters}
                 onExportExcelWithoutFilters={onExportExcelWithoutFilters}
@@ -84,8 +82,8 @@ export default function AsesorFilterBar({
                 <DateRangePicker
                     dateFrom={filters.date_from}
                     dateTo={filters.date_to}
-                    onDateFromChange={value => onFiltersChange({ ...filters, date_from: value })}
-                    onDateToChange={value => onFiltersChange({ ...filters, date_to: value })}
+                    onDateFromChange={(value) => onFiltersChange({ ...filters, date_from: value })}
+                    onDateToChange={(value) => onFiltersChange({ ...filters, date_to: value })}
                 />
                 <GeoFilters
                     filters={filters}
@@ -99,7 +97,7 @@ export default function AsesorFilterBar({
                     values={filters.sellers ?? []}
                     options={cleanedSellerOptions}
                     triggerClassName={triggerClassName}
-                    onChange={value => handleSelectChange("sellers", value)}
+                    onChange={(value) => handleSelectChange("sellers", value)}
                 />
             </ReportFilterBarShell>
         </div>

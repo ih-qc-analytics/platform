@@ -27,6 +27,7 @@ def verify_admin_key(x_admin_key: str = Header()) -> None:
     if not secrets.compare_digest(x_admin_key, settings.admin_api_key):
         raise HTTPException(status_code=403, detail="Forbidden")
 
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s %(levelname)-8s %(name)s — %(message)s",
@@ -46,10 +47,13 @@ async def lifespan(app: FastAPI):
         try:
             await run_startup_backfill_if_needed()
         except Exception:
-            logger.exception("Startup backfill failed — app will start with existing reporting data")
+            logger.exception(
+                "Startup backfill failed — app will start with existing reporting data"
+            )
         start_scheduler()
 
     yield
+
 
 app = FastAPI(
     title="IH-QC Analytics",
@@ -57,6 +61,7 @@ app = FastAPI(
     docs_url="/docs" if settings.env_mode == "dev" else None,
     lifespan=lifespan,
 )
+
 
 @app.exception_handler(SQLAlchemyError)
 async def db_exception_handler(request: Request, exc: SQLAlchemyError):
@@ -78,31 +83,36 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 @app.get("/health")
 async def health():
     return {"status": "ok", "environment": settings.env_mode}
+
 
 @app.post("/admin/etl/payment-upsert", dependencies=[Depends(verify_admin_key)])
 async def trigger_payment_upsert():
     await run_upsert()
     return {"status": "ok"}
 
+
 @app.post("/admin/etl/dimensional-refresh", dependencies=[Depends(verify_admin_key)])
 async def trigger_dimensional_refresh():
     await run_dimensional_refresh()
     return {"status": "ok"}
+
 
 @app.post("/admin/etl/fetch-rates", dependencies=[Depends(verify_admin_key)])
 async def trigger_fetch_rates():
     await fetch_and_store_rates()
     return {"status": "ok"}
 
+
 _auth = [Depends(verify_token)]
-app.include_router(filters.router,       prefix="/filters", tags=["filters"],  dependencies=_auth)
-app.include_router(total_sales.router,   prefix="/reports", tags=["reports"],  dependencies=_auth)
-app.include_router(por_asesor.router,    prefix="/reports", tags=["reports"],  dependencies=_auth)
-app.include_router(detalle_asesor.router,prefix="/reports", tags=["reports"],  dependencies=_auth)
-app.include_router(por_pais.router,      prefix="/reports", tags=["reports"],  dependencies=_auth)
+app.include_router(filters.router, prefix="/filters", tags=["filters"], dependencies=_auth)
+app.include_router(total_sales.router, prefix="/reports", tags=["reports"], dependencies=_auth)
+app.include_router(por_asesor.router, prefix="/reports", tags=["reports"], dependencies=_auth)
+app.include_router(detalle_asesor.router, prefix="/reports", tags=["reports"], dependencies=_auth)
+app.include_router(por_pais.router, prefix="/reports", tags=["reports"], dependencies=_auth)
 
 # ── Static file serving (production monolithic build) ────────────────────────
 # The Dockerfile copies the Vite build output to ./static relative to /app.

@@ -37,9 +37,7 @@ export default function ReportFilterBarShell({
     return (
         <Card className="rounded-[2rem] shadow-sm">
             <CardContent className="grid gap-5 p-6 2xl:grid-cols-[minmax(0,1fr)_auto] 2xl:items-end">
-                <div className="flex min-w-0 flex-wrap items-end gap-4">
-                    {children}
-                </div>
+                <div className="flex min-w-0 flex-wrap items-end gap-4">{children}</div>
                 <div className="flex shrink-0 flex-col gap-3 2xl:items-end">
                     {onClear ? (
                         <Button

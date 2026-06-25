@@ -85,7 +85,9 @@ async def run_historical_exchange_rate_backfill() -> date | None:
     return earliest_date
 
 
-async def _missing_quotes_by_base_for_range(start_date: date, end_date: date) -> dict[str, list[str]]:
+async def _missing_quotes_by_base_for_range(
+    start_date: date, end_date: date
+) -> dict[str, list[str]]:
     total_days = (end_date - start_date).days + 1
     expected_pairs = [
         (base_currency, target_currency)
@@ -95,17 +97,19 @@ async def _missing_quotes_by_base_for_range(start_date: date, end_date: date) ->
     ]
 
     async with ReportingSessionLocal() as session:
-        rows = (await session.execute(text("""
+        rows = (
+            await session.execute(
+                text("""
             SELECT from_currency, to_currency, COUNT(DISTINCT date) AS day_count
             FROM exchange_rates
             WHERE date BETWEEN :start_date AND :end_date
             GROUP BY from_currency, to_currency
-        """), {"start_date": start_date, "end_date": end_date})).fetchall()
+        """),
+                {"start_date": start_date, "end_date": end_date},
+            )
+        ).fetchall()
 
-    existing_pairs = {
-        (row.from_currency, row.to_currency): int(row.day_count)
-        for row in rows
-    }
+    existing_pairs = {(row.from_currency, row.to_currency): int(row.day_count) for row in rows}
     missing_pairs: dict[str, list[str]] = {}
     for base_currency, target_currency in expected_pairs:
         if existing_pairs.get((base_currency, target_currency), 0) < total_days:

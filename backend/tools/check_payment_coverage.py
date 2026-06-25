@@ -35,7 +35,6 @@ QUERIES = {
         FROM payment
         WHERE status = 'Aprobado'
     """,
-
     "payment_date_by_year": """
         SELECT
             YEAR(c.createdAt)                                               AS cart_year,

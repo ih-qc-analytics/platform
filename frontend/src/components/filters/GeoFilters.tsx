@@ -44,7 +44,7 @@ export default function GeoFilters<TFilters extends Partial<Record<GeoFilterKey,
                     values={filters[key] ?? []}
                     options={optionMap[key]}
                     triggerClassName={triggerClassName}
-                    onChange={value => onChange(key, value)}
+                    onChange={(value) => onChange(key, value)}
                 />
             ))}
         </>
