@@ -34,6 +34,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
+# Default to prod — Railway overrides this via its Variables tab if needed
+ENV ENVIRONMENT=prod
+
 COPY backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
