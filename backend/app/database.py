@@ -22,7 +22,6 @@ def get_async_url() -> str:
 
 engine = create_async_engine(
     get_async_url(),
-    pool_pre_ping=True
 )
 
 SessionLocal = async_sessionmaker(
