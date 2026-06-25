@@ -34,7 +34,7 @@ function ProtectedLayout({ session }: { session: Session | null | undefined }) {
                     <SidebarTrigger className="text-white hover:bg-white/10" />
                     <PageTitle />
                 </header>
-                <main className="flex-1 overflow-auto">
+                <main className="flex-1 overflow-y-auto overflow-x-hidden">
                     <Outlet />
                 </main>
             </SidebarInset>
