@@ -1,10 +1,9 @@
 import { useEffect, useMemo, useState } from "react"
 import { Search } from "lucide-react"
 
-import { exportDetalleAsesorExcel, exportDetalleAsesorExcelAll, fetchDetalleAsesorPdfPayload } from "@/api/reports"
+import { exportDetalleAsesorExcel, exportDetalleAsesorExcelAll, exportDetalleAsesorPdf } from "@/api/reports"
 import FilterBar from "@/components/filters/FilterBar"
 import { DETALLE_ASESOR_EXAM_TYPES, EXAM_TYPE_LABELS } from "@/components/constants/detalleAsesorExamTypes"
-import DetalleAsesorPDF from "@/components/pdf/DetalleAsesorPDF"
 import ReportPagination from "@/components/reports/ReportPagination"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -19,7 +18,6 @@ import {
 } from "@/components/ui/table"
 import useCursorPagination from "@/hooks/useCursorPagination"
 import { useDetalleAsesorReport } from "@/hooks/useReports"
-import { downloadPdf } from "@/lib/exportPdf"
 import { getDefaultReportFilters } from "@/lib/reportFilters"
 import { cn, formatInteger } from "@/lib/utils"
 import type { DetalleAsesorFilters, ReportFilters } from "@/types"
@@ -56,7 +54,7 @@ export default function DetallePorAsesor() {
     )
 
     const { data, isLoading, isError } = useDetalleAsesorReport(requestFilters)
-    const rows = data?.rows ?? []
+    const rows = data?.current.rows ?? []
 
     const handleExportExcel = async (variant: "filtered" | "all") => {
         if (!filters.date_from || !filters.date_to) {
@@ -93,11 +91,7 @@ export default function DetallePorAsesor() {
         setExportError(null)
         setIsExportingPdf(true)
         try {
-            const payload = await fetchDetalleAsesorPdfPayload({
-                ...filters,
-                search: search || undefined,
-            })
-            await downloadPdf(<DetalleAsesorPDF data={payload} />, "detalle-asesor.pdf")
+            await exportDetalleAsesorPdf({ ...filters, search: search || undefined })
         } catch {
             setExportError("No fue posible exportar el archivo. Intenta de nuevo.")
         } finally {
@@ -108,6 +102,7 @@ export default function DetallePorAsesor() {
     return (
         <div className="flex flex-col gap-8 p-6">
             <FilterBar
+                hideComparison
                 value={filters}
                 onChange={nextFilters => {
                     reset()
@@ -208,9 +203,9 @@ export default function DetallePorAsesor() {
                             <ReportPagination
                                 page={page}
                                 currentCount={rows.length}
-                                hasMore={data?.has_more ?? false}
+                                hasMore={data?.current.has_more ?? false}
                                 onPrevious={goPrevious}
-                                onNext={() => goNext(data?.next_cursor)}
+                                onNext={() => goNext(data?.current.next_cursor)}
                             />
                         </>
                     )}

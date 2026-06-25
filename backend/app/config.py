@@ -52,6 +52,17 @@ class Settings:
             f"@{self.reporting_db_host}:{self.reporting_db_port}/{self.reporting_db_name}"
         )
 
+    # Auth
+    supabase_url: str = os.getenv("SUPABASE_URL", "")
+    supabase_anon_key: str = os.getenv("SUPABASE_ANON_KEY", "")
+    admin_api_key: str = os.getenv("ADMIN_API_KEY", "")
+
+    # CORS — comma-separated origins, e.g. "https://app.example.com,http://localhost:5173"
+    @property
+    def cors_origins(self) -> list[str]:
+        raw = os.getenv("CORS_ORIGINS", "http://localhost:5173")
+        return [o.strip() for o in raw.split(",") if o.strip()]
+
     @property
     def payment_upsert_lookback_hours(self) -> int:
         return int(os.getenv("PAYMENT_UPSERT_LOOKBACK_HOURS", "3"))

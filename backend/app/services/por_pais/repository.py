@@ -1,7 +1,9 @@
+from app.enums import BaseCurrency
 from sqlalchemy import text
 
 from app.reporting.database import ReportingSessionLocal
 from app.schemas.reports import PorPaisFilters
+from app.services.utils.report_currency import line_paid_total_column, payment_amount_column
 from app.services.shared import build_line_item_where_clause, build_payment_where_clause
 
 
@@ -13,14 +15,18 @@ def _line_where(filters: PorPaisFilters, *, require_product_breakdown: bool = Fa
     return build_line_item_where_clause(filters, require_product_breakdown=require_product_breakdown)
 
 
-async def fetch_country_payment_rows(filters: PorPaisFilters) -> list:
+async def fetch_country_payment_rows(
+    filters: PorPaisFilters,
+    base_currency: BaseCurrency = BaseCurrency.MXN,
+) -> list:
     where, params = _payment_where(filters)
+    payment_amount = payment_amount_column(base_currency)
     async with ReportingSessionLocal() as session:
         return (await session.execute(text(f"""
             SELECT
                 site AS country,
                 COUNT(DISTINCT lead_id) AS total_schools,
-                COALESCE(SUM(amount_mxn), 0) AS total_revenue
+                COALESCE(SUM({payment_amount}), 0) AS total_revenue
             FROM report_payments
             WHERE {where}
             GROUP BY site
@@ -28,13 +34,17 @@ async def fetch_country_payment_rows(filters: PorPaisFilters) -> list:
         """), params)).fetchall()
 
 
-async def fetch_country_allocated_revenue_rows(filters: PorPaisFilters) -> list:
+async def fetch_country_allocated_revenue_rows(
+    filters: PorPaisFilters,
+    base_currency: BaseCurrency = BaseCurrency.MXN,
+) -> list:
     where, params = _line_where(filters, require_product_breakdown=True)
+    paid_total = line_paid_total_column(base_currency)
     async with ReportingSessionLocal() as session:
         return (await session.execute(text(f"""
             SELECT
                 site AS country,
-                COALESCE(SUM(paid_total_mxn), 0) AS allocated_revenue
+                COALESCE(SUM({paid_total}), 0) AS allocated_revenue
             FROM report_line_items
             WHERE {where}
             GROUP BY site

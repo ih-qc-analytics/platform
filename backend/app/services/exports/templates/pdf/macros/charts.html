@@ -1,0 +1,60 @@
+{% macro render_charts(trend_points, geo_points) %}
+<div class="chart-section">
+  <div class="chart-section-title">Tendencia y distribución geográfica</div>
+
+  {# ── Trend bar chart ──────────────────────────────────── #}
+  <div class="chart-panel">
+    <div class="chart-panel-title">Tendencia</div>
+    {% if trend_points | length == 0 %}
+    <div class="table-empty">Sin datos para el período seleccionado.</div>
+    {% else %}
+    {% set bar_h = 120 %}
+    {% set bar_w = 22 %}
+    {% set col_w = 44 %}
+    {% set svg_w = trend_points | length * col_w %}
+    {% set svg_h = bar_h + 30 %}
+    <svg xmlns="http://www.w3.org/2000/svg" width="{{ svg_w }}" height="{{ svg_h }}" viewBox="0 0 {{ svg_w }} {{ svg_h }}">
+      {% for pt in trend_points %}
+      {% set x = loop.index0 * col_w %}
+      {% set bh = [pt.scaled * bar_h, 2] | max %}
+      {% set by = bar_h - bh %}
+      {% set cx = x + col_w / 2 %}
+      {# value label above bar #}
+      <text x="{{ cx }}" y="{{ by - 2 }}" text-anchor="middle" font-size="5" fill="#6B7280">{{ pt.value | compact_currency }}</text>
+      {# bar #}
+      <rect x="{{ cx - bar_w / 2 }}" y="{{ by }}" width="{{ bar_w }}" height="{{ bh }}"
+            rx="3" fill="#3D5FC4" />
+      {# month label below #}
+      <text x="{{ cx }}" y="{{ bar_h + 14 }}" text-anchor="middle" font-size="5" fill="#1A1A2E">{{ pt.label }}</text>
+      {% endfor %}
+    </svg>
+    {% endif %}
+  </div>
+
+  {# ── Geo horizontal bar chart ─────────────────────────── #}
+  <div class="chart-panel">
+    <div class="chart-panel-title">Distribución geográfica</div>
+    {% if geo_points | length == 0 %}
+    <div class="table-empty">Sin datos para el período seleccionado.</div>
+    {% else %}
+    {% set track_w = 380 %}
+    {% set row_h = 26 %}
+    {% set svg_h = geo_points | length * row_h %}
+    <svg xmlns="http://www.w3.org/2000/svg" width="100%" height="{{ svg_h }}" viewBox="0 0 500 {{ svg_h }}">
+      {% for pt in geo_points %}
+      {% set y = loop.index0 * row_h %}
+      {% set bar_fill = [pt.scaled * track_w, 4] | max %}
+      {# label #}
+      <text x="0" y="{{ y + 9 }}" font-size="6" fill="#1A1A2E">{{ pt.label }}</text>
+      {# value #}
+      <text x="500" y="{{ y + 9 }}" text-anchor="end" font-size="6" fill="#6B7280">{{ pt.value | compact_currency }}</text>
+      {# track #}
+      <rect x="0" y="{{ y + 12 }}" width="{{ track_w }}" height="10" rx="5" fill="#F3F6FF" />
+      {# fill #}
+      <rect x="0" y="{{ y + 12 }}" width="{{ bar_fill }}" height="10" rx="5" fill="#1A3FAD" />
+      {% endfor %}
+    </svg>
+    {% endif %}
+  </div>
+</div>
+{% endmacro %}

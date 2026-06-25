@@ -1,4 +1,5 @@
 import FilterFieldShell from "@/components/filters/FilterFieldShell"
+import { FILTER_CONTROL_CLASS, FILTER_FIELD_WIDTH_CLASS } from "@/components/filters/controlStyles"
 
 type DateRangePickerProps = {
     dateFrom: string | undefined
@@ -10,20 +11,20 @@ type DateRangePickerProps = {
 export default function DateRangePicker({ dateFrom, dateTo, onDateFromChange, onDateToChange }: DateRangePickerProps) {
     return (
         <>
-            <FilterFieldShell label="Fecha desde">
+            <FilterFieldShell label="Fecha desde" className={FILTER_FIELD_WIDTH_CLASS}>
                 <input
                     type="date"
                     value={dateFrom ?? ""}
                     onChange={e => onDateFromChange(e.target.value)}
-                    className="h-14 rounded-2xl border border-transparent bg-muted/70 px-4 text-sm text-slate-700 shadow-none outline-none transition focus:border-primary/20 focus:ring-2 focus:ring-primary/20"
+                    className={FILTER_CONTROL_CLASS}
                 />
             </FilterFieldShell>
-            <FilterFieldShell label="Fecha hasta">
+            <FilterFieldShell label="Fecha hasta" className={FILTER_FIELD_WIDTH_CLASS}>
                 <input
                     type="date"
                     value={dateTo ?? ""}
                     onChange={e => onDateToChange(e.target.value)}
-                    className="h-14 rounded-2xl border border-transparent bg-muted/70 px-4 text-sm text-slate-700 shadow-none outline-none transition focus:border-primary/20 focus:ring-2 focus:ring-primary/20"
+                    className={FILTER_CONTROL_CLASS}
                 />
             </FilterFieldShell>
         </>

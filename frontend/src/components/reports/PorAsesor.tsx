@@ -1,8 +1,7 @@
 import { useMemo, useState } from "react"
 import { ChevronRight } from "lucide-react"
 
-import { exportAsesorExcel, exportAsesorExcelAll, fetchPorAsesorPdfPayload } from "@/api/reports"
-import PorAsesorPDF from "@/components/pdf/PorAsesorPDF"
+import { exportAsesorExcel, exportAsesorExcelAll, exportPorAsesorPdf } from "@/api/reports"
 import AsesorFilterBar from "@/components/reports/AsesorFilterBar"
 import DetalleAsesor from "@/components/reports/DetalleAsesor"
 import ReportPagination from "@/components/reports/ReportPagination"
@@ -18,28 +17,16 @@ import {
     TableRow,
 } from "@/components/ui/table"
 import { useAsesorReport, useFilterOptions, useSellerOptions } from "@/hooks/useReports"
-import useDebouncedValue from "@/hooks/useDebouncedValue"
 import useCursorPagination from "@/hooks/useCursorPagination"
 import type { AsesorFilters, AsesorRow } from "@/types"
-import { downloadPdf } from "@/lib/exportPdf"
 import { cn, formatCurrency, formatInteger, formatPercentChange, getPercentChange } from "@/lib/utils"
 import { TABLE_DISPLAY_GROUPS } from "@/components/reports/asesorCategories"
+import { getDefaultAsesorFilters } from "@/lib/reportFilters"
 
 const PAGE_SIZE = 8
 
 export default function PorAsesor() {
-    const currentYear = new Date().getFullYear()
-    const yearOptions = [currentYear - 2, currentYear - 1, currentYear]
-
-    const [filters, setFilters] = useState<AsesorFilters>({
-        year: currentYear,
-        countries: [],
-        zones: [],
-        states: [],
-        cities: [],
-        sellers: [],
-    })
-    const [showComparison, setShowComparison] = useState(false)
+    const [filters, setFilters] = useState<AsesorFilters>(getDefaultAsesorFilters())
     const [selectedRow, setSelectedRow] = useState<AsesorRow | null>(null)
     const [isExportingPdf, setIsExportingPdf] = useState(false)
     const [isExportingExcel, setIsExportingExcel] = useState(false)
@@ -67,36 +54,13 @@ export default function PorAsesor() {
         [currentCursor, normalizedFilters],
     )
     const { data, isLoading, isError } = useAsesorReport(requestFilters)
-    const visibleSellerNames = useMemo(
-        () => (data?.rows ?? []).map(row => row.seller_name),
-        [data?.rows],
-    )
-    const debouncedComparisonFilters = useDebouncedValue(
-        {
-            ...normalizedFilters,
-            year: normalizedFilters.year - 1,
-            sellers: visibleSellerNames,
-            limit: PAGE_SIZE,
-            cursor: null,
-        },
-        350,
-    )
-    const {
-        data: comparisonData,
-        isLoading: isComparisonLoading,
-        isFetching: isComparisonFetching,
-    } = useAsesorReport(
-        debouncedComparisonFilters,
-        showComparison && debouncedComparisonFilters.year > 0 && debouncedComparisonFilters.sellers.length > 0,
-    )
-    const showComparisonValues = showComparison && !isComparisonLoading && !isComparisonFetching
-
+    const showComparisonValues = Boolean(filters.show_comparison && data?.comparison)
     const comparisonRowsBySeller = useMemo(
-        () => new Map((comparisonData?.rows ?? []).map(row => [row.seller_id, row])),
-        [comparisonData?.rows],
+        () => new Map((data?.comparison?.data.rows ?? []).map(row => [row.seller_id, row])),
+        [data?.comparison?.data.rows],
     )
 
-    const rows = data?.rows ?? []
+    const rows = data?.current.rows ?? []
 
     const handleExportExcel = async (variant: "filtered" | "all") => {
         setExportError(null)
@@ -120,8 +84,7 @@ export default function PorAsesor() {
         setExportError(null)
         setIsExportingPdf(true)
         try {
-            const payload = await fetchPorAsesorPdfPayload(normalizedFilters)
-            await downloadPdf(<PorAsesorPDF data={payload} />, "por-asesor.pdf")
+            await exportPorAsesorPdf(normalizedFilters)
         } catch {
             setExportError("No fue posible exportar el archivo. Intenta de nuevo.")
         } finally {
@@ -135,17 +98,10 @@ export default function PorAsesor() {
                 filters={normalizedFilters}
                 options={filterOptions}
                 sellerOptions={sellerOptions}
-                yearOptions={yearOptions}
-                showComparison={showComparison}
                 onFiltersChange={nextFilters => {
                     reset()
                     setExportError(null)
                     setFilters(nextFilters)
-                }}
-                onToggleComparison={value => {
-                    reset()
-                    setExportError(null)
-                    setShowComparison(value)
                 }}
                 onExportPdf={() => void handleExportPdf()}
                 onExportExcelWithFilters={() => void handleExportExcel("filtered")}
@@ -159,7 +115,7 @@ export default function PorAsesor() {
             <Card className="rounded-[2rem] shadow-sm">
                 <CardHeader className="pb-2">
                     <CardTitle className="text-4xl font-semibold tracking-tight text-slate-900">
-                        Resultados por Asesor - {normalizedFilters.year}
+                        Resultados por Asesor
                     </CardTitle>
                 </CardHeader>
                 <CardContent className="p-0">
@@ -283,9 +239,9 @@ export default function PorAsesor() {
                             <ReportPagination
                                 page={page}
                                 currentCount={rows.length}
-                                hasMore={data?.has_more ?? false}
+                                hasMore={data?.current.has_more ?? false}
                                 onPrevious={goPrevious}
-                                onNext={() => goNext(data?.next_cursor)}
+                                onNext={() => goNext(data?.current.next_cursor)}
                             />
                         </>
                     )}

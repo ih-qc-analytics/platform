@@ -26,16 +26,29 @@ def build_sync_url() -> str:
 
 
 QUERIES = {
-    "ja": 
-    """
- SELECT COUNT(*) as mismatches
-FROM cart c
-WHERE ABS(
-    (SELECT COALESCE(SUM(total), 0) FROM cart_product WHERE cartId = c.id)
-    - (SELECT COALESCE(SUM(quantity), 0) FROM payment WHERE cartId = c.id AND status = 'Aprobado')
-) > 1;
-    """
-  
+    "payment_date_coverage": """
+        SELECT
+            COUNT(*)                                                        AS total_aprobado,
+            SUM(CASE WHEN paymentDate IS NOT NULL THEN 1 ELSE 0 END)       AS has_payment_date,
+            SUM(CASE WHEN paymentDate IS NULL THEN 1 ELSE 0 END)           AS missing_payment_date,
+            ROUND(100.0 * SUM(CASE WHEN paymentDate IS NOT NULL THEN 1 ELSE 0 END) / COUNT(*), 1) AS pct_with_date
+        FROM payment
+        WHERE status = 'Aprobado'
+    """,
+
+    "payment_date_by_year": """
+        SELECT
+            YEAR(c.createdAt)                                               AS cart_year,
+            COUNT(*)                                                        AS total,
+            SUM(CASE WHEN p.paymentDate IS NOT NULL THEN 1 ELSE 0 END)     AS has_date,
+            SUM(CASE WHEN p.paymentDate IS NULL THEN 1 ELSE 0 END)         AS no_date
+        FROM payment p
+        JOIN cart c ON c.id = p.cartId
+        WHERE p.status = 'Aprobado'
+          AND c.deletedAt IS NULL
+        GROUP BY YEAR(c.createdAt)
+        ORDER BY cart_year DESC
+    """,
 }
 
 

@@ -9,6 +9,7 @@ import DateRangePicker from "./DateRangePicker"
 type FilterBarProps = {
     value?: ReportFilters
     onChange: (filters: ReportFilters) => void
+    hideComparison?: boolean
     onExportPdf?: () => void
     onExportExcelWithFilters?: () => void
     onExportExcelWithoutFilters?: () => void
@@ -18,7 +19,7 @@ type FilterBarProps = {
     exportError?: string | null
 }
 
-export default function FilterBar(props: FilterBarProps) {
+export default function FilterBar({ hideComparison, ...props }: FilterBarProps) {
     const { data: options, isLoading } = useFilterOptions()
     const [internalSelected, setInternalSelected] = useState<ReportFilters>(getDefaultReportFilters())
     const selected = props.value ?? internalSelected
@@ -50,6 +51,9 @@ export default function FilterBar(props: FilterBarProps) {
     return (
         <ReportFilterBarShell
             onClear={() => commitChange(getDefaultReportFilters())}
+            comparison={selected}
+            onApplyComparison={next => commitChange({ ...selected, ...next })}
+            hideComparison={hideComparison}
             onExportPdf={props.onExportPdf}
             onExportExcelWithFilters={props.onExportExcelWithFilters}
             onExportExcelWithoutFilters={props.onExportExcelWithoutFilters}

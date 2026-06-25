@@ -1,8 +1,7 @@
 import { useMemo, useState } from "react"
 import { ChevronRight } from "lucide-react"
 
-import { exportPorPaisExcel, exportPorPaisExcelAll, fetchPorPaisPdfPayload } from "@/api/reports"
-import PorPaisPDF from "@/components/pdf/PorPaisPDF"
+import { exportPorPaisExcel, exportPorPaisExcelAll, exportPorPaisPdf } from "@/api/reports"
 import PorPaisDetail from "@/components/reports/PorPaisDetail"
 import PorPaisFilterBar from "@/components/reports/PorPaisFilterBar"
 import { Badge } from "@/components/ui/badge"
@@ -17,7 +16,6 @@ import {
     TableRow,
 } from "@/components/ui/table"
 import { usePorPaisReport } from "@/hooks/useReports"
-import { downloadPdf } from "@/lib/exportPdf"
 import { getDefaultPorPaisFilters } from "@/lib/reportFilters"
 import { cn, formatCurrency, formatInteger } from "@/lib/utils"
 import type { PorPaisFilters, PorPaisStatusRow, PorPaisSummaryRow } from "@/types"
@@ -32,8 +30,12 @@ export default function PorPais() {
     const requestFilters = useMemo(() => filters, [filters])
     const { data, isLoading, isError } = usePorPaisReport(requestFilters)
 
-    const summaryRows = data?.summary_rows ?? []
-    const statusRows = data?.status_rows ?? []
+    const summaryRows = data?.current.summary_rows ?? []
+    const statusRows = data?.current.status_rows ?? []
+    const comparisonRowsByCountry = useMemo(
+        () => new Map((data?.comparison?.data.summary_rows ?? []).map(row => [row.country, row])),
+        [data?.comparison?.data.summary_rows],
+    )
 
     const handleExportExcel = async (variant: "filtered" | "all") => {
         if (!filters.date_from || !filters.date_to) {
@@ -67,8 +69,7 @@ export default function PorPais() {
         setExportError(null)
         setIsExportingPdf(true)
         try {
-            const payload = await fetchPorPaisPdfPayload(filters)
-            await downloadPdf(<PorPaisPDF data={payload} />, "por-pais.pdf")
+            await exportPorPaisPdf(filters)
         } catch {
             setExportError("No fue posible exportar el archivo. Intenta de nuevo.")
         } finally {
@@ -139,6 +140,8 @@ export default function PorPais() {
                                         <ClickableCountryRow
                                             key={row.country}
                                             row={row}
+                                            comparisonRow={comparisonRowsByCountry.get(row.country)}
+                                            showComparison={Boolean(filters.show_comparison && data?.comparison)}
                                             onSelect={() => setSelectedCountry(row.country)}
                                         />
                                     ))}
@@ -203,9 +206,13 @@ export default function PorPais() {
 
 function ClickableCountryRow({
     row,
+    comparisonRow,
+    showComparison,
     onSelect,
 }: {
     row: PorPaisSummaryRow
+    comparisonRow?: PorPaisSummaryRow
+    showComparison: boolean
     onSelect: () => void
 }) {
     return (
@@ -224,14 +231,14 @@ function ClickableCountryRow({
             <TableBodyCell className="sticky left-0 z-10 bg-card font-semibold text-slate-900 group-hover:bg-muted/30 group-focus-visible:bg-muted/30">
                 {row.country}
             </TableBodyCell>
-            <MetricCell value={row.total_schools} align="right" />
-            <MetricCell value={row.total_revenue} align="right" emphasize format={formatCurrency} />
-            <MetricCell value={row.uncategorized_revenue} align="right" format={formatCurrency} />
-            <MetricCell value={row.cambridge} align="right" emphasize />
-            <MetricCell value={row.ielts} align="right" emphasize />
-            <MetricCell value={row.michigan} align="right" emphasize />
-            <MetricCell value={row.tea} align="right" emphasize />
-            <MetricCell value={row.other} align="right" emphasize />
+            <MetricCell value={row.total_schools} comparisonValue={comparisonRow?.total_schools} showComparison={showComparison} align="right" />
+            <MetricCell value={row.total_revenue} comparisonValue={comparisonRow?.total_revenue} showComparison={showComparison} align="right" emphasize format={formatCurrency} />
+            <MetricCell value={row.uncategorized_revenue} comparisonValue={comparisonRow?.uncategorized_revenue} showComparison={showComparison} align="right" format={formatCurrency} />
+            <MetricCell value={row.cambridge} comparisonValue={comparisonRow?.cambridge} showComparison={showComparison} align="right" emphasize />
+            <MetricCell value={row.ielts} comparisonValue={comparisonRow?.ielts} showComparison={showComparison} align="right" emphasize />
+            <MetricCell value={row.michigan} comparisonValue={comparisonRow?.michigan} showComparison={showComparison} align="right" emphasize />
+            <MetricCell value={row.tea} comparisonValue={comparisonRow?.tea} showComparison={showComparison} align="right" emphasize />
+            <MetricCell value={row.other} comparisonValue={comparisonRow?.other} showComparison={showComparison} align="right" emphasize />
             <TableBodyCell className="w-12 text-right text-slate-400">
                 <ChevronRight className="ml-auto size-5" />
             </TableBodyCell>
@@ -283,18 +290,27 @@ function TableBodyCell({
 
 function MetricCell({
     value,
+    comparisonValue,
+    showComparison = false,
     align = "center",
     emphasize = false,
     format = formatInteger,
 }: {
     value: number
+    comparisonValue?: number
+    showComparison?: boolean
     align?: "center" | "right"
     emphasize?: boolean
     format?: (value: number) => string
 }) {
     return (
         <TableBodyCell className={align === "right" ? "text-right" : "text-center"}>
-            <span className={cn("tabular-nums text-slate-700", emphasize && "font-semibold")}>{format(value)}</span>
+            <div className="flex flex-col">
+                <span className={cn("tabular-nums text-slate-700", emphasize && "font-semibold")}>{format(value)}</span>
+                {showComparison && comparisonValue !== undefined ? (
+                    <span className="text-[10px] text-muted-foreground">{format(comparisonValue)}</span>
+                ) : null}
+            </div>
         </TableBodyCell>
     )
 }

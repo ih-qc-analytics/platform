@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 
-from app.schemas.pdf import DetalleAsesorPDFPayload
 from app.schemas.reports import DetalleFilters, DetalleReportResponse
+from app.services.exports.pdf_renderer import render_detalle_asesor_pdf
 from app.services.detalle_asesor.detalle_asesor import (
     build_detalle_asesor_pdf_payload,
     build_detalle_export_filters_for_all,
@@ -19,9 +19,10 @@ async def get_detalle_asesor(filters: DetalleFilters):
     return await getDetalleData(filters)
 
 
-@router.post("/detalle-asesor/export/pdf", response_model=DetalleAsesorPDFPayload)
+@router.post("/detalle-asesor/export/pdf")
 async def export_detalle_asesor_pdf(filters: DetalleFilters):
-    return await build_detalle_asesor_pdf_payload(filters)
+    payload = await build_detalle_asesor_pdf_payload(filters)
+    return await render_detalle_asesor_pdf(payload)
 
 
 @router.post("/detalle-asesor/export/excel")

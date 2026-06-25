@@ -3,11 +3,13 @@ import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } f
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import type { GeoPoint } from "@/types"
 import { formatRevenue } from "@/lib/utils"
+import { useMemo } from "react"
 
 const Y_AXIS_WIDTH = 80
 
 type GeoBarProps = {
     data: GeoPoint[]
+    comparisonData?: GeoPoint[]
 }
 
 const chartConfig = {
@@ -15,10 +17,23 @@ const chartConfig = {
         label: "Ingresos",
         color: "hsl(var(--chart-1))",
     },
+    comparison_revenue: {
+        label: "Comparativo",
+        color: "hsl(var(--chart-2))",
+    },
 } satisfies ChartConfig
 
 
-export default function GeoBar({ data }: GeoBarProps) {
+export default function GeoBar({ data, comparisonData }: GeoBarProps) {
+    const chartData = useMemo(() => {
+        const comparisonByDimension = new Map((comparisonData ?? []).map(point => [point.dimension, point.revenue]))
+        return data.map(point => ({
+            dimension: point.dimension,
+            revenue: point.revenue,
+            comparison_revenue: comparisonByDimension.get(point.dimension) ?? null,
+        }))
+    }, [comparisonData, data])
+
     if (!data.length) return (
         <Card>
             <CardContent className="flex items-center justify-center min-h-48">
@@ -34,12 +49,15 @@ export default function GeoBar({ data }: GeoBarProps) {
             </CardHeader>
             <CardContent>
                 <ChartContainer config={chartConfig} className="min-h-48 w-full">
-                    <BarChart data={data} layout="vertical">
+                    <BarChart data={chartData} layout="vertical">
                         <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-                        <XAxis type="number" tickFormatter={formatRevenue} tickLine={false} axisLine={false} />
+                        <XAxis type="number" tickFormatter={(value) => formatRevenue(value as number)} tickLine={false} axisLine={false} />
                         <YAxis type="category" dataKey="dimension" tickLine={false} axisLine={false} width={80} />
                         <ChartTooltip content={<ChartTooltipContent formatter={(val) => formatRevenue(val as number)} />} />
                         <Bar dataKey="revenue" fill="var(--color-revenue)" radius={[0, 4, 4, 0]} />
+                        {comparisonData?.length ? (
+                            <Bar dataKey="comparison_revenue" fill="var(--color-comparison_revenue)" radius={[0, 4, 4, 0]} />
+                        ) : null}
                     </BarChart>
                 </ChartContainer>
             </CardContent>

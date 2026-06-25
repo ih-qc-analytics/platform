@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% from "macros/header.html" import render_header %}
+{% from "macros/table.html"  import render_table %}
+
+{% block page_style %}
+@page { size: A4 landscape; margin: 24pt 24pt 36pt 24pt; }
+{% endblock %}
+
+{% block content %}
+{{ render_header(payload.header, logo_b64) }}
+{{ render_table("Identidad de registros", payload.table_identity) }}
+{{ render_table("Desglose por examen", payload.table_exams, compact=true) }}
+{% endblock %}

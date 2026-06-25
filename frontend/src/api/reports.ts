@@ -1,22 +1,18 @@
 import {
-    AsesorDetailPDFPayload,
-    AsesorDetail,
+    AsesorDetailResponse,
     AsesorFilters,
-    DetalleAsesorPDFPayload,
     AsesorReportResponse,
     DetalleAsesorFilters,
     DetalleAsesorReportResponse,
-    PorPaisDetailPDFPayload,
-    PorAsesorPDFPayload,
     PorPaisDetailResponse,
-    PorPaisPDFPayload,
     PorPaisFilters,
     PorPaisReportResponse,
-    VentasTotalesPDFPayload,
     ReportFilters,
     TotalSalesResponse,
 } from "@/types"
-import config from "../config"
+
+import { apiRequest, apiResponse } from "./client"
+import { downloadPdfBlob } from "@/lib/exportPdf"
 
 const EXCEL_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
@@ -37,89 +33,61 @@ const downloadBlob = (blob: Blob, filename: string) => {
 }
 
 const exportExcel = async <TFilters>(path: string, filters: TFilters, fallbackFilename: string) => {
-    const res = await fetch(`${config.apiUrl}${path}`, {
+    const response = await apiResponse(path, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(filters),
+        body: filters,
     })
-    if (!res.ok) throw new Error(`Request failed: ${res.status}`)
-
-    const blob = await res.blob()
-    const contentType = res.headers.get("content-type")
+    const blob = await response.blob()
+    const contentType = blob.type
     if (contentType && !contentType.includes(EXCEL_CONTENT_TYPE)) {
         throw new Error("Unexpected file type returned by server")
     }
-
-    downloadBlob(blob, parseFilename(res.headers.get("content-disposition"), fallbackFilename))
+    downloadBlob(blob, parseFilename(response.headers.get("content-disposition"), fallbackFilename))
 }
 
-export const fetchTotalSalesData = async (filters: ReportFilters): Promise<TotalSalesResponse> => {
-    const res = await fetch(`${config.apiUrl}/reports/ventas-totales`, {
+export const fetchTotalSalesData = async (filters: ReportFilters): Promise<TotalSalesResponse> =>
+    apiRequest<TotalSalesResponse>("/reports/ventas-totales", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(filters),
+        body: filters,
     })
-    if (!res.ok) throw new Error(`Request failed: ${res.status}`)
-    return res.json()
-}
 
-export const fetchAsesorReport = async (filters: AsesorFilters): Promise<AsesorReportResponse> => {
-    const res = await fetch(`${config.apiUrl}/reports/por-asesor`, {
+export const fetchAsesorReport = async (filters: AsesorFilters): Promise<AsesorReportResponse> =>
+    apiRequest<AsesorReportResponse>("/reports/por-asesor", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(filters),
+        body: filters,
     })
-    if (!res.ok) throw new Error(`Request failed: ${res.status}`)
-    return res.json()
-}
 
 export const fetchAsesorDetail = async (
     sellerId: number,
     filters: AsesorFilters,
-): Promise<AsesorDetail> => {
-    const res = await fetch(`${config.apiUrl}/reports/por-asesor/${sellerId}`, {
+): Promise<AsesorDetailResponse> =>
+    apiRequest<AsesorDetailResponse>(`/reports/por-asesor/${sellerId}`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(filters),
+        body: filters,
     })
-    if (!res.ok) throw new Error(`Request failed: ${res.status}`)
-    return res.json()
-}
 
 export const fetchDetalleAsesorReport = async (
     filters: DetalleAsesorFilters,
-): Promise<DetalleAsesorReportResponse> => {
-    const res = await fetch(`${config.apiUrl}/reports/detalle-asesor`, {
+): Promise<DetalleAsesorReportResponse> =>
+    apiRequest<DetalleAsesorReportResponse>("/reports/detalle-asesor", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(filters),
+        body: filters,
     })
-    if (!res.ok) throw new Error(`Request failed: ${res.status}`)
-    return res.json()
-}
 
-export const fetchPorPaisReport = async (filters: PorPaisFilters): Promise<PorPaisReportResponse> => {
-    const res = await fetch(`${config.apiUrl}/reports/por-pais`, {
+export const fetchPorPaisReport = async (filters: PorPaisFilters): Promise<PorPaisReportResponse> =>
+    apiRequest<PorPaisReportResponse>("/reports/por-pais", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(filters),
+        body: filters,
     })
-    if (!res.ok) throw new Error(`Request failed: ${res.status}`)
-    return res.json()
-}
 
 export const fetchPorPaisDetail = async (
     country: string,
     filters: PorPaisFilters,
-): Promise<PorPaisDetailResponse> => {
-    const res = await fetch(`${config.apiUrl}/reports/por-pais/${country}`, {
+): Promise<PorPaisDetailResponse> =>
+    apiRequest<PorPaisDetailResponse>(`/reports/por-pais/${country}`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(filters),
+        body: filters,
     })
-    if (!res.ok) throw new Error(`Request failed: ${res.status}`)
-    return res.json()
-}
 
 export const exportTotalSalesExcel = async (filters: ReportFilters) =>
     exportExcel("/reports/ventas-totales/export/excel", filters, "ventas-totales.xlsx")
@@ -127,79 +95,29 @@ export const exportTotalSalesExcel = async (filters: ReportFilters) =>
 export const exportTotalSalesExcelAll = async (filters: ReportFilters) =>
     exportExcel("/reports/ventas-totales/export/excel/all", filters, "ventas-totales-all.xlsx")
 
-export const fetchVentasTotalesPdfPayload = async (
-    filters: ReportFilters,
-): Promise<VentasTotalesPDFPayload> => {
-    const res = await fetch(`${config.apiUrl}/reports/ventas-totales/export/pdf`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(filters),
-    })
-    if (!res.ok) throw new Error(`Request failed: ${res.status}`)
-    return res.json()
+const exportPdf = async <TFilters>(path: string, filters: TFilters, fallbackFilename: string) => {
+    const response = await apiResponse(path, { method: "POST", body: filters })
+    const blob = await response.blob()
+    await downloadPdfBlob(blob, fallbackFilename, response.headers.get("content-disposition"))
 }
 
-export const fetchPorAsesorPdfPayload = async (
-    filters: AsesorFilters,
-): Promise<PorAsesorPDFPayload> => {
-    const res = await fetch(`${config.apiUrl}/reports/por-asesor/export/pdf`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(filters),
-    })
-    if (!res.ok) throw new Error(`Request failed: ${res.status}`)
-    return res.json()
-}
+export const exportVentasTotalesPdf = (filters: ReportFilters) =>
+    exportPdf("/reports/ventas-totales/export/pdf", filters, "ventas-totales.pdf")
 
-export const fetchAsesorDetailPdfPayload = async (
-    sellerId: number,
-    filters: AsesorFilters,
-): Promise<AsesorDetailPDFPayload> => {
-    const res = await fetch(`${config.apiUrl}/reports/por-asesor/${sellerId}/export/pdf`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(filters),
-    })
-    if (!res.ok) throw new Error(`Request failed: ${res.status}`)
-    return res.json()
-}
+export const exportPorAsesorPdf = (filters: AsesorFilters) =>
+    exportPdf("/reports/por-asesor/export/pdf", filters, "por-asesor.pdf")
 
-export const fetchDetalleAsesorPdfPayload = async (
-    filters: DetalleAsesorFilters,
-): Promise<DetalleAsesorPDFPayload> => {
-    const res = await fetch(`${config.apiUrl}/reports/detalle-asesor/export/pdf`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(filters),
-    })
-    if (!res.ok) throw new Error(`Request failed: ${res.status}`)
-    return res.json()
-}
+export const exportAsesorDetailPdf = (sellerId: number, filters: AsesorFilters) =>
+    exportPdf(`/reports/por-asesor/${sellerId}/export/pdf`, filters, "detalle-asesor.pdf")
 
-export const fetchPorPaisPdfPayload = async (
-    filters: PorPaisFilters,
-): Promise<PorPaisPDFPayload> => {
-    const res = await fetch(`${config.apiUrl}/reports/por-pais/export/pdf`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(filters),
-    })
-    if (!res.ok) throw new Error(`Request failed: ${res.status}`)
-    return res.json()
-}
+export const exportDetalleAsesorPdf = (filters: DetalleAsesorFilters) =>
+    exportPdf("/reports/detalle-asesor/export/pdf", filters, "detalle-asesor.pdf")
 
-export const fetchPorPaisDetailPdfPayload = async (
-    country: string,
-    filters: PorPaisFilters,
-): Promise<PorPaisDetailPDFPayload> => {
-    const res = await fetch(`${config.apiUrl}/reports/por-pais/${country}/export/pdf`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(filters),
-    })
-    if (!res.ok) throw new Error(`Request failed: ${res.status}`)
-    return res.json()
-}
+export const exportPorPaisPdf = (filters: PorPaisFilters) =>
+    exportPdf("/reports/por-pais/export/pdf", filters, "por-pais.pdf")
+
+export const exportPorPaisDetailPdf = (country: string, filters: PorPaisFilters) =>
+    exportPdf(`/reports/por-pais/${country}/export/pdf`, filters, "detalle-por-pais.pdf")
 
 export const exportAsesorExcel = async (filters: AsesorFilters) =>
     exportExcel("/reports/por-asesor/export/excel", filters, "por-asesor.xlsx")

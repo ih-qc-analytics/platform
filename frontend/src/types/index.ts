@@ -1,10 +1,42 @@
-export type ReportFilters = {
+export type BaseCurrency = "MXN" | "USD"
+
+export type ComparisonMode = "PREVIOUS_YEAR" | "PREVIOUS_PERIOD" | "CUSTOM"
+
+export type ComparisonFields = {
+    show_comparison?: boolean
+    comparison_mode?: ComparisonMode
+    comparison_date_from?: string
+    comparison_date_to?: string
+}
+
+export type ReportFilters = ComparisonFields & {
     date_from?: string
     date_to?: string
     countries?: string[]
     zones?: string[]
     states?: string[]
     cities?: string[]
+}
+
+export type ComparisonMeta = {
+    mode: ComparisonMode
+    date_from: string
+    date_to: string
+}
+
+export type MetricDelta = {
+    comparison_value?: number | null
+    pct_change?: number | null
+}
+
+export type ComparedResponse<T, D = Record<string, MetricDelta>> = {
+    current: T
+    comparison_mode?: ComparisonMode | null
+    comparison?: {
+        meta: ComparisonMeta
+        data: T
+        deltas: D
+    } | null
 }
 
 export type TrendPoint = {
@@ -24,7 +56,7 @@ export type GeoPoint = {
     revenue: number
 }
 
-export type TotalSalesResponse = {
+export type TotalSalesBase = {
     total_clients: number
     total_exams: number
     exam_revenue: number
@@ -41,12 +73,12 @@ export type TotalSalesResponse = {
     unknown_site_revenue: number
     unknown_site_expected_revenue: number
     profit_margin: number
-    prior_year_revenue: number
-    growth_pct: number
     trend_points: TrendPoint[]
     geo_points: GeoPoint[]
     product_mix: ProductMix | null
 }
+
+export type TotalSalesResponse = ComparedResponse<TotalSalesBase>
 
 export type PDFHeader = {
     title: string
@@ -136,12 +168,7 @@ export type SellerOptionsResponse = {
     sellers: string[]
 }
 
-export type AsesorFilters = {
-    year: number
-    countries?: string[]
-    zones?: string[]
-    states?: string[]
-    cities?: string[]
+export type AsesorFilters = ReportFilters & {
     sellers?: string[]
     limit?: number
     cursor?: string | null
@@ -158,12 +185,13 @@ export type AsesorRow = {
     total_revenue: number
 }
 
-export type AsesorReportResponse = {
+export type AsesorReportBase = {
     rows: AsesorRow[]
-    year: number
     next_cursor: string | null
     has_more: boolean
 }
+
+export type AsesorReportResponse = ComparedResponse<AsesorReportBase>
 
 export type ExamBrandDetail = {
     exams: number
@@ -177,7 +205,7 @@ export type BusinessStatusDetail = {
     revenue: number
 }
 
-export type AsesorDetail = {
+export type AsesorDetailBase = {
     seller_name: string
     countries: string[]
     zones: string[]
@@ -193,6 +221,8 @@ export type AsesorDetail = {
     mantenidos: BusinessStatusDetail
 }
 
+export type AsesorDetailResponse = ComparedResponse<AsesorDetailBase>
+
 export type DetalleAsesorFilters = ReportFilters & {
     search?: string
     cursor?: number | null
@@ -204,17 +234,22 @@ export type DetalleAsesorRow = {
     seller_name: string
     school_name: string
     exam_date: string
+    exam_type: string
     exam_counts: Record<string, number>
     total: number
 }
 
-export type DetalleAsesorReportResponse = {
+export type DetalleAsesorReportBase = {
     rows: DetalleAsesorRow[]
     next_cursor: number | null
     has_more: boolean
 }
 
-export type PorPaisFilters = {
+export type DetalleAsesorReportResponse = {
+    current: DetalleAsesorReportBase
+}
+
+export type PorPaisFilters = ComparisonFields & {
     date_from: string
     date_to: string
 }
@@ -241,10 +276,12 @@ export type PorPaisStatusRow = {
     exams_mantenidos: number
 }
 
-export type PorPaisReportResponse = {
+export type PorPaisReportBase = {
     summary_rows: PorPaisSummaryRow[]
     status_rows: PorPaisStatusRow[]
 }
+
+export type PorPaisReportResponse = ComparedResponse<PorPaisReportBase>
 
 export type PorPaisDetailResponse = {
     country: string

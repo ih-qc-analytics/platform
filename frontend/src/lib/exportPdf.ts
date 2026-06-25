@@ -1,12 +1,14 @@
-import { pdf } from "@react-pdf/renderer"
-import type { DocumentProps } from "@react-pdf/renderer"
-import type { ReactElement } from "react"
+const parseFilename = (contentDisposition: string | null, fallback: string): string => {
+    const match = contentDisposition?.match(/filename="?([^"]+)"?/)
+    return match?.[1] ?? fallback
+}
 
-export const downloadPdf = async (
-    document: ReactElement<DocumentProps>,
-    filename: string,
+export const downloadPdfBlob = async (
+    blob: Blob,
+    fallbackFilename: string,
+    contentDisposition?: string | null,
 ): Promise<void> => {
-    const blob = await pdf(document).toBlob()
+    const filename = parseFilename(contentDisposition ?? null, fallbackFilename)
     const url = URL.createObjectURL(blob)
     const anchor = window.document.createElement("a")
     anchor.href = url

@@ -1,0 +1,21 @@
+{% macro render_header(header, logo_b64) %}
+<div class="pdf-header">
+  <div class="pdf-header-top">
+    <div>
+      <div class="pdf-header-title">{{ header.title }}</div>
+      <div class="pdf-header-subtitle">{{ header.subtitle }}</div>
+      <div class="pdf-header-date">Generado el {{ header.generated_at }}</div>
+    </div>
+    {% if logo_b64 %}
+    <img class="pdf-header-logo" src="{{ logo_b64 }}" alt="Logo" />
+    {% endif %}
+  </div>
+  {% if header.filters_summary %}
+  <div class="pdf-header-pills">
+    {% for key, value in header.filters_summary.items() %}
+    <span class="pdf-header-pill"><strong>{{ key }}:</strong> {{ value }}</span>
+    {% endfor %}
+  </div>
+  {% endif %}
+</div>
+{% endmacro %}

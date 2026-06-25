@@ -1,13 +1,11 @@
 import { FileDown, Loader2 } from "lucide-react"
 
-import { fetchAsesorDetailPdfPayload } from "@/api/reports"
-import AsesorDetailPDF from "@/components/pdf/AsesorDetailPDF"
+import { exportAsesorDetailPdf } from "@/api/reports"
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useAsesorDetail } from "@/hooks/useReports"
-import { downloadPdf } from "@/lib/exportPdf"
 import type { AsesorFilters, BusinessStatusDetail } from "@/types"
 import { cn, formatCurrency, formatInteger } from "@/lib/utils"
 import { ASESOR_EXAM_CATEGORIES } from "@/components/reports/asesorCategories"
@@ -24,6 +22,8 @@ type DetalleAsesorProps = {
 type SummaryInfoCardProps = {
     label: string
     value: string
+    comparisonValue?: string
+    showComparison?: boolean
     wide?: boolean
 }
 
@@ -57,16 +57,18 @@ export default function DetalleAsesor({
     const [isExportingPdf, setIsExportingPdf] = useState(false)
     const [exportError, setExportError] = useState<string | null>(null)
     const { data, isLoading, isError } = useAsesorDetail(sellerId, filters, open)
+    const detail = data?.current
+    const comparisonDetail = data?.comparison?.data
 
     const statusEntries: Array<{
         title: string
         detail: BusinessStatusDetail
         tone: BreakdownTileProps["tone"]
-    }> = data
+    }> = detail
         ? [
-              { title: "Ganados", detail: data.ganados, tone: "green" },
-              { title: "Perdidos", detail: data.perdidos, tone: "rose" },
-              { title: "Mantenidos", detail: data.mantenidos, tone: "indigo" },
+              { title: "Ganados", detail: detail.ganados, tone: "green" },
+              { title: "Perdidos", detail: detail.perdidos, tone: "rose" },
+              { title: "Mantenidos", detail: detail.mantenidos, tone: "indigo" },
           ]
         : []
 
@@ -76,11 +78,7 @@ export default function DetalleAsesor({
         setExportError(null)
         setIsExportingPdf(true)
         try {
-            const payload = await fetchAsesorDetailPdfPayload(sellerId, filters)
-            await downloadPdf(
-                <AsesorDetailPDF data={payload} />,
-                buildAsesorDetailPdfFilename(payload.header.title),
-            )
+            await exportAsesorDetailPdf(sellerId, filters)
         } catch {
             setExportError("No fue posible exportar el archivo. Intenta de nuevo.")
         } finally {
@@ -94,7 +92,7 @@ export default function DetalleAsesor({
                 <SheetHeader className="border-b border-border px-5 py-4">
                     <div className="flex items-start justify-between gap-4">
                         <SheetTitle className="text-2xl font-semibold tracking-tight text-slate-900">
-                            {data?.seller_name ?? sellerName ?? "Detalle"}
+                            {detail?.seller_name ?? sellerName ?? "Detalle"}
                         </SheetTitle>
                         <Button
                             onClick={() => void handleExportPdf()}
@@ -114,17 +112,17 @@ export default function DetalleAsesor({
                         <DetalleSkeleton />
                     ) : isError ? (
                         <p className="text-sm text-destructive">No fue posible cargar el detalle.</p>
-                    ) : data ? (
+                    ) : detail ? (
                         <>
                             <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                                <SummaryInfoCard label="País" value={joinValues(data.countries)} />
-                                <SummaryInfoCard label="Sede" value={joinValues(data.zones)} />
-                                <SummaryInfoCard label="Estado" value={joinValues(data.states)} />
-                                <SummaryInfoCard label="Ciudad" value={joinValues(data.cities)} />
-                                <SummaryInfoCard label="Total Colegios" value={formatInteger(data.total_schools)} />
-                                <SummaryInfoCard label="Total Exámenes" value={formatInteger(data.total_exams)} />
-                                <SummaryInfoCard label="Sin Categorizar" value={formatCurrency(data.uncategorized_revenue)} />
-                                <SummaryInfoCard label="Valor Total" value={formatCurrency(data.total_revenue)} wide />
+                                <SummaryInfoCard label="País" value={joinValues(detail.countries)} />
+                                <SummaryInfoCard label="Sede" value={joinValues(detail.zones)} />
+                                <SummaryInfoCard label="Estado" value={joinValues(detail.states)} />
+                                <SummaryInfoCard label="Ciudad" value={joinValues(detail.cities)} />
+                                <SummaryInfoCard label="Total Colegios" value={formatInteger(detail.total_schools)} comparisonValue={comparisonDetail ? formatInteger(comparisonDetail.total_schools) : undefined} showComparison={Boolean(filters.show_comparison)} />
+                                <SummaryInfoCard label="Total Exámenes" value={formatInteger(detail.total_exams)} comparisonValue={comparisonDetail ? formatInteger(comparisonDetail.total_exams) : undefined} showComparison={Boolean(filters.show_comparison)} />
+                                <SummaryInfoCard label="Sin Categorizar" value={formatCurrency(detail.uncategorized_revenue)} comparisonValue={comparisonDetail ? formatCurrency(comparisonDetail.uncategorized_revenue) : undefined} showComparison={Boolean(filters.show_comparison)} />
+                                <SummaryInfoCard label="Valor Total" value={formatCurrency(detail.total_revenue)} comparisonValue={comparisonDetail ? formatCurrency(comparisonDetail.total_revenue) : undefined} showComparison={Boolean(filters.show_comparison)} wide />
                             </div>
 
                             <section className="flex flex-col gap-3">
@@ -133,7 +131,7 @@ export default function DetalleAsesor({
                                 </h2>
                                 <div className="grid grid-cols-1 gap-3 xl:grid-cols-3">
                                     {ASESOR_EXAM_CATEGORIES.map((label, index) => {
-                                        const detail = data?.exam_breakdown[label] ?? {
+                                        const categoryDetail = detail?.exam_breakdown[label] ?? {
                                             exams: 0,
                                             schools: 0,
                                             revenue: 0,
@@ -144,11 +142,11 @@ export default function DetalleAsesor({
                                             key={label}
                                             title={label}
                                             firstLabel="Exámenes"
-                                            firstValue={detail.exams}
+                                            firstValue={categoryDetail.exams}
                                             secondLabel="Colegios"
-                                            secondValue={detail.schools}
+                                            secondValue={categoryDetail.schools}
                                             totalLabel="Valor"
-                                            totalValue={detail.revenue}
+                                            totalValue={categoryDetail.revenue}
                                             tone={(["blue", "purple", "amber"] as const)[index % 3]}
                                         />
                                         )
@@ -184,12 +182,15 @@ export default function DetalleAsesor({
     )
 }
 
-function SummaryInfoCard({ label, value, wide = false }: SummaryInfoCardProps) {
+function SummaryInfoCard({ label, value, comparisonValue, showComparison = false, wide = false }: SummaryInfoCardProps) {
     return (
         <Card className={cn("rounded-2xl shadow-none", wide && "md:col-span-2")}>
             <CardContent className="flex min-h-20 flex-col justify-between gap-3 p-4">
                 <span className="text-xs font-medium text-slate-500">{label}</span>
                 <span className="text-xl font-semibold tracking-tight text-slate-900">{value || "-"}</span>
+                {showComparison && comparisonValue ? (
+                    <span className="text-xs text-muted-foreground">{comparisonValue}</span>
+                ) : null}
             </CardContent>
         </Card>
     )
@@ -232,17 +233,6 @@ function MetricRow({ label, value }: { label: string; value: string }) {
 
 function joinValues(values: string[]) {
     return values.length > 0 ? values.join(", ") : "-"
-}
-
-function buildAsesorDetailPdfFilename(sellerName: string) {
-    const slug = sellerName
-        .normalize("NFD")
-        .replace(/[\u0300-\u036f]/g, "")
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, "-")
-        .replace(/^-+|-+$/g, "")
-
-    return slug ? `detalle-asesor-${slug}.pdf` : "detalle-asesor.pdf"
 }
 
 function DetalleSkeleton() {

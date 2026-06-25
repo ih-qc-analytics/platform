@@ -3,8 +3,10 @@ import json
 
 from sqlalchemy import text
 
+from app.enums import BaseCurrency
 from app.reporting.database import ReportingSessionLocal
 from app.schemas.reports import AsesorFilters
+from app.services.utils.report_currency import line_paid_total_column, payment_amount_column
 from app.services.shared import build_line_item_where_clause, build_payment_where_clause
 
 
@@ -26,11 +28,9 @@ def decode_cursor(cursor: str) -> dict:
 def _payment_where(
     filters: AsesorFilters,
     *,
-    year: int | None = None,
     seller_id: int | None = None,
 ) -> tuple[str, dict]:
-    scoped_filters = filters.model_copy(update={"year": year if year is not None else filters.year})
-    where, params = build_payment_where_clause(scoped_filters)
+    where, params = build_payment_where_clause(filters)
     if getattr(filters, "sellers", None):
         where += " AND seller_name = ANY(:sellers)"
         params["sellers"] = list(filters.sellers)
@@ -43,13 +43,11 @@ def _payment_where(
 def _line_where(
     filters: AsesorFilters,
     *,
-    year: int | None = None,
     seller_id: int | None = None,
     require_product_breakdown: bool = False,
 ) -> tuple[str, dict]:
-    scoped_filters = filters.model_copy(update={"year": year if year is not None else filters.year})
     where, params = build_line_item_where_clause(
-        scoped_filters,
+        filters,
         require_product_breakdown=require_product_breakdown,
     )
     if getattr(filters, "sellers", None):
@@ -65,17 +63,19 @@ async def fetch_paginated_summary_rows(
     filters: AsesorFilters,
     limit: int,
     cursor: str | None,
+    base_currency: BaseCurrency = BaseCurrency.MXN,
 ) -> tuple[list, bool, str | None]:
     where, params = _payment_where(filters)
+    payment_amount = payment_amount_column(base_currency)
 
     cursor_clause = ""
     if cursor:
         cp = decode_cursor(cursor)
-        cursor_clause = """
+        cursor_clause = f"""
             HAVING
-                SUM(amount_mxn) < :cursor_total_revenue
-                OR (SUM(amount_mxn) = :cursor_total_revenue AND MIN(seller_name) > :cursor_seller_name)
-                OR (SUM(amount_mxn) = :cursor_total_revenue AND MIN(seller_name) = :cursor_seller_name
+                SUM({payment_amount}) < :cursor_total_revenue
+                OR (SUM({payment_amount}) = :cursor_total_revenue AND MIN(seller_name) > :cursor_seller_name)
+                OR (SUM({payment_amount}) = :cursor_total_revenue AND MIN(seller_name) = :cursor_seller_name
                     AND seller_id > :cursor_seller_id)
         """
         params.update(cp)
@@ -85,7 +85,7 @@ async def fetch_paginated_summary_rows(
         SELECT
             seller_id,
             MIN(seller_name) AS seller_name,
-            COALESCE(SUM(amount_mxn), 0) AS total_revenue
+            COALESCE(SUM({payment_amount}), 0) AS total_revenue
         FROM report_payments
         WHERE {where}
         GROUP BY seller_id
@@ -112,16 +112,42 @@ async def fetch_paginated_summary_rows(
 async def fetch_summary_allocated_revenue_rows_by_seller_ids(
     seller_ids: list[int],
     filters: AsesorFilters,
+    base_currency: BaseCurrency = BaseCurrency.MXN,
 ) -> list:
     if not seller_ids:
         return []
     where, params = _line_where(filters, require_product_breakdown=True)
     params["seller_ids"] = seller_ids
+    paid_total = line_paid_total_column(base_currency)
     query = f"""
         SELECT
             seller_id,
-            COALESCE(SUM(paid_total_mxn), 0) AS allocated_revenue
+            COALESCE(SUM({paid_total}), 0) AS allocated_revenue
         FROM report_line_items
+        WHERE {where}
+          AND seller_id = ANY(:seller_ids)
+        GROUP BY seller_id
+    """
+    async with ReportingSessionLocal() as session:
+        return (await session.execute(text(query), params)).fetchall()
+
+
+async def fetch_summary_rows_by_seller_ids(
+    seller_ids: list[int],
+    filters: AsesorFilters,
+    base_currency: BaseCurrency = BaseCurrency.MXN,
+) -> list:
+    if not seller_ids:
+        return []
+    where, params = _payment_where(filters)
+    params["seller_ids"] = seller_ids
+    payment_amount = payment_amount_column(base_currency)
+    query = f"""
+        SELECT
+            seller_id,
+            MIN(seller_name) AS seller_name,
+            COALESCE(SUM({payment_amount}), 0) AS total_revenue
+        FROM report_payments
         WHERE {where}
           AND seller_id = ANY(:seller_ids)
         GROUP BY seller_id
@@ -155,11 +181,10 @@ async def fetch_summary_exam_breakdown_rows_by_seller_ids(
 
 async def fetch_school_presence_rows(
     filters: AsesorFilters,
-    year: int,
     *,
     seller_id: int | None = None,
 ) -> list:
-    where, params = _payment_where(filters, year=year, seller_id=seller_id)
+    where, params = _payment_where(filters, seller_id=seller_id)
     query = f"""
         SELECT DISTINCT seller_id, lead_id
         FROM report_payments
@@ -171,16 +196,17 @@ async def fetch_school_presence_rows(
 
 async def fetch_school_allocated_revenue_metric_rows(
     filters: AsesorFilters,
-    year: int,
     *,
     seller_id: int | None = None,
+    base_currency: BaseCurrency = BaseCurrency.MXN,
 ) -> list:
-    where, params = _line_where(filters, year=year, seller_id=seller_id, require_product_breakdown=True)
+    where, params = _line_where(filters, seller_id=seller_id, require_product_breakdown=True)
+    paid_total = line_paid_total_column(base_currency)
     query = f"""
         SELECT
             seller_id,
             lead_id,
-            COALESCE(SUM(paid_total_mxn), 0) AS revenue
+            COALESCE(SUM({paid_total}), 0) AS revenue
         FROM report_line_items
         WHERE {where}
         GROUP BY seller_id, lead_id
@@ -191,11 +217,10 @@ async def fetch_school_allocated_revenue_metric_rows(
 
 async def fetch_school_exam_metric_rows(
     filters: AsesorFilters,
-    year: int,
     *,
     seller_id: int | None = None,
 ) -> list:
-    where, params = _line_where(filters, year=year, seller_id=seller_id, require_product_breakdown=True)
+    where, params = _line_where(filters, seller_id=seller_id, require_product_breakdown=True)
     query = f"""
         SELECT
             seller_id,
@@ -204,6 +229,28 @@ async def fetch_school_exam_metric_rows(
         FROM report_line_items
         WHERE {where}
         GROUP BY seller_id, lead_id
+    """
+    async with ReportingSessionLocal() as session:
+        return (await session.execute(text(query), params)).fetchall()
+
+
+async def fetch_detail_exam_breakdown_rows(
+    seller_id: int,
+    filters: AsesorFilters,
+    base_currency: BaseCurrency = BaseCurrency.MXN,
+) -> list:
+    where, params = _line_where(filters, seller_id=seller_id, require_product_breakdown=True)
+    paid_total = line_paid_total_column(base_currency)
+    query = f"""
+        SELECT
+            exam_category,
+            SUM(quantity) AS exams,
+            COUNT(DISTINCT lead_id) AS schools,
+            SUM({paid_total}) AS revenue
+        FROM report_line_items
+        WHERE {where}
+          AND product_type = 'exam'
+        GROUP BY exam_category
     """
     async with ReportingSessionLocal() as session:
         return (await session.execute(text(query), params)).fetchall()

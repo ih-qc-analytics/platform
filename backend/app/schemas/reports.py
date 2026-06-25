@@ -1,10 +1,11 @@
-from pydantic import BaseModel
+from __future__ import annotations
+
 from typing import Optional
 
+from pydantic import BaseModel
 
-# ─────────────────────────────────────────────
-# Base filter classes
-# ─────────────────────────────────────────────
+from app.enums import ComparisonMode
+
 
 class BaseGeoFilters(BaseModel):
     countries: list[str] = []
@@ -13,17 +14,40 @@ class BaseGeoFilters(BaseModel):
     cities: list[str] = []
 
 
-class ReportFilters(BaseGeoFilters):
-    date_from: Optional[str] = None    # "2025-01-01"
-    date_to: Optional[str] = None      # "2025-12-31"
+class ComparisonFilterFields(BaseModel):
+    show_comparison: bool = False
+    comparison_mode: ComparisonMode = ComparisonMode.PREVIOUS_YEAR
+    comparison_date_from: Optional[str] = None
+    comparison_date_to: Optional[str] = None
 
 
-# ─────────────────────────────────────────────
-# Ventas Totales
-# ─────────────────────────────────────────────
+class DateRangeFilterFields(BaseModel):
+    date_from: Optional[str] = None
+    date_to: Optional[str] = None
+
+
+class ReportFilters(BaseGeoFilters, DateRangeFilterFields, ComparisonFilterFields):
+    pass
+
+
+class ComparisonMeta(BaseModel):
+    mode: ComparisonMode
+    date_from: str
+    date_to: str
+
+
+class MetricDelta(BaseModel):
+    comparison_value: Optional[float] = None
+    pct_change: Optional[float] = None
+
 
 class TrendPoint(BaseModel):
     month: str
+    revenue: float
+
+
+class GeoPoint(BaseModel):
+    dimension: str
     revenue: float
 
 
@@ -34,12 +58,7 @@ class ProductMix(BaseModel):
     unknown_pct: float
 
 
-class GeoPoint(BaseModel):
-    dimension: str
-    revenue: float
-
-
-class TotalSalesResponse(BaseModel):
+class TotalSalesBase(BaseModel):
     total_clients: int
     total_exams: int
     exam_revenue: float
@@ -56,16 +75,22 @@ class TotalSalesResponse(BaseModel):
     unknown_site_revenue: float
     unknown_site_expected_revenue: float
     profit_margin: float
-    prior_year_revenue: float
-    growth_pct: Optional[float] = None
     trend_points: list[TrendPoint]
     geo_points: list[GeoPoint]
     product_mix: Optional[ProductMix] = None
 
 
-# ─────────────────────────────────────────────
-# Filter options
-# ─────────────────────────────────────────────
+class TotalSalesComparison(BaseModel):
+    meta: ComparisonMeta
+    data: TotalSalesBase
+    deltas: dict[str, MetricDelta]
+
+
+class TotalSalesResponse(BaseModel):
+    current: TotalSalesBase
+    comparison_mode: Optional[ComparisonMode] = None
+    comparison: Optional[TotalSalesComparison] = None
+
 
 class FilterOptionsResponse(BaseModel):
     countries: list[str]
@@ -78,15 +103,11 @@ class SellerOptionsResponse(BaseModel):
     sellers: list[str]
 
 
-# ─────────────────────────────────────────────
-# Por Asesor
-# ─────────────────────────────────────────────
-
-class AsesorFilters(BaseGeoFilters):
-    year: int
+class AsesorFilters(BaseGeoFilters, DateRangeFilterFields, ComparisonFilterFields):
     sellers: list[str] = []
     limit: int = 25
     cursor: Optional[str] = None
+    year: Optional[int] = None
 
 
 class AsesorRow(BaseModel):
@@ -100,11 +121,22 @@ class AsesorRow(BaseModel):
     uncategorized_revenue: float
 
 
-class AsesorReportResponse(BaseModel):
+class AsesorReportBase(BaseModel):
     rows: list[AsesorRow]
-    year: int
     next_cursor: Optional[str] = None
     has_more: bool = False
+
+
+class AsesorReportComparison(BaseModel):
+    meta: ComparisonMeta
+    data: AsesorReportBase
+    deltas: dict[str, MetricDelta] = {}
+
+
+class AsesorReportResponse(BaseModel):
+    current: AsesorReportBase
+    comparison_mode: Optional[ComparisonMode] = None
+    comparison: Optional[AsesorReportComparison] = None
 
 
 class ExamBrandDetail(BaseModel):
@@ -119,7 +151,7 @@ class BusinessStatusDetail(BaseModel):
     revenue: float
 
 
-class AsesorDetail(BaseModel):
+class AsesorDetailBase(BaseModel):
     seller_name: str
     countries: list[str]
     zones: list[str]
@@ -135,36 +167,45 @@ class AsesorDetail(BaseModel):
     mantenidos: BusinessStatusDetail
 
 
-# ─────────────────────────────────────────────
-# Detalle por Asesor
-# ─────────────────────────────────────────────
+class AsesorDetailComparison(BaseModel):
+    meta: ComparisonMeta
+    data: AsesorDetailBase
+    deltas: dict[str, MetricDelta] = {}
+
+
+class AsesorDetailResponse(BaseModel):
+    current: AsesorDetailBase
+    comparison_mode: Optional[ComparisonMode] = None
+    comparison: Optional[AsesorDetailComparison] = None
+
 
 class DetalleFilters(ReportFilters):
-    search: Optional[str] = None   # matches seller name OR school name
-    cursor: Optional[int] = None   # last row id for cursor pagination
+    search: Optional[str] = None
+    cursor: Optional[int] = None
     page_size: int = 8
 
 
 class DetalleRow(BaseModel):
-    id: int                        # cart_product.id, used as cursor
+    id: int
     seller_name: str
     school_name: str
-    exam_date: str                 # YYYY-MM-DD from cart_product.testDate
-    exam_counts: dict[str, int]    # { "KET": 12, "FCE": 8, ... } keyed by exam_cat.name
-    total: int                     # sum of all exam_counts values
+    exam_date: str
+    exam_type: str
+    exam_counts: dict[str, int]
+    total: int
 
 
-class DetalleReportResponse(BaseModel):
+class DetalleReportBase(BaseModel):
     rows: list[DetalleRow]
-    next_cursor: Optional[int]     # None if no more pages
+    next_cursor: Optional[int]
     has_more: bool
 
 
-# ─────────────────────────────────────────────
-# Por País
-# ─────────────────────────────────────────────
+class DetalleReportResponse(BaseModel):
+    current: DetalleReportBase
 
-class PorPaisFilters(BaseModel):
+
+class PorPaisFilters(DateRangeFilterFields, ComparisonFilterFields):
     date_from: str
     date_to: str
 
@@ -191,9 +232,21 @@ class PorPaisStatusRow(BaseModel):
     exams_mantenidos: int
 
 
-class PorPaisReportResponse(BaseModel):
+class PorPaisReportBase(BaseModel):
     summary_rows: list[PorPaisSummaryRow]
     status_rows: list[PorPaisStatusRow]
+
+
+class PorPaisReportComparison(BaseModel):
+    meta: ComparisonMeta
+    data: PorPaisReportBase
+    deltas: dict[str, MetricDelta] = {}
+
+
+class PorPaisReportResponse(BaseModel):
+    current: PorPaisReportBase
+    comparison_mode: Optional[ComparisonMode] = None
+    comparison: Optional[PorPaisReportComparison] = None
 
 
 class PorPaisDetailResponse(BaseModel):

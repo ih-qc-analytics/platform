@@ -1,14 +1,8 @@
-import config from "../config"
+import { apiRequest } from "./client"
 import type { FilterOptionsResponse, SellerOptionsResponse } from "../types"
 
-export const fetchFilterOptions = async (): Promise<FilterOptionsResponse> => {
-    const res = await fetch(`${config.apiUrl}/filters/options`)
-    if (!res.ok) throw new Error(`Request failed: ${res.status}`)
-    return res.json()
-}
+export const fetchFilterOptions = async (): Promise<FilterOptionsResponse> =>
+    apiRequest<FilterOptionsResponse>("/filters/options")
 
-export const fetchSellerOptions = async (): Promise<SellerOptionsResponse> => {
-    const res = await fetch(`${config.apiUrl}/filters/sellers`)
-    if (!res.ok) throw new Error(`Request failed: ${res.status}`)
-    return res.json()
-}
+export const fetchSellerOptions = async (): Promise<SellerOptionsResponse> =>
+    apiRequest<SellerOptionsResponse>("/filters/sellers")

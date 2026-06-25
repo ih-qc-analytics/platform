@@ -10,7 +10,7 @@ type FilterFieldShellProps = {
 
 export default function FilterFieldShell({ label, children, className }: FilterFieldShellProps) {
     return (
-        <div className={cn("flex min-w-40 flex-col gap-2", className)}>
+        <div className={cn("flex flex-col gap-2", className)}>
             <label className="px-1 text-sm font-medium text-slate-600">{label}</label>
             {children}
         </div>

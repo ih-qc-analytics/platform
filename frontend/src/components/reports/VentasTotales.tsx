@@ -1,7 +1,6 @@
 import { useState } from "react"
 import { Users, FileText, BookOpen, GraduationCap, DollarSign, TrendingUp, Percent, Calendar, PackageSearch, Landmark } from "lucide-react"
-import VentasTotalesPDF from "@/components/pdf/VentasTotalesPDF"
-import { exportTotalSalesExcel, exportTotalSalesExcelAll, fetchVentasTotalesPdfPayload } from "@/api/reports"
+import { exportTotalSalesExcel, exportTotalSalesExcelAll, exportVentasTotalesPdf } from "@/api/reports"
 import FilterBar from "@/components/filters/FilterBar"
 import KpiCard from "@/components/ui/KpiCard"
 import TrendLine from "@/components/charts/TrendLine"
@@ -9,7 +8,6 @@ import GeoBar from "@/components/charts/GeoBar"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useTotalSalesData } from "@/hooks/useReports"
-import { downloadPdf } from "@/lib/exportPdf"
 import { getDefaultReportFilters } from "@/lib/reportFilters"
 import type { ReportFilters } from "@/types"
 
@@ -59,8 +57,7 @@ export default function VentasTotales() {
         setExportError(null)
         setIsExportingPdf(true)
         try {
-            const payload = await fetchVentasTotalesPdfPayload(filters)
-            await downloadPdf(<VentasTotalesPDF data={payload} />, "ventas-totales.pdf")
+            await exportVentasTotalesPdf(filters)
         } catch {
             setExportError("No fue posible exportar el archivo. Intenta de nuevo.")
         } finally {
@@ -101,109 +98,112 @@ export default function VentasTotales() {
                                 <KpiCard
                                     title="Total Clientes"
                                     icon={<Users className="size-6" />}
-                                    value={data.total_clients}
+                                    value={data.current.total_clients}
+                                    showComparison={Boolean(data.comparison)}
+                                    comparisonValue={data.comparison?.deltas.total_clients?.comparison_value}
+                                    comparisonPct={data.comparison?.deltas.total_clients?.pct_change}
                                 />
                                 <KpiCard
                                     title="Total Exámenes"
                                     icon={<FileText className="size-6" />}
-                                    value={data.total_exams}
+                                    value={data.current.total_exams}
+                                    showComparison={Boolean(data.comparison)}
+                                    comparisonValue={data.comparison?.deltas.total_exams?.comparison_value}
+                                    comparisonPct={data.comparison?.deltas.total_exams?.pct_change}
                                 />
                                 <KpiCard
                                     title="Ingreso por Exámenes"
                                     icon={<DollarSign className="size-6" />}
-                                    value={data.exam_revenue}
+                                    value={data.current.exam_revenue}
                                     prefix="$"
+                                    showComparison={Boolean(data.comparison)}
+                                    comparisonValue={data.comparison?.deltas.exam_revenue?.comparison_value}
+                                    comparisonPct={data.comparison?.deltas.exam_revenue?.pct_change}
                                 />
                                 <KpiCard
                                     title="Total Libros"
                                     icon={<BookOpen className="size-6" />}
-                                    value={data.total_books}
+                                    value={data.current.total_books}
                                 />
                                 <KpiCard
                                     title="Ingreso por Libros"
                                     icon={<BookOpen className="size-6" />}
-                                    value={data.book_revenue}
+                                    value={data.current.book_revenue}
                                     prefix="$"
                                 />
                                 <KpiCard
                                     title="Total Cursos"
                                     icon={<GraduationCap className="size-6" />}
-                                    value={data.total_courses}
+                                    value={data.current.total_courses}
                                 />
                                 <KpiCard
                                     title="Ingreso por Cursos"
                                     icon={<GraduationCap className="size-6" />}
-                                    value={data.course_revenue}
+                                    value={data.current.course_revenue}
                                     prefix="$"
                                 />
                                 <KpiCard
                                     title="Otros"
                                     icon={<FileText className="size-6" />}
-                                    value={(data as typeof data & { total_otros: number }).total_otros}
+                                    value={data.current.total_otros}
                                 />
                                 <KpiCard
                                     title="Ingreso por Otros"
                                     icon={<DollarSign className="size-6" />}
-                                    value={(data as typeof data & { otros_revenue: number }).otros_revenue}
+                                    value={data.current.otros_revenue}
                                     prefix="$"
                                 />
                                 <KpiCard
                                     title="Ingreso Total"
                                     icon={<TrendingUp className="size-6" />}
-                                    value={data.total_revenue}
+                                    value={data.current.total_revenue}
                                     prefix="$"
-                                    growth={data.growth_pct ?? undefined}
+                                    showComparison={Boolean(data.comparison)}
+                                    comparisonValue={data.comparison?.deltas.total_revenue?.comparison_value}
+                                    comparisonPct={data.comparison?.deltas.total_revenue?.pct_change}
                                 />
                                 <KpiCard
                                     title="Ingreso Esperado"
                                     icon={<Landmark className="size-6" />}
-                                    value={data.expected_revenue}
+                                    value={data.current.expected_revenue}
                                     prefix="$"
                                 />
                                 <KpiCard
                                     title="Costo Esperado"
                                     icon={<PackageSearch className="size-6" />}
-                                    value={data.expected_cost}
+                                    value={data.current.expected_cost}
                                     prefix="$"
                                 />
                                 <KpiCard
                                     title="Ingreso Sin Categorizar"
                                     icon={<DollarSign className="size-6" />}
-                                    value={data.uncategorized_revenue}
+                                    value={data.current.uncategorized_revenue}
                                     prefix="$"
                                 />
                                 <KpiCard
                                     title="Ingreso Sitio Desconocido"
                                     icon={<FileText className="size-6" />}
-                                    value={data.unknown_site_revenue}
+                                    value={data.current.unknown_site_revenue}
                                     prefix="$"
                                 />
                                 <KpiCard
                                     title="Esperado Sitio Desconocido"
                                     icon={<FileText className="size-6" />}
-                                    value={data.unknown_site_expected_revenue}
+                                    value={data.current.unknown_site_expected_revenue}
                                     prefix="$"
                                 />
                                 <KpiCard
                                     title="Margen de Utilidad"
                                     icon={<Percent className="size-6" />}
-                                    value={data.profit_margin}
+                                    value={data.current.profit_margin}
                                     suffix="%"
                                     decimals={1}
                                 />
-                                {data.prior_year_revenue > 0 && (
-                                    <KpiCard
-                                        title="Ingreso Año Anterior"
-                                        icon={<Calendar className="size-6" />}
-                                        value={data.prior_year_revenue}
-                                        prefix="$"
-                                    />
-                                )}
                             </div>
 
                             <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-                                <TrendLine data={data.trend_points} />
-                                <GeoBar data={data.geo_points} />
+                                <TrendLine data={data.current.trend_points} comparisonData={data.comparison?.data.trend_points} />
+                                <GeoBar data={data.current.geo_points} comparisonData={data.comparison?.data.geo_points} />
                             </div>
                         </>
                     ) : null}

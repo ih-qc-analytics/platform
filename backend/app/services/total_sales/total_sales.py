@@ -3,9 +3,19 @@ from datetime import datetime
 
 from sqlalchemy import text
 
+from app.enums import BaseCurrency
 from app.reporting.database import ReportingSessionLocal
 from app.schemas.pdf import PDFGeoPoint, PDFKpiItem, PDFTrendPoint, VentasTotalesPDFPayload
-from app.schemas.reports import GeoPoint, ProductMix, ReportFilters, TotalSalesResponse, TrendPoint
+from app.schemas.reports import (
+    GeoPoint,
+    MetricDelta,
+    ProductMix,
+    ReportFilters,
+    TotalSalesBase,
+    TotalSalesComparison,
+    TotalSalesResponse,
+    TrendPoint,
+)
 from app.services.exports.excel import (
     ExcelColumn,
     ExcelWorksheetSpec,
@@ -19,7 +29,13 @@ from app.services.exports.pdf_helpers import (
     format_percent,
     scale_series,
 )
-from app.services.utils.date_utils import rewind_date_range_one_year
+from app.services.utils.date_utils import percent_change, resolve_comparison_range
+from app.services.utils.report_currency import (
+    line_expected_cost_column,
+    line_expected_total_column,
+    line_paid_total_column,
+    payment_amount_column,
+)
 from app.services.shared import build_line_item_where_clause, build_payment_where_clause, line_item_date_expr, payment_date_expr
 
 TOTAL_SALES_SUMMARY_COLUMNS = [
@@ -51,19 +67,24 @@ TOTAL_SALES_CHART_COLUMNS = [
 ]
 
 
-async def getTotalSalesData(
+async def _get_total_sales_base(
     filters: ReportFilters,
     country_rates: dict | None = None,
-) -> TotalSalesResponse:
+    base_currency: BaseCurrency = BaseCurrency.MXN,
+) -> TotalSalesBase:
     payment_where, payment_params = build_payment_where_clause(filters)
     line_where, line_params = build_line_item_where_clause(filters, require_product_breakdown=True)
+    payment_amount = payment_amount_column(base_currency)
+    paid_total = line_paid_total_column(base_currency)
+    expected_total = line_expected_total_column(base_currency)
+    expected_cost = line_expected_cost_column(base_currency)
 
     async def fetch_payment_summary():
         async with ReportingSessionLocal() as session:
             return (await session.execute(text(f"""
                 SELECT
                     COUNT(DISTINCT lead_id) AS total_clients,
-                    COALESCE(SUM(amount_mxn), 0) AS total_revenue,
+                    COALESCE(SUM({payment_amount}), 0) AS total_revenue,
                     COALESCE(SUM(CASE WHEN base_currency = 'UNKNOWN' THEN amount ELSE 0 END), 0) AS unknown_site_revenue
                 FROM report_payments
                 WHERE {payment_where}
@@ -74,16 +95,16 @@ async def getTotalSalesData(
             return (await session.execute(text(f"""
                 SELECT
                     COALESCE(SUM(CASE WHEN product_type = 'exam' THEN quantity ELSE 0 END), 0) AS total_exams,
-                    COALESCE(SUM(CASE WHEN product_type = 'exam' THEN paid_total_mxn ELSE 0 END), 0) AS exam_revenue,
+                    COALESCE(SUM(CASE WHEN product_type = 'exam' THEN {paid_total} ELSE 0 END), 0) AS exam_revenue,
                     COALESCE(SUM(CASE WHEN product_type = 'book' THEN quantity ELSE 0 END), 0) AS total_books,
-                    COALESCE(SUM(CASE WHEN product_type = 'book' THEN paid_total_mxn ELSE 0 END), 0) AS book_revenue,
+                    COALESCE(SUM(CASE WHEN product_type = 'book' THEN {paid_total} ELSE 0 END), 0) AS book_revenue,
                     COALESCE(SUM(CASE WHEN product_type = 'course' THEN quantity ELSE 0 END), 0) AS total_courses,
-                    COALESCE(SUM(CASE WHEN product_type = 'course' THEN paid_total_mxn ELSE 0 END), 0) AS course_revenue,
+                    COALESCE(SUM(CASE WHEN product_type = 'course' THEN {paid_total} ELSE 0 END), 0) AS course_revenue,
                     COALESCE(SUM(CASE WHEN product_type = 'UNCATEGORIZED' THEN quantity ELSE 0 END), 0) AS total_otros,
-                    COALESCE(SUM(CASE WHEN product_type = 'UNCATEGORIZED' THEN paid_total_mxn ELSE 0 END), 0) AS otros_revenue,
-                    COALESCE(SUM(paid_total_mxn), 0) AS allocated_paid_revenue,
-                    COALESCE(SUM(expected_total_mxn), 0) AS expected_revenue,
-                    COALESCE(SUM(expected_cost_mxn), 0) AS expected_cost,
+                    COALESCE(SUM(CASE WHEN product_type = 'UNCATEGORIZED' THEN {paid_total} ELSE 0 END), 0) AS otros_revenue,
+                    COALESCE(SUM({paid_total}), 0) AS allocated_paid_revenue,
+                    COALESCE(SUM({expected_total}), 0) AS expected_revenue,
+                    COALESCE(SUM({expected_cost}), 0) AS expected_cost,
                     COALESCE(SUM(CASE WHEN base_currency = 'UNKNOWN' THEN expected_total ELSE 0 END), 0) AS unknown_site_expected_revenue
                 FROM report_line_items
                 WHERE {line_where}
@@ -94,7 +115,7 @@ async def getTotalSalesData(
             return (await session.execute(text(f"""
                 SELECT
                     TO_CHAR({payment_date_expr()}, 'YYYY-MM') AS month,
-                    COALESCE(SUM(amount_mxn), 0) AS revenue
+                    COALESCE(SUM({payment_amount}), 0) AS revenue
                 FROM report_payments
                 WHERE {payment_where}
                 GROUP BY TO_CHAR({payment_date_expr()}, 'YYYY-MM')
@@ -106,7 +127,7 @@ async def getTotalSalesData(
             return (await session.execute(text(f"""
                 SELECT
                     site AS dimension,
-                    COALESCE(SUM(amount_mxn), 0) AS revenue
+                    COALESCE(SUM({payment_amount}), 0) AS revenue
                 FROM report_payments
                 WHERE {payment_where}
                 AND site IS NOT NULL
@@ -114,41 +135,23 @@ async def getTotalSalesData(
                 ORDER BY site ASC
             """), payment_params)).fetchall()
 
-    async def fetch_prior_year_revenue():
-        if not filters.date_from or not filters.date_to:
-            return 0.0
-        prior_date_from, prior_date_to = rewind_date_range_one_year(filters.date_from, filters.date_to)
-        prior_filters = filters.model_copy(update={"date_from": prior_date_from, "date_to": prior_date_to})
-        prior_where, prior_params = build_payment_where_clause(prior_filters)
-        async with ReportingSessionLocal() as session:
-            prior_row = (await session.execute(text(f"""
-                SELECT COALESCE(SUM(amount_mxn), 0) AS prior_revenue
-                FROM report_payments
-                WHERE {prior_where}
-            """), prior_params)).fetchone()
-            return float(prior_row.prior_revenue or 0)
-
-    payment_row, line_row, trend_rows, geo_rows, prior_year_revenue = await asyncio.gather(
+    payment_row, line_row, trend_rows, geo_rows = await asyncio.gather(
         fetch_payment_summary(),
         fetch_line_summary(),
         fetch_trend_rows(),
         fetch_geo_rows(),
-        fetch_prior_year_revenue(),
     )
 
-    growth_pct = 0.0
     total_revenue = float(payment_row.total_revenue or 0)
     allocated_paid_revenue = float(line_row.allocated_paid_revenue or 0)
     expected_cost = float(line_row.expected_cost or 0)
     uncategorized_revenue = total_revenue - allocated_paid_revenue
-    if prior_year_revenue > 0:
-        growth_pct = (total_revenue - prior_year_revenue) / prior_year_revenue * 100
     profit_margin = ((allocated_paid_revenue - expected_cost) / allocated_paid_revenue * 100) if allocated_paid_revenue > 0 else 0.0
 
     trend_points = _build_trend_points(filters, trend_rows)
     geo_points   = [GeoPoint(dimension=r.dimension, revenue=float(r.revenue or 0)) for r in geo_rows]
 
-    response = TotalSalesResponse(
+    response = TotalSalesBase(
         total_clients=int(payment_row.total_clients or 0),
         total_exams=int(line_row.total_exams or 0),
         exam_revenue=float(line_row.exam_revenue or 0),
@@ -165,8 +168,6 @@ async def getTotalSalesData(
         unknown_site_revenue=float(payment_row.unknown_site_revenue or 0),
         unknown_site_expected_revenue=float(line_row.unknown_site_expected_revenue or 0),
         profit_margin=profit_margin,
-        prior_year_revenue=prior_year_revenue,
-        growth_pct=growth_pct,
         trend_points=trend_points,
         geo_points=geo_points,
         product_mix=None,
@@ -181,6 +182,76 @@ async def getTotalSalesData(
         )
 
     return response
+
+
+def _total_sales_kpi_deltas(current: TotalSalesBase, comparison: TotalSalesBase) -> dict[str, MetricDelta]:
+    values = {
+        "total_clients": (current.total_clients, comparison.total_clients),
+        "total_exams": (current.total_exams, comparison.total_exams),
+        "exam_revenue": (current.exam_revenue, comparison.exam_revenue),
+        "total_books": (current.total_books, comparison.total_books),
+        "book_revenue": (current.book_revenue, comparison.book_revenue),
+        "total_courses": (current.total_courses, comparison.total_courses),
+        "course_revenue": (current.course_revenue, comparison.course_revenue),
+        "total_otros": (current.total_otros, comparison.total_otros),
+        "otros_revenue": (current.otros_revenue, comparison.otros_revenue),
+        "total_revenue": (current.total_revenue, comparison.total_revenue),
+        "expected_revenue": (current.expected_revenue, comparison.expected_revenue),
+        "expected_cost": (current.expected_cost, comparison.expected_cost),
+        "uncategorized_revenue": (current.uncategorized_revenue, comparison.uncategorized_revenue),
+        "unknown_site_revenue": (current.unknown_site_revenue, comparison.unknown_site_revenue),
+        "unknown_site_expected_revenue": (current.unknown_site_expected_revenue, comparison.unknown_site_expected_revenue),
+        "profit_margin": (current.profit_margin, comparison.profit_margin),
+    }
+    return {
+        key: MetricDelta(comparison_value=float(comparison_value), pct_change=percent_change(current_value, comparison_value))
+        for key, (current_value, comparison_value) in values.items()
+    }
+
+
+async def getTotalSalesData(
+    filters: ReportFilters,
+    country_rates: dict | None = None,
+    base_currency: BaseCurrency = BaseCurrency.MXN,
+) -> TotalSalesResponse:
+    comparison_meta = resolve_comparison_range(filters)
+    current_filters = filters.model_copy(
+        update={
+            "show_comparison": False,
+            "comparison_date_from": None,
+            "comparison_date_to": None,
+        }
+    )
+
+    if comparison_meta is None:
+        current = await _get_total_sales_base(
+            current_filters,
+            country_rates=country_rates,
+            base_currency=base_currency,
+        )
+        return TotalSalesResponse(current=current, comparison_mode=None, comparison=None)
+
+    comparison_filters = current_filters.model_copy(
+        update={
+            "date_from": comparison_meta.date_from,
+            "date_to": comparison_meta.date_to,
+        }
+    )
+
+    current, comparison = await asyncio.gather(
+        _get_total_sales_base(current_filters, country_rates=country_rates, base_currency=base_currency),
+        _get_total_sales_base(comparison_filters, country_rates=country_rates, base_currency=base_currency),
+    )
+
+    return TotalSalesResponse(
+        current=current,
+        comparison_mode=comparison_meta.mode,
+        comparison=TotalSalesComparison(
+            meta=comparison_meta,
+            data=comparison,
+            deltas=_total_sales_kpi_deltas(current, comparison),
+        ),
+    )
 
 
 def _build_trend_points(filters: ReportFilters, trend_rows) -> list[TrendPoint]:
@@ -207,42 +278,45 @@ def _build_trend_points(filters: ReportFilters, trend_rows) -> list[TrendPoint]:
 async def build_ventas_totales_pdf_payload(
     filters: ReportFilters,
     country_rates: dict | None = None,
+    base_currency: BaseCurrency = BaseCurrency.MXN,
 ) -> VentasTotalesPDFPayload:
-    response = await getTotalSalesData(filters, country_rates=country_rates)
+    response = await getTotalSalesData(filters, country_rates=country_rates, base_currency=base_currency)
+    base = response.current
 
-    trend_values = [point.revenue for point in response.trend_points]
-    geo_values = [point.revenue for point in response.geo_points]
+    trend_values = [point.revenue for point in base.trend_points]
+    geo_values = [point.revenue for point in base.geo_points]
     scaled_trend = scale_series(trend_values)
     scaled_geo = scale_series(geo_values)
 
-    growth_value = response.growth_pct if response.prior_year_revenue > 0 else None
+    growth_delta = response.comparison.deltas.get("total_revenue") if response.comparison else None
+    growth_value = growth_delta.pct_change if growth_delta else None
     growth, growth_positive = format_growth(growth_value)
 
     kpis = [
-        PDFKpiItem(label="Total Clientes", value=str(response.total_clients)),
-        PDFKpiItem(label="Total Exámenes", value=str(response.total_exams)),
-        PDFKpiItem(label="Ingreso por Exámenes", value=format_currency(response.exam_revenue)),
-        PDFKpiItem(label="Total Libros", value=str(response.total_books)),
-        PDFKpiItem(label="Ingreso por Libros", value=format_currency(response.book_revenue)),
-        PDFKpiItem(label="Total Cursos", value=str(response.total_courses)),
-        PDFKpiItem(label="Ingreso por Cursos", value=format_currency(response.course_revenue)),
-        PDFKpiItem(label="Otros", value=str(response.total_otros)),
-        PDFKpiItem(label="Ingreso por Otros", value=format_currency(response.otros_revenue)),
-        PDFKpiItem(label="Ingreso Esperado", value=format_currency(response.expected_revenue)),
-        PDFKpiItem(label="Costo Esperado", value=format_currency(response.expected_cost)),
-        PDFKpiItem(label="Sin Categorizar", value=format_currency(response.uncategorized_revenue)),
-        PDFKpiItem(label="Ingreso Sitio Desconocido", value=format_currency(response.unknown_site_revenue)),
-        PDFKpiItem(label="Esperado Sitio Desconocido", value=format_currency(response.unknown_site_expected_revenue)),
+        PDFKpiItem(label="Total Clientes", value=str(base.total_clients)),
+        PDFKpiItem(label="Total Exámenes", value=str(base.total_exams)),
+        PDFKpiItem(label="Ingreso por Exámenes", value=format_currency(base.exam_revenue, base_currency)),
+        PDFKpiItem(label="Total Libros", value=str(base.total_books)),
+        PDFKpiItem(label="Ingreso por Libros", value=format_currency(base.book_revenue, base_currency)),
+        PDFKpiItem(label="Total Cursos", value=str(base.total_courses)),
+        PDFKpiItem(label="Ingreso por Cursos", value=format_currency(base.course_revenue, base_currency)),
+        PDFKpiItem(label="Otros", value=str(base.total_otros)),
+        PDFKpiItem(label="Ingreso por Otros", value=format_currency(base.otros_revenue, base_currency)),
+        PDFKpiItem(label="Ingreso Esperado", value=format_currency(base.expected_revenue, base_currency)),
+        PDFKpiItem(label="Costo Esperado", value=format_currency(base.expected_cost, base_currency)),
+        PDFKpiItem(label="Sin Categorizar", value=format_currency(base.uncategorized_revenue, base_currency)),
+        PDFKpiItem(label="Ingreso Sitio Desconocido", value=format_currency(base.unknown_site_revenue, base_currency)),
+        PDFKpiItem(label="Esperado Sitio Desconocido", value=format_currency(base.unknown_site_expected_revenue, base_currency)),
         PDFKpiItem(
             label="Ingreso Total",
-            value=format_currency(response.total_revenue),
+            value=format_currency(base.total_revenue, base_currency),
             growth=growth,
             growth_positive=growth_positive,
         ),
-        PDFKpiItem(label="Margen de Utilidad", value=format_percent(response.profit_margin)),
+        PDFKpiItem(label="Margen de Utilidad", value=format_percent(base.profit_margin)),
     ]
-    if response.prior_year_revenue > 0:
-        kpis.append(PDFKpiItem(label="Ingreso Año Anterior", value=format_currency(response.prior_year_revenue)))
+    if response.comparison is not None:
+        kpis.append(PDFKpiItem(label="Ingreso Comparativo", value=format_currency(response.comparison.data.total_revenue, base_currency)))
 
     return VentasTotalesPDFPayload(
         header=build_pdf_header(
@@ -257,7 +331,7 @@ async def build_ventas_totales_pdf_payload(
                 value=point.revenue,
                 scaled=scaled_trend[index],
             )
-            for index, point in enumerate(response.trend_points)
+            for index, point in enumerate(base.trend_points)
         ],
         geo_points=[
             PDFGeoPoint(
@@ -265,7 +339,7 @@ async def build_ventas_totales_pdf_payload(
                 value=point.revenue,
                 scaled=scaled_geo[index],
             )
-            for index, point in enumerate(response.geo_points)
+            for index, point in enumerate(base.geo_points)
         ],
     )
 
@@ -281,25 +355,26 @@ def build_total_sales_export_worksheets(
     *,
     include_charts: bool = True,
 ) -> list[ExcelWorksheetSpec]:
+    base = response.current
     summary_row = {
-        "total_clients": response.total_clients,
-        "total_exams": response.total_exams,
-        "exam_revenue": response.exam_revenue,
-        "total_books": response.total_books,
-        "book_revenue": response.book_revenue,
-        "total_courses": response.total_courses,
-        "course_revenue": response.course_revenue,
-        "total_otros": response.total_otros,
-        "otros_revenue": response.otros_revenue,
-        "total_revenue": response.total_revenue,
-        "expected_revenue": response.expected_revenue,
-        "expected_cost": response.expected_cost,
-        "uncategorized_revenue": response.uncategorized_revenue,
-        "unknown_site_revenue": response.unknown_site_revenue,
-        "unknown_site_expected_revenue": response.unknown_site_expected_revenue,
-        "profit_margin": response.profit_margin,
-        "prior_year_revenue": response.prior_year_revenue,
-        "growth_pct": response.growth_pct,
+        "total_clients": base.total_clients,
+        "total_exams": base.total_exams,
+        "exam_revenue": base.exam_revenue,
+        "total_books": base.total_books,
+        "book_revenue": base.book_revenue,
+        "total_courses": base.total_courses,
+        "course_revenue": base.course_revenue,
+        "total_otros": base.total_otros,
+        "otros_revenue": base.otros_revenue,
+        "total_revenue": base.total_revenue,
+        "expected_revenue": base.expected_revenue,
+        "expected_cost": base.expected_cost,
+        "uncategorized_revenue": base.uncategorized_revenue,
+        "unknown_site_revenue": base.unknown_site_revenue,
+        "unknown_site_expected_revenue": base.unknown_site_expected_revenue,
+        "profit_margin": base.profit_margin,
+        "prior_year_revenue": response.comparison.data.total_revenue if response.comparison else 0.0,
+        "growth_pct": response.comparison.deltas.get("total_revenue").pct_change if response.comparison else None,
     }
     worksheets = [
         ExcelWorksheetSpec(
@@ -309,11 +384,11 @@ def build_total_sales_export_worksheets(
         )
     ]
     if include_charts:
-        max_length = max(len(response.trend_points), len(response.geo_points), 1)
+        max_length = max(len(base.trend_points), len(base.geo_points), 1)
         chart_rows = []
         for index in range(max_length):
-            trend_point = response.trend_points[index] if index < len(response.trend_points) else None
-            geo_point   = response.geo_points[index]   if index < len(response.geo_points)   else None
+            trend_point = base.trend_points[index] if index < len(base.trend_points) else None
+            geo_point   = base.geo_points[index]   if index < len(base.geo_points)   else None
             chart_rows.append({
                 "month":        trend_point.month   if trend_point else "",
                 "trend_revenue": trend_point.revenue if trend_point else 0,

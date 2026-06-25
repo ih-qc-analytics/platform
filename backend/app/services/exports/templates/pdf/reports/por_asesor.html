@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% from "macros/header.html"   import render_header %}
+{% from "macros/kpi_grid.html" import render_kpi_grid %}
+{% from "macros/table.html"    import render_table %}
+
+{% block content %}
+{{ render_header(payload.header, logo_b64) }}
+{{ render_kpi_grid(payload.kpis) }}
+{{ render_table("Resultados por asesor", payload.table) }}
+{% endblock %}

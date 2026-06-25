@@ -1,12 +1,13 @@
 import asyncio
 from collections import defaultdict
-from datetime import datetime
 
-from app.enums import ProductType
+from app.enums import BaseCurrency, ComparisonMode, ProductType
 from app.schemas.pdf import PDFKpiItem, PDFTable, PDFTableRow, PorPaisDetailPDFPayload, PorPaisPDFPayload
 from app.schemas.reports import (
     PorPaisDetailResponse,
     PorPaisFilters,
+    PorPaisReportBase,
+    PorPaisReportComparison,
     PorPaisReportResponse,
     PorPaisStatusRow,
     PorPaisSummaryRow,
@@ -14,6 +15,7 @@ from app.schemas.reports import (
 from app.services.exports.pdf_helpers import build_pdf_header, format_currency, format_integer
 from app.services.exports.excel import ExcelColumn, ExcelWorksheetSpec
 from app.services.por_asesor.product_grouping import EXAM_NAME_ORDER, canonical_exam_name
+from app.services.utils.date_utils import resolve_comparison_range
 from app.services.por_pais.repository import (
     fetch_country_allocated_revenue_rows,
     fetch_country_exam_rows,
@@ -48,16 +50,6 @@ POR_PAIS_DETAIL_COLUMNS = [
     ExcelColumn("country", "Country"),
     *[ExcelColumn(name, name) for name in DETALLE_EXAM_NAME_ORDER],
 ]
-
-
-def _rewound_dates(filters: PorPaisFilters) -> tuple[str, str]:
-    date_from = datetime.strptime(filters.date_from, "%Y-%m-%d").replace(
-        year=datetime.strptime(filters.date_from, "%Y-%m-%d").year - 1
-    ).strftime("%Y-%m-%d")
-    date_to = datetime.strptime(filters.date_to, "%Y-%m-%d").replace(
-        year=datetime.strptime(filters.date_to, "%Y-%m-%d").year - 1
-    ).strftime("%Y-%m-%d")
-    return date_from, date_to
 
 
 def summary_bucket_for_exam(exam_name: str) -> str:
@@ -142,26 +134,89 @@ def build_detail_counts(exam_rows, country: str) -> dict[str, int]:
     return counts
 
 
-async def getPorPaisReport(filters: PorPaisFilters) -> PorPaisReportResponse:
-    prior_from, prior_to = _rewound_dates(filters)
-
+async def _get_por_pais_base(
+    filters: PorPaisFilters,
+    base_currency: BaseCurrency = BaseCurrency.MXN,
+) -> PorPaisReportBase:
     (
         payment_rows, allocated_rows, exam_rows,
-        current_presence, prior_presence,
-        current_metrics,  prior_metrics,
+        current_presence, comparison_presence,
+        current_metrics,  comparison_metrics,
     ) = await asyncio.gather(
-        fetch_country_payment_rows(filters),
-        fetch_country_allocated_revenue_rows(filters),
+        fetch_country_payment_rows(filters, base_currency=base_currency),
+        fetch_country_allocated_revenue_rows(filters, base_currency=base_currency),
         fetch_country_exam_rows(filters),
         fetch_country_presence_rows(filters),
-        fetch_country_presence_rows(PorPaisFilters(date_from=prior_from, date_to=prior_to)),
+        fetch_country_presence_rows(filters),
         fetch_country_metric_rows(filters),
-        fetch_country_metric_rows(PorPaisFilters(date_from=prior_from, date_to=prior_to)),
+        fetch_country_metric_rows(filters),
+    )
+
+    return PorPaisReportBase(
+        summary_rows=build_summary_rows(payment_rows, allocated_rows, exam_rows),
+        status_rows=build_status_rows(current_presence, comparison_presence, current_metrics, comparison_metrics),
+    )
+
+
+async def getPorPaisReport(
+    filters: PorPaisFilters,
+    base_currency: BaseCurrency = BaseCurrency.MXN,
+) -> PorPaisReportResponse:
+    comparison_meta = resolve_comparison_range(filters)
+    current_filters = filters.model_copy(
+        update={
+            "show_comparison": False,
+            "comparison_date_from": None,
+            "comparison_date_to": None,
+        }
+    )
+
+    if comparison_meta is None:
+        current = await _get_por_pais_base(current_filters, base_currency=base_currency)
+        return PorPaisReportResponse(current=current, comparison_mode=None, comparison=None)
+
+    current_status_filters = current_filters.model_copy()
+    comparison_status_filters = current_filters.model_copy(
+        update={
+            "date_from": comparison_meta.date_from,
+            "date_to": comparison_meta.date_to,
+        }
+    )
+
+    current_summary, current_presence, current_metrics, comparison_summary, comparison_presence, comparison_metrics = await asyncio.gather(
+        asyncio.gather(
+            fetch_country_payment_rows(current_status_filters, base_currency=base_currency),
+            fetch_country_allocated_revenue_rows(current_status_filters, base_currency=base_currency),
+            fetch_country_exam_rows(current_status_filters),
+        ),
+        fetch_country_presence_rows(current_status_filters),
+        fetch_country_metric_rows(current_status_filters),
+        asyncio.gather(
+            fetch_country_payment_rows(comparison_status_filters, base_currency=base_currency),
+            fetch_country_allocated_revenue_rows(comparison_status_filters, base_currency=base_currency),
+            fetch_country_exam_rows(comparison_status_filters),
+        ),
+        fetch_country_presence_rows(comparison_status_filters),
+        fetch_country_metric_rows(comparison_status_filters),
+    )
+
+    current = PorPaisReportBase(
+        summary_rows=build_summary_rows(*current_summary),
+        status_rows=build_status_rows(current_presence, comparison_presence, current_metrics, comparison_metrics),
+    )
+    comparison = PorPaisReportBase(
+        summary_rows=build_summary_rows(*comparison_summary),
+        status_rows=build_status_rows(comparison_presence, current_presence, comparison_metrics, current_metrics),
     )
 
     return PorPaisReportResponse(
-        summary_rows=build_summary_rows(payment_rows, allocated_rows, exam_rows),
-        status_rows=build_status_rows(current_presence, prior_presence, current_metrics, prior_metrics),
+        current=current,
+        comparison_mode=comparison_meta.mode,
+        comparison=PorPaisReportComparison(
+            meta=comparison_meta,
+            data=comparison,
+            deltas={},
+        ),
     )
 
 
@@ -174,9 +229,9 @@ async def getPorPaisDetailsForReport(
     report: PorPaisReportResponse,
     filters: PorPaisFilters,
 ) -> list[PorPaisDetailResponse]:
-    if not report.summary_rows:
+    if not report.current.summary_rows:
         return []
-    return list(await asyncio.gather(*(getPorPaisDetail(row.country, filters) for row in report.summary_rows)))
+    return list(await asyncio.gather(*(getPorPaisDetail(row.country, filters) for row in report.current.summary_rows)))
 
 
 def build_por_pais_export_filters_for_all(filters: PorPaisFilters) -> PorPaisFilters:
@@ -195,30 +250,34 @@ def build_por_pais_export_worksheets(
         detail_rows.append(row)
 
     return [
-        ExcelWorksheetSpec(name="Por Pais Summary", columns=POR_PAIS_SUMMARY_COLUMNS, rows=[r.model_dump() for r in report.summary_rows]),
-        ExcelWorksheetSpec(name="Por Pais Status",  columns=POR_PAIS_STATUS_COLUMNS,  rows=[r.model_dump() for r in report.status_rows]),
+        ExcelWorksheetSpec(name="Por Pais Summary", columns=POR_PAIS_SUMMARY_COLUMNS, rows=[r.model_dump() for r in report.current.summary_rows]),
+        ExcelWorksheetSpec(name="Por Pais Status",  columns=POR_PAIS_STATUS_COLUMNS,  rows=[r.model_dump() for r in report.current.status_rows]),
         ExcelWorksheetSpec(name="Por Pais Detail",  columns=POR_PAIS_DETAIL_COLUMNS,  rows=detail_rows),
     ]
 
 
-async def build_por_pais_pdf_payload(filters: PorPaisFilters) -> PorPaisPDFPayload:
-    report = await getPorPaisReport(filters)
+async def build_por_pais_pdf_payload(
+    filters: PorPaisFilters,
+    base_currency: BaseCurrency = BaseCurrency.MXN,
+) -> PorPaisPDFPayload:
+    report = await getPorPaisReport(filters, base_currency=base_currency)
+    current = report.current
 
-    total_schools  = sum(r.total_schools for r in report.summary_rows)
-    total_revenue = sum(r.total_revenue for r in report.summary_rows)
-    total_uncategorized = sum(r.uncategorized_revenue for r in report.summary_rows)
-    total_cambridge = sum(r.cambridge    for r in report.summary_rows)
-    total_ielts    = sum(r.ielts         for r in report.summary_rows)
-    total_met      = sum(r.michigan      for r in report.summary_rows)
-    total_otros    = sum(r.tea + r.other for r in report.summary_rows)
+    total_schools  = sum(r.total_schools for r in current.summary_rows)
+    total_revenue = sum(r.total_revenue for r in current.summary_rows)
+    total_uncategorized = sum(r.uncategorized_revenue for r in current.summary_rows)
+    total_cambridge = sum(r.cambridge    for r in current.summary_rows)
+    total_ielts    = sum(r.ielts         for r in current.summary_rows)
+    total_met      = sum(r.michigan      for r in current.summary_rows)
+    total_otros    = sum(r.tea + r.other for r in current.summary_rows)
 
     return PorPaisPDFPayload(
         header=build_pdf_header("Resultado por País", "Resumen por país y estado de colegios/exámenes", filters),
         kpis=[
-            PDFKpiItem(label="Países",    value=format_integer(len(report.summary_rows))),
+            PDFKpiItem(label="Países",    value=format_integer(len(current.summary_rows))),
             PDFKpiItem(label="Colegios",  value=format_integer(total_schools)),
-            PDFKpiItem(label="Ingreso Total", value=format_currency(total_revenue)),
-            PDFKpiItem(label="Sin Categorizar", value=format_currency(total_uncategorized)),
+            PDFKpiItem(label="Ingreso Total", value=format_currency(total_revenue, base_currency)),
+            PDFKpiItem(label="Sin Categorizar", value=format_currency(total_uncategorized, base_currency)),
             PDFKpiItem(label="Cambridge", value=format_integer(total_cambridge)),
             PDFKpiItem(label="IELTS",     value=format_integer(total_ielts)),
             PDFKpiItem(label="MET",       value=format_integer(total_met)),
@@ -227,11 +286,11 @@ async def build_por_pais_pdf_payload(filters: PorPaisFilters) -> PorPaisPDFPaylo
         summary_table=PDFTable(
             headers=["País", "Colegios", "Ingreso", "Sin Categorizar", "Cambridge", "IELTS", "MET", "TEA", "Otros"],
             rows=[PDFTableRow(cells=[
-                r.country, format_integer(r.total_schools), format_currency(r.total_revenue),
-                format_currency(r.uncategorized_revenue), format_integer(r.cambridge),
+                r.country, format_integer(r.total_schools), format_currency(r.total_revenue, base_currency),
+                format_currency(r.uncategorized_revenue, base_currency), format_integer(r.cambridge),
                 format_integer(r.ielts), format_integer(r.michigan),
                 format_integer(r.tea),   format_integer(r.other),
-            ]) for r in report.summary_rows],
+            ]) for r in current.summary_rows],
             column_widths=[3, 2, 2, 2, 2, 2, 2, 2, 2],
         ),
         status_table=PDFTable(
@@ -240,7 +299,7 @@ async def build_por_pais_pdf_payload(filters: PorPaisFilters) -> PorPaisPDFPaylo
                 r.country,
                 format_integer(r.schools_ganados),   format_integer(r.schools_perdidos),   format_integer(r.schools_mantenidos),
                 format_integer(r.exams_ganados),     format_integer(r.exams_perdidos),     format_integer(r.exams_mantenidos),
-            ]) for r in report.status_rows],
+            ]) for r in current.status_rows],
             column_widths=[3, 2, 2, 2, 2, 2, 2],
         ),
     )

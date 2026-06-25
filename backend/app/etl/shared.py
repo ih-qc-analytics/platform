@@ -4,7 +4,8 @@ import logging
 from sqlalchemy import bindparam, text
 
 from app.database import SessionLocal
-from app.etl.frankfurter import fetch_frankfurter_rate
+from app.etl.frankfurter import FXRateFetchError, fetch_frankfurter_rate
+from app.etl.rate_defaults import FALLBACK_RATES
 from app.enums import BusinessStatus, ETLJobName, PaymentStatus
 from app.reporting.database import ReportingSessionLocal
 
@@ -66,6 +67,28 @@ def split_multi_value(value: str | list[str] | tuple[str, ...] | None) -> list[s
     return [part for part in value.split("||") if part]
 
 
+def coerce_to_date(value, fallback: date | None = None) -> date | None:
+    """
+    Coerce any date-like value to a plain datetime.date.
+
+    datetime is checked before date because datetime subclasses date — without
+    this, a datetime object passes the isinstance(value, date) branch and is
+    returned as-is.  That breaks exchange-rate dict lookups because
+    date(2024,1,15) and datetime(2024,1,15) have different hashes and are not
+    equal as mapping keys, causing silent cache misses on every ETL run.
+    """
+    if value is None:
+        return fallback
+    if isinstance(value, datetime):   # must come before date check
+        return value.date()
+    if isinstance(value, date):
+        return value
+    try:
+        return date.fromisoformat(str(value))
+    except (ValueError, TypeError):
+        return fallback
+
+
 def extract_dimensions(row: dict) -> dict:
     created_at = row["created_at"]
     return {
@@ -84,8 +107,8 @@ def extract_dimensions(row: dict) -> dict:
         "year": created_at.year,
         "month": created_at.month,
         "created_at": created_at,
-        "payment_date": row.get("payment_date"),
-        "payment_day": row.get("payment_date") or created_at.date(),
+        "payment_date": coerce_to_date(row.get("payment_date")),
+        "payment_day": coerce_to_date(row.get("payment_date")) or created_at.date(),
         "etl_date": datetime.now().date(),
         "base_currency": SITE_CURRENCY.get(row.get("site", ""), UNKNOWN_CURRENCY),
     }
@@ -157,7 +180,31 @@ async def prefetch_rates(dates: set[date]) -> dict[tuple[date, str, str], float]
 
 
 async def fetch_live_rate(rate_date: date, from_cur: str, to_cur: str) -> float:
-    provider_date, rate = await fetch_frankfurter_rate(from_cur, to_cur, rate_date)
+    try:
+        provider_date, rate = await fetch_frankfurter_rate(from_cur, to_cur, rate_date)
+    except FXRateFetchError as exc:
+        approx = FALLBACK_RATES.get((from_cur, to_cur), 9999.0)
+        logger.error(
+            "APPROX_FX_RATE: could not fetch %s/%s on %s — using approximate rate %.6f. "
+            "Manual correction required in exchange_rates table. Original error: %s",
+            from_cur,
+            to_cur,
+            rate_date.isoformat(),
+            approx,
+            exc,
+        )
+        async with ReportingSessionLocal() as session:
+            async with session.begin():
+                await session.execute(
+                    text("""
+                        INSERT INTO exchange_rates (date, from_currency, to_currency, rate)
+                        VALUES (:date, :from_cur, :to_cur, :rate)
+                        ON CONFLICT (date, from_currency, to_currency) DO NOTHING
+                    """),
+                    {"date": rate_date, "from_cur": from_cur, "to_cur": to_cur, "rate": approx},
+                )
+        return approx
+
     if provider_date != rate_date:
         logger.warning(
             "Frankfurter returned %s for %s/%s requested on %s; caching rate under requested date.",

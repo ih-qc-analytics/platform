@@ -1,0 +1,18 @@
+{% macro render_kpi_grid(kpis) %}
+<div class="kpi-section">
+  <div class="kpi-section-title">Indicadores principales</div>
+  <div class="kpi-grid">
+    {% for kpi in kpis %}
+    <div class="kpi-card">
+      <div class="kpi-label">{{ kpi.label }}</div>
+      <div class="kpi-value">{{ kpi.value }}</div>
+      {% if kpi.growth is not none %}
+      <div class="kpi-growth {% if kpi.growth_positive %}kpi-growth-pos{% else %}kpi-growth-neg{% endif %}">
+        Variación: {{ kpi.growth }}
+      </div>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endmacro %}

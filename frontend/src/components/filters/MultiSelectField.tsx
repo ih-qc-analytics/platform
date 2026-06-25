@@ -11,6 +11,7 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import FilterFieldShell from "@/components/filters/FilterFieldShell"
+import { FILTER_BUTTON_CLASS, FILTER_CONTROL_CLASS, FILTER_FIELD_WIDTH_CLASS } from "@/components/filters/controlStyles"
 import { cn } from "@/lib/utils"
 
 type MultiSelectFieldProps = {
@@ -47,14 +48,15 @@ export default function MultiSelectField({
               : `${selected.length} seleccionados`
 
     return (
-        <FilterFieldShell label={label}>
+        <FilterFieldShell label={label} className={cn(FILTER_FIELD_WIDTH_CLASS, triggerClassName)}>
             <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                     <Button
                         variant="outline"
                         className={cn(
-                            "h-14 min-w-40 justify-between rounded-2xl border-transparent bg-muted/70 px-5 text-left text-base font-medium text-slate-700 shadow-none hover:bg-muted",
-                            triggerClassName,
+                            FILTER_BUTTON_CLASS,
+                            FILTER_CONTROL_CLASS,
+                            "justify-between text-left",
                         )}
                     >
                         <span className="truncate">{triggerLabel}</span>

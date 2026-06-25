@@ -29,6 +29,8 @@ export default function PorPaisFilterBar({
     return (
         <ReportFilterBarShell
             onClear={() => onChange(getDefaultPorPaisFilters())}
+            comparison={filters}
+            onApplyComparison={next => onChange({ ...filters, ...next })}
             onExportPdf={onExportPdf}
             onExportExcelWithFilters={onExportExcelWithFilters}
             onExportExcelWithoutFilters={onExportExcelWithoutFilters}

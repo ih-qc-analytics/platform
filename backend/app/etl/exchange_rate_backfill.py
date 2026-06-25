@@ -8,7 +8,8 @@ from sqlalchemy import text
 
 from app.config import settings
 from app.database import SessionLocal
-from app.etl.frankfurter import fetch_frankfurter_time_series
+from app.etl.frankfurter import FXRateFetchError, fetch_frankfurter_time_series
+from app.etl.retry import async_retry
 from app.reporting.database import ReportingSessionLocal
 import logging
 
@@ -52,14 +53,24 @@ async def ensure_exchange_rates_for_range(
         for base_currency, quotes in missing_quotes_by_base.items():
             if not quotes:
                 continue
-            rows = await fetch_frankfurter_time_series(
-                base_currency,
-                quotes,
-                start_date,
-                end_date,
-                client=client,
-            )
-            all_rows.extend(rows)
+            try:
+                rows = await async_retry(
+                    lambda b=base_currency, q=quotes: fetch_frankfurter_time_series(
+                        b, q, start_date, end_date, client=client
+                    ),
+                    attempts=3,
+                    exceptions=(FXRateFetchError,),
+                )
+                all_rows.extend(rows)
+            except FXRateFetchError:
+                logger.error(
+                    "MISSING_FX_RATES: failed to fetch %s → %s for %s–%s after 3 attempts. "
+                    "Approximate fallback rates will be used during upsert.",
+                    base_currency,
+                    quotes,
+                    start_date,
+                    end_date,
+                )
 
     if all_rows:
         await _upsert_exchange_rates(all_rows)

@@ -1,20 +1,28 @@
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
 
+import type { BaseCurrency } from "@/types"
+import { getStoredBaseCurrency } from "@/lib/reportPreferences"
+
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
-export const formatRevenue = (value: number) => {
-    if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(1)}M`
-    if (value >= 1_000) return `$${(value / 1_000).toFixed(1)}K`
-    return `$${value}`
+const currencySymbol = (currency: BaseCurrency) => (currency === "USD" ? "US$" : "$")
+
+export const formatRevenue = (value: number, currency: BaseCurrency = getStoredBaseCurrency()) => {
+    if (value >= 1_000_000) return `${currencySymbol(currency)}${(value / 1_000_000).toFixed(1)}M`
+    if (value >= 1_000) return `${currencySymbol(currency)}${(value / 1_000).toFixed(1)}K`
+    return `${currencySymbol(currency)}${value}`
 }
 
-export const formatCurrency = (value: number) =>
-    new Intl.NumberFormat("es-MX", {
+export const formatCurrency = (
+    value: number,
+    currency: BaseCurrency = getStoredBaseCurrency(),
+) =>
+    new Intl.NumberFormat(currency === "USD" ? "en-US" : "es-MX", {
         style: "currency",
-        currency: "MXN",
+        currency,
         maximumFractionDigits: 0,
     }).format(value)
 

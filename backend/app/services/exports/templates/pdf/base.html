@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<style>
+  /* ── Page setup ─────────────────────────────────────────── */
+  @page {
+    size: A4 portrait;
+    margin: 24pt 24pt 36pt 24pt;
+    @bottom-left   { content: "Reporte Confidencial - Sistema QC"; font-size: 5.25pt; color: #6B7280; font-family: Helvetica, Arial, sans-serif; }
+    @bottom-center { content: "Página " counter(page) " de " counter(pages); font-size: 5.25pt; color: #6B7280; font-family: Helvetica, Arial, sans-serif; }
+    @bottom-right  { content: "{{ generated_at }}"; font-size: 5.25pt; color: #6B7280; font-family: Helvetica, Arial, sans-serif; }
+  }
+  {% block page_style %}{% endblock %}
+
+  /* ── Reset ──────────────────────────────────────────────── */
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: Helvetica, Arial, sans-serif;
+    font-size: 6.75pt;
+    color: #1A1A2E;
+    background: #F8F9FA;
+  }
+
+  /* ── Utilities ──────────────────────────────────────────── */
+  .page-break { page-break-before: always; }
+
+  /* ── Header block ───────────────────────────────────────── */
+  .pdf-header {
+    background: #F3F6FF;
+    border: 1pt solid #E5E7EB;
+    border-radius: 8pt;
+    padding: 10pt;
+    margin-bottom: 14pt;
+  }
+  .pdf-header-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 8pt;
+  }
+  .pdf-header-logo { width: 52pt; height: 52pt; object-fit: contain; }
+  .pdf-header-title { font-size: 15pt; font-weight: 700; color: #1A3FAD; }
+  .pdf-header-subtitle { font-size: 6.75pt; color: #1A1A2E; margin-top: 2pt; }
+  .pdf-header-date { font-size: 6.75pt; color: #6B7280; margin-top: 4pt; }
+  .pdf-header-pills { display: flex; flex-wrap: wrap; gap: 4pt; margin-top: 6pt; }
+  .pdf-header-pill {
+    font-size: 6pt;
+    background: #FFFFFF;
+    border: 1pt solid #E5E7EB;
+    border-radius: 999pt;
+    padding: 2pt 6pt;
+    color: #1A1A2E;
+  }
+
+  /* ── KPI grid ───────────────────────────────────────────── */
+  .kpi-section { margin-bottom: 14pt; }
+  .kpi-section-title { font-size: 9.75pt; font-weight: 700; color: #1A3FAD; margin-bottom: 6pt; }
+  .kpi-grid { display: flex; flex-wrap: wrap; gap: 6pt; }
+  .kpi-card {
+    width: 31%;
+    min-height: 52pt;
+    padding: 7pt;
+    background: #FFFFFF;
+    border: 1pt solid #E5E7EB;
+    border-radius: 7pt;
+  }
+  .kpi-label { font-size: 6.75pt; color: #6B7280; margin-bottom: 4pt; }
+  .kpi-value { font-size: 13.5pt; font-weight: 700; color: #1A1A2E; }
+  .kpi-growth { font-size: 6.75pt; margin-top: 3pt; }
+  .kpi-growth-pos { color: #16A34A; }
+  .kpi-growth-neg { color: #DC2626; }
+
+  /* ── Table ──────────────────────────────────────────────── */
+  .table-section { margin-bottom: 14pt; }
+  .table-section-title { font-size: 9.75pt; font-weight: 700; color: #1A3FAD; margin-bottom: 5pt; }
+  .pdf-table {
+    width: 100%;
+    border-collapse: collapse;
+    border: 1pt solid #E5E7EB;
+    border-radius: 6pt;
+    overflow: hidden;
+    table-layout: fixed;
+  }
+  .pdf-table th {
+    background: #1A3FAD;
+    color: #FFFFFF;
+    font-size: 6pt;
+    font-weight: 700;
+    padding: 4pt 4pt;
+    text-align: left;
+    word-wrap: break-word;
+    border-right: 1pt solid #3D5FC4;
+  }
+  .pdf-table th:last-child { border-right: none; }
+  .pdf-table td {
+    font-size: 6.75pt;
+    color: #1A1A2E;
+    padding: 4pt 4pt;
+    border-right: 1pt solid #E5E7EB;
+    border-top: 1pt solid #E5E7EB;
+    word-wrap: break-word;
+  }
+  .pdf-table td:last-child { border-right: none; }
+  .pdf-table tr.alt-row td { background: #F3F6FF; }
+  .pdf-table-compact th { font-size: 5pt; padding: 3pt 2pt; }
+  .pdf-table-compact td { font-size: 5pt; padding: 3pt 2pt; }
+  .table-empty { font-size: 6.75pt; color: #6B7280; }
+
+  /* ── Charts ─────────────────────────────────────────────── */
+  .chart-section { margin-bottom: 14pt; }
+  .chart-section-title { font-size: 9.75pt; font-weight: 700; color: #1A3FAD; margin-bottom: 6pt; }
+  .chart-panel {
+    background: #FFFFFF;
+    border: 1pt solid #E5E7EB;
+    border-radius: 8pt;
+    padding: 10pt;
+    margin-bottom: 10pt;
+  }
+  .chart-panel-title { font-size: 9.75pt; font-weight: 700; color: #1A3FAD; margin-bottom: 8pt; }
+</style>
+</head>
+<body>
+{% block content %}{% endblock %}
+</body>
+</html>

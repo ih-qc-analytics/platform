@@ -7,31 +7,57 @@ type KpiCardProps = {
     value: number
     prefix?: string
     suffix?: string
-    decimals?: number      
-    growth?: number
+    decimals?: number
+    showComparison?: boolean
+    comparisonValue?: number | null
+    comparisonPct?: number | null
+    comparisonLabel?: string
 }
 
-export default function KpiCard({ title, icon, value, prefix, suffix, decimals = 0, growth }: KpiCardProps) {
-    const formatted = value.toLocaleString(undefined, {
-        minimumFractionDigits: decimals,
-        maximumFractionDigits: decimals,
-    })
+const formatNumber = (value: number, decimals: number) => value.toLocaleString(undefined, {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+})
+
+export default function KpiCard({
+    title,
+    icon,
+    value,
+    prefix,
+    suffix,
+    decimals = 0,
+    showComparison = false,
+    comparisonValue,
+    comparisonPct,
+    comparisonLabel = "Periodo comparativo",
+}: KpiCardProps) {
+    const formatted = formatNumber(value, decimals)
+    const comparisonFormatted = comparisonValue === null || comparisonValue === undefined
+        ? null
+        : formatNumber(comparisonValue, decimals)
 
     return (
         <Card>
-            <CardContent className="flex justify-between items-start pt-6">
+            <CardContent className="flex items-start justify-between pt-6">
                 <div className="flex flex-col gap-2">
-                    <span className="text-muted-foreground text-sm font-medium">{title}</span>
+                    <span className="text-sm font-medium text-muted-foreground">{title}</span>
                     <span className="text-3xl font-bold">
                         {prefix}{formatted}{suffix}
                     </span>
-                    {growth !== undefined && (
-                        <span className={`text-sm font-medium ${growth >= 0 ? "text-success" : "text-destructive"}`}>
-                            {growth >= 0 ? "+" : ""}{growth.toFixed(1)}% vs año anterior
-                        </span>
-                    )}
+                    {showComparison && comparisonFormatted !== null ? (
+                        <div className="flex flex-col gap-1">
+                            <span className="text-xs text-muted-foreground">
+                                {comparisonLabel}: {prefix}{comparisonFormatted}{suffix}
+                            </span>
+                            {comparisonPct !== null && comparisonPct !== undefined ? (
+                                <span className={`text-sm font-medium ${comparisonPct >= 0 ? "text-success" : "text-destructive"}`}>
+                                    {comparisonPct >= 0 ? "+" : ""}{comparisonPct.toFixed(1)}%
+                                </span>
+                            ) : null}
+                        </div>
+                    ) : null}
                 </div>
-                <div className="bg-primary/10 p-3 rounded-xl text-primary flex items-center justify-center [&>svg]:size-5">
+                <div className="flex items-center justify-center rounded-xl bg-primary/10 p-3 text-primary [&>svg]:size-5">
                     {icon}
                 </div>
             </CardContent>

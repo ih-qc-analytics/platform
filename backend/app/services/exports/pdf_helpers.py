@@ -1,6 +1,7 @@
 from datetime import datetime
 from typing import Optional
 
+from app.enums import BaseCurrency
 from app.schemas.pdf import PDFHeader
 
 MONTH_LABELS = {
@@ -19,8 +20,9 @@ MONTH_LABELS = {
 }
 
 
-def format_currency(value: float) -> str:
-    return f"${value:,.0f}"
+def format_currency(value: float, currency: BaseCurrency = BaseCurrency.MXN) -> str:
+    prefix = "US$" if currency == BaseCurrency.USD else "$"
+    return f"{prefix}{value:,.0f}"
 
 
 def format_percent(value: float) -> str:

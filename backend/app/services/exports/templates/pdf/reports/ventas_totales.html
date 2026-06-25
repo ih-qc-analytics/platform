@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% from "macros/header.html"   import render_header %}
+{% from "macros/kpi_grid.html" import render_kpi_grid %}
+{% from "macros/charts.html"   import render_charts %}
+
+{% block content %}
+{# ── Page 1: header + KPIs ── #}
+{{ render_header(payload.header, logo_b64) }}
+{{ render_kpi_grid(payload.kpis) }}
+
+{# ── Page 2: charts ── #}
+<div class="page-break">
+{{ render_charts(payload.trend_points, payload.geo_points) }}
+</div>
+{% endblock %}

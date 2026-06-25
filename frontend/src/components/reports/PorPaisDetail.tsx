@@ -1,15 +1,13 @@
 import { useMemo, useState } from "react"
 import { FileDown, Loader2 } from "lucide-react"
 
-import { fetchPorPaisDetailPdfPayload } from "@/api/reports"
-import PorPaisDetailPDF from "@/components/pdf/PorPaisDetailPDF"
+import { exportPorPaisDetailPdf } from "@/api/reports"
 import { DETALLE_ASESOR_EXAM_TYPES } from "@/components/reports/detalleAsesorExamTypes"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { Skeleton } from "@/components/ui/skeleton"
 import { usePorPaisDetail } from "@/hooks/useReports"
-import { downloadPdf } from "@/lib/exportPdf"
 import { formatInteger } from "@/lib/utils"
 import type { PorPaisFilters } from "@/types"
 
@@ -75,8 +73,7 @@ export default function PorPaisDetail({
         setExportError(null)
         setIsExportingPdf(true)
         try {
-            const payload = await fetchPorPaisDetailPdfPayload(country, filters)
-            await downloadPdf(<PorPaisDetailPDF data={payload} />, buildPorPaisDetailPdfFilename(payload.header.title))
+            await exportPorPaisDetailPdf(country, filters)
         } catch {
             setExportError("No fue posible exportar el archivo. Intenta de nuevo.")
         } finally {
@@ -153,18 +150,6 @@ export default function PorPaisDetail({
             </SheetContent>
         </Sheet>
     )
-}
-
-function buildPorPaisDetailPdfFilename(title: string) {
-    const slug = title
-        .replace(/^Detalle por País - /, "")
-        .normalize("NFD")
-        .replace(/[\u0300-\u036f]/g, "")
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, "-")
-        .replace(/^-+|-+$/g, "")
-
-    return slug ? `detalle-por-pais-${slug}.pdf` : "detalle-por-pais.pdf"
 }
 
 function DetailSkeleton() {

@@ -25,6 +25,17 @@ class ETLJobName(str, Enum):
     DIMENSIONAL_REFRESH = "dimensional_refresh"
 
 
+class ComparisonMode(str, Enum):
+    PREVIOUS_YEAR = "PREVIOUS_YEAR"
+    PREVIOUS_PERIOD = "PREVIOUS_PERIOD"
+    CUSTOM = "CUSTOM"
+
+
+class BaseCurrency(str, Enum):
+    MXN = "MXN"
+    USD = "USD"
+
+
 class ProductType(str, Enum):
     EXAM = "exam"
     BOOK = "book"

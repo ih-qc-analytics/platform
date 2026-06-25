@@ -1,7 +1,7 @@
 import asyncio
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 
-from sqlalchemy import text
+from sqlalchemy import bindparam, text
 
 from app.database import SessionLocal
 from app.enums import ETLJobName, ExamCategory, PaymentStatus, ProductType
@@ -10,6 +10,7 @@ from app.services.por_asesor.product_grouping import canonical_exam_category, ca
 from app.etl.shared import (
     LEAD_ADDRESS_SUBQUERY,
     calculate_business_status,
+    coerce_to_date,
     convert_currency,
     extract_dimensions,
     log_etl_run,
@@ -117,6 +118,7 @@ ALLOCATION_EXTRACT_QUERY = """
     SELECT
         pay.id                              AS payment_id,
         pay.quantity                        AS payment_amount,
+        pay.paymentDate                     AS payment_date,
         c.id                                AS cart_id,
         c.createdAt                         AS created_at,
         l.site                              AS site,
@@ -131,6 +133,29 @@ ALLOCATION_EXTRACT_QUERY = """
     AND pay.status = :payment_status
     AND c.deletedAt IS NULL
     AND cp.deletedAt IS NULL
+"""
+
+# Returns one row per (cart_product, payment_date) so each payment's portion of
+# paid_total can be converted at its own exchange rate rather than collapsing
+# everything to MAX(payment_date).  The list of cart_product_ids is passed as a
+# parameter rather than derived from the :since window so we capture ALL
+# historical payments for the affected products, not just recent ones.
+PAID_TOTAL_BY_DATE_QUERY = """
+    SELECT
+        st.cartProductId    AS cart_product_id,
+        pay.paymentDate     AS payment_date,
+        l.site              AS site,
+        SUM(sp.amount)      AS paid_total
+    FROM student_payments sp
+    JOIN student st ON sp.student_id = st.id
+    JOIN payment pay ON sp.payment_id = pay.id
+    JOIN cart_product cp ON cp.id = st.cartProductId
+    JOIN cart c ON c.id = cp.cartId
+    JOIN seller_lead sl ON sl.id = c.sellerLeadId
+    JOIN `lead` l ON l.id = sl.leadId
+    WHERE pay.status = :payment_status
+      AND st.cartProductId IN :cart_product_ids
+    GROUP BY st.cartProductId, pay.paymentDate, l.site
 """
 
 DELETED_CART_PRODUCTS_QUERY = """
@@ -184,10 +209,48 @@ async def _extract_all(since: datetime) -> tuple[list, list, list, list[int], li
     )
 
 
+
+async def _build_paid_total_converted(
+    paid_total_date_rows: list[dict],
+    rates: dict,
+) -> dict[int, tuple[float | None, float | None]]:
+    """
+    For each cart_product, sum the paid_total converted at each payment's own
+    exchange rate.  Returns {cart_product_id: (paid_total_mxn, paid_total_usd)}.
+
+    If any date-slice for a cart_product has an unknown site (unconvertible),
+    the whole product is marked (None, None) so reporting treats it as
+    uncategorized rather than applying a wrong partial rate.
+    """
+    accum_mxn: dict[int, float | None] = {}
+    accum_usd: dict[int, float | None] = {}
+
+    for row in paid_total_date_rows:
+        cp_id = int(row["cart_product_id"])
+        # Skip if already marked unconvertible by an earlier row for this product
+        if cp_id in accum_mxn and accum_mxn[cp_id] is None:
+            continue
+
+        site = row.get("site", "")
+        amount = float(row.get("paid_total") or 0)
+        rate_date = coerce_to_date(row.get("payment_date"), date.today())
+        mxn, usd = await convert_currency(amount, site, rate_date, rates)
+
+        if mxn is None or usd is None:
+            accum_mxn[cp_id] = None
+            accum_usd[cp_id] = None
+        else:
+            accum_mxn[cp_id] = (accum_mxn.get(cp_id) or 0.0) + mxn
+            accum_usd[cp_id] = (accum_usd.get(cp_id) or 0.0) + usd
+
+    return {cp_id: (accum_mxn[cp_id], accum_usd[cp_id]) for cp_id in accum_mxn}
+
+
 async def _transform_payment(row: dict, ganados: set[int], perdidos: set[int], mantenidos: set[int], rates: dict) -> dict:
     dims = extract_dimensions(row)
     amount = float(row.get("amount") or 0)
-    amount_mxn, amount_usd = await convert_currency(amount, row.get("site", ""), dims["created_at"].date(), rates)
+    rate_date = coerce_to_date(row.get("payment_date"), dims["created_at"].date())
+    amount_mxn, amount_usd = await convert_currency(amount, row.get("site", ""), rate_date, rates)
     payment_status = row.get("payment_status") or PaymentStatus.UNCATEGORIZED.value
     cart_deleted_at = row.get("cart_deleted_at")
     return {
@@ -203,7 +266,14 @@ async def _transform_payment(row: dict, ganados: set[int], perdidos: set[int], m
     }
 
 
-async def _transform_line_item(row: dict, ganados: set[int], perdidos: set[int], mantenidos: set[int], rates: dict) -> dict:
+async def _transform_line_item(
+    row: dict,
+    ganados: set[int],
+    perdidos: set[int],
+    mantenidos: set[int],
+    rates: dict,
+    paid_total_converted: dict[int, tuple[float | None, float | None]],
+) -> dict:
     dims = extract_dimensions(row)
     product_type = row.get("product_type") or ""
     exam_cat_name = row.get("exam_cat_name") or ""
@@ -211,11 +281,17 @@ async def _transform_line_item(row: dict, ganados: set[int], perdidos: set[int],
     expected_cost = float(row.get("expected_cost") or 0)
     paid_total = float(row.get("paid_total") or 0)
     site = row.get("site", "")
-    rate_date = (row.get("payment_date") or dims["created_at"].date())
+    rate_date = coerce_to_date(row.get("payment_date"), dims["created_at"].date())
     expected_total_mxn, expected_total_usd = await convert_currency(expected_total, site, rate_date, rates)
     expected_cost_mxn, expected_cost_usd = await convert_currency(expected_cost, site, rate_date, rates)
-    paid_total_mxn, paid_total_usd = await convert_currency(paid_total, site, rate_date, rates)
-    payment_date = row.get("payment_date")
+    # Use the per-payment-date conversion if available; fall back to MAX-date
+    # conversion only for cart_products not covered by the breakdown query.
+    cp_id = int(row["cart_product_id"])
+    if cp_id in paid_total_converted:
+        paid_total_mxn, paid_total_usd = paid_total_converted[cp_id]
+    else:
+        paid_total_mxn, paid_total_usd = await convert_currency(paid_total, site, rate_date, rates)
+    payment_date = dims["payment_date"]  # already coerced via extract_dimensions
     return {
         **dims,
         "payment_date": payment_date,
@@ -270,10 +346,11 @@ async def _build_allocation_rows(allocation_rows_raw: list, rates: dict) -> list
         payment_amount = float(row["payment_amount"] or 0)
         share = (cp_total / cart_total) if cart_total > 0 else 0.0
         allocated_amount = round(payment_amount * share, 2)
+        rate_date = coerce_to_date(row.get("payment_date"), row["created_at"].date())
         allocated_amount_mxn, allocated_amount_usd = await convert_currency(
             allocated_amount,
             row.get("site", ""),
-            row["created_at"].date(),
+            rate_date,
             rates,
         )
         rows.append(
@@ -463,12 +540,44 @@ async def run_upsert(*, since: datetime | None = None, job_name: ETLJobName = ET
             return
 
         all_lead_ids = {int(row["lead_id"]) for row in [*payment_rows_raw, *line_item_rows_raw]}
-        all_dates = {dict(row)["created_at"].date() for row in [*payment_rows_raw, *line_item_rows_raw, *allocation_rows_raw]}
+        all_rows = [*payment_rows_raw, *line_item_rows_raw, *allocation_rows_raw]
+        all_dates = {dict(row)["created_at"].date() for row in all_rows}
+        all_dates |= {
+            d for row in all_rows
+            if (d := coerce_to_date(dict(row).get("payment_date")))
+        }
         ganados, perdidos, mantenidos = await calculate_business_status(all_lead_ids)
+
+        # Fetch per-payment-date paid_total breakdown for all affected cart_products.
+        # This lets us convert each payment slice at its own exchange rate so that
+        # paid_total_mxn/usd on line items matches the per-rate conversion done on
+        # report_payments, eliminating spurious negative uncategorized_revenue values.
+        affected_cp_ids = [int(row["cart_product_id"]) for row in line_item_rows_raw]
+        paid_total_date_rows: list[dict] = []
+        if affected_cp_ids:
+            async with SessionLocal() as source:
+                result = await source.execute(
+                    text(PAID_TOTAL_BY_DATE_QUERY).bindparams(
+                        bindparam("cart_product_ids", expanding=True)
+                    ),
+                    {
+                        "payment_status": PaymentStatus.APROBADO.value,
+                        "cart_product_ids": affected_cp_ids,
+                    },
+                )
+                paid_total_date_rows = [dict(row) for row in result.mappings().fetchall()]
+
+        # Include any new payment dates from the breakdown rows in the prefetch set.
+        all_dates |= {
+            d for row in paid_total_date_rows
+            if (d := coerce_to_date(row.get("payment_date")))
+        }
         rates = await prefetch_rates(all_dates)
 
+        paid_total_converted = await _build_paid_total_converted(paid_total_date_rows, rates)
+
         payment_rows = [await _transform_payment(dict(row), ganados, perdidos, mantenidos, rates) for row in payment_rows_raw]
-        line_item_rows = [await _transform_line_item(dict(row), ganados, perdidos, mantenidos, rates) for row in line_item_rows_raw]
+        line_item_rows = [await _transform_line_item(dict(row), ganados, perdidos, mantenidos, rates, paid_total_converted) for row in line_item_rows_raw]
         allocation_rows = await _build_allocation_rows(allocation_rows_raw, rates)
 
         async with ReportingSessionLocal() as reporting:

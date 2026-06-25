@@ -1,0 +1,35 @@
+{% macro render_table(title, table, compact=false) %}
+{% set total_w = table.column_widths | sum %}
+<div class="table-section">
+  {% if title %}
+  <div class="table-section-title">{{ title }}</div>
+  {% endif %}
+  {% if table.rows | length == 0 %}
+  <div class="table-empty">Sin datos para los filtros seleccionados.</div>
+  {% else %}
+  <table class="pdf-table {% if compact %}pdf-table-compact{% endif %}">
+    <colgroup>
+      {% for w in table.column_widths %}
+      <col style="width: {{ (w / total_w * 100) | round(1) }}%" />
+      {% endfor %}
+    </colgroup>
+    <thead>
+      <tr>
+        {% for header in table.headers %}
+        <th>{{ header }}</th>
+        {% endfor %}
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in table.rows %}
+      <tr {% if loop.index is odd %}{% else %}class="alt-row"{% endif %}>
+        {% for cell in row.cells %}
+        <td>{{ cell }}</td>
+        {% endfor %}
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+</div>
+{% endmacro %}
