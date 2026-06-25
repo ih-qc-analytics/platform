@@ -5,6 +5,7 @@ existing ``build_*_pdf_payload`` helpers), renders it to HTML, converts it to PD
 bytes on a thread-pool executor (so the event loop stays unblocked), and returns
 a ``StreamingResponse`` ready to be returned directly from a FastAPI route.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -33,6 +34,7 @@ _LOGO_PATH = Path(__file__).parent / "assets" / "logo.png"
 
 # ── Jinja2 custom filter ──────────────────────────────────────────────────────
 
+
 def _compact_currency(value: float) -> str:
     """Format a number as compact currency: $1.5k for ≥1000, $500 otherwise."""
     abs_val = abs(value)
@@ -45,6 +47,7 @@ def _compact_currency(value: float) -> str:
 
 
 # ── Module-level setup ────────────────────────────────────────────────────────
+
 
 def _load_logo_b64() -> str:
     if not _LOGO_PATH.exists():
@@ -64,6 +67,7 @@ _env.filters["compact_currency"] = _compact_currency
 
 
 # ── Internal helpers ──────────────────────────────────────────────────────────
+
 
 def _render_html(template_name: str, **context) -> str:
     tpl = _env.get_template(template_name)
@@ -100,6 +104,7 @@ def _slugify(text: str, fallback: str) -> str:
 
 
 # ── Public render functions ───────────────────────────────────────────────────
+
 
 async def render_ventas_totales_pdf(payload: VentasTotalesPDFPayload) -> StreamingResponse:
     html = _render_html(

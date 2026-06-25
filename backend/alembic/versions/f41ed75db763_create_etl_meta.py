@@ -4,11 +4,12 @@ Revision ID: f41ed75db763
 Revises: 8f5db224fc05
 Create Date: 2026-05-14
 """
+
 from typing import Sequence, Union
 from alembic import op
 
-revision: str = 'f41ed75db763'
-down_revision: Union[str, Sequence[str], None] = '8f5db224fc05'
+revision: str = "f41ed75db763"
+down_revision: Union[str, Sequence[str], None] = "8f5db224fc05"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

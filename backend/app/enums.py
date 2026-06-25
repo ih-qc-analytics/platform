@@ -51,13 +51,13 @@ class BusinessStatus(str, Enum):
 
 
 class ExamCategory(str, Enum):
-    CAMBRIDGE_ENGLISH  = "Cambridge English (Main Suite)"
+    CAMBRIDGE_ENGLISH = "Cambridge English (Main Suite)"
     CAMBRIDGE_TEACHING = "Cambridge Teaching & Skills"
-    IELTS              = "IELTS"
-    MICHIGAN           = "Michigan (MET)"
-    TEA                = "TEA (Test of English for Aviation)"
-    PLACEMENT          = "Placement & Otros"
-    UNCATEGORIZED      = "UNCATEGORIZED"
+    IELTS = "IELTS"
+    MICHIGAN = "Michigan (MET)"
+    TEA = "TEA (Test of English for Aviation)"
+    PLACEMENT = "Placement & Otros"
+    UNCATEGORIZED = "UNCATEGORIZED"
 
 
 class BroadExamCategory(str, Enum):

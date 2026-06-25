@@ -17,6 +17,7 @@ router = APIRouter()
 def resolve_total_sales_country_rates(request: Request) -> dict[str, float]:
     return build_country_rates_for_mxn(getattr(request.app.state, "rates", None))
 
+
 @router.post("/ventas-totales", response_model=TotalSalesResponse)
 async def get_total_sales_data(filters: ReportFilters, request: Request):
     return await getTotalSalesData(

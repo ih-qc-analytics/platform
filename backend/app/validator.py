@@ -7,6 +7,7 @@ from app.config import settings
 
 logger = logging.getLogger(__name__)
 
+
 ## carga los esquemas snapshot de la base de datos
 def load_schema() -> dict:
     path = Path(__file__).parent.parent / "schema_snapshot.json"
@@ -16,6 +17,7 @@ def load_schema() -> dict:
 
 def get_db_name() -> str:
     return settings.dbname
+
 
 ## verifica que las columnas de la base de datos live tienen el mismo nombre, tipo, y null
 ## constraint que las columnas del snapshot que se usan para la fabricacion de reportes
@@ -29,13 +31,18 @@ def check_columns(table: str, table_data: dict, live_cols: dict) -> list[str]:
             live_type = live_cols[name]["data_type"].lower()
             snapshot_type = col["type"].lower()
             if live_type not in snapshot_type:
-                issues.append(f"{table}.{name} type changed: snapshot={col['type']} live={live_cols[name]['data_type']}")
+                issues.append(
+                    f"{table}.{name} type changed: snapshot={col['type']} live={live_cols[name]['data_type']}"
+                )
             live_nullable = live_cols[name]["is_nullable"] == "YES"
             if live_nullable != col["nullable"]:
-                issues.append(f"{table}.{name} nullable changed: snapshot={col['nullable']} live={live_nullable}")
+                issues.append(
+                    f"{table}.{name} nullable changed: snapshot={col['nullable']} live={live_nullable}"
+                )
     return issues
 
-## verifica que los primary keys de la base de datos son las mismas que 
+
+## verifica que los primary keys de la base de datos son las mismas que
 # las del snapshot que se usa para la fabricacion de reportes
 def check_primary_keys(table: str, table_data: dict, live_pks: list) -> list[str]:
     issues = []
@@ -45,7 +52,8 @@ def check_primary_keys(table: str, table_data: dict, live_pks: list) -> list[str
         issues.append(f"{table} PK changed: snapshot={snapshot_pk} live={live_pk}")
     return issues
 
-## verifica que los foreign keys de la base de datos son los mismos que 
+
+## verifica que los foreign keys de la base de datos son los mismos que
 # las del snapshot que se usa para la fabricacion de reportes
 def check_foreign_keys(table: str, table_data: dict, live_fks: dict) -> list[str]:
     issues = []
@@ -56,14 +64,20 @@ def check_foreign_keys(table: str, table_data: dict, live_fks: dict) -> list[str
         else:
             live = live_fks[col]
             if live["referenced_table_name"] != fk["referred_table"]:
-                issues.append(f"{table}.{col} FK referred_table changed: snapshot={fk['referred_table']} live={live['referenced_table_name']}")
+                issues.append(
+                    f"{table}.{col} FK referred_table changed: snapshot={fk['referred_table']} live={live['referenced_table_name']}"
+                )
             if live["referenced_column_name"] != fk["referred_columns"][0]:
-                issues.append(f"{table}.{col} FK referred_column changed: snapshot={fk['referred_columns'][0]} live={live['referenced_column_name']}")
+                issues.append(
+                    f"{table}.{col} FK referred_column changed: snapshot={fk['referred_columns'][0]} live={live['referenced_column_name']}"
+                )
     return issues
+
 
 ## obtiene las columnas y sus tipos de las tablas en la base de datos live
 async def fetch_live_columns(session, db_name: str, tables: tuple) -> dict:
-    result = await session.execute(text("""
+    result = await session.execute(
+        text("""
         SELECT
             TABLE_NAME  AS table_name,
             COLUMN_NAME AS column_name,
@@ -72,7 +86,9 @@ async def fetch_live_columns(session, db_name: str, tables: tuple) -> dict:
         FROM information_schema.COLUMNS
         WHERE TABLE_SCHEMA = :db_name
         AND TABLE_NAME IN :tables
-    """), {"db_name": db_name, "tables": tables})
+    """),
+        {"db_name": db_name, "tables": tables},
+    )
     per_table = {}
     for r in result.mappings().fetchall():
         t = r["table_name"]
@@ -80,13 +96,15 @@ async def fetch_live_columns(session, db_name: str, tables: tuple) -> dict:
             per_table[r.table_name] = {}
         per_table[r.table_name][r.column_name] = {
             "data_type": r.data_type,
-            "is_nullable": r.is_nullable
+            "is_nullable": r.is_nullable,
         }
     return per_table
 
+
 ## obtiene las primary keys de las tablas en la base de datos live
 async def fetch_live_primary_keys(session, db_name: str, tables: tuple) -> dict:
-    result = await session.execute(text("""
+    result = await session.execute(
+        text("""
         SELECT
             TABLE_NAME  AS table_name,
             COLUMN_NAME AS column_name
@@ -94,7 +112,9 @@ async def fetch_live_primary_keys(session, db_name: str, tables: tuple) -> dict:
         WHERE table_schema = :db_name
         AND table_name IN :tables
         AND constraint_name = 'PRIMARY'
-    """), {"db_name": db_name, "tables": tables})
+    """),
+        {"db_name": db_name, "tables": tables},
+    )
     per_table = {}
     for r in result.mappings().fetchall():
         t = r["table_name"]
@@ -103,9 +123,11 @@ async def fetch_live_primary_keys(session, db_name: str, tables: tuple) -> dict:
         per_table[t].append(r["column_name"])
     return per_table
 
+
 # Obtiene las foreign keys de las tablas en la base de datos live
 async def fetch_live_foreign_keys(session, db_name: str, tables: tuple) -> dict:
-    result = await session.execute(text("""
+    result = await session.execute(
+        text("""
         SELECT
             TABLE_NAME              AS table_name,
             COLUMN_NAME             AS column_name,
@@ -115,7 +137,9 @@ async def fetch_live_foreign_keys(session, db_name: str, tables: tuple) -> dict:
         WHERE table_schema = :db_name
         AND table_name IN :tables
         AND referenced_table_name IS NOT NULL
-    """), {"db_name": db_name, "tables": tables})
+    """),
+        {"db_name": db_name, "tables": tables},
+    )
     per_table = {}
     for r in result.mappings().fetchall():
         t = r["table_name"]
@@ -123,9 +147,10 @@ async def fetch_live_foreign_keys(session, db_name: str, tables: tuple) -> dict:
             per_table[r.table_name] = {}
         per_table[r.table_name][r.column_name] = {
             "referenced_table_name": r.referenced_table_name,
-            "referenced_column_name": r.referenced_column_name
+            "referenced_column_name": r.referenced_column_name,
         }
     return per_table
+
 
 # valida que el esquema de la base de datos en vivo coincida con el snapshot guardado
 async def validate_schema():

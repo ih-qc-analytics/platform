@@ -115,7 +115,9 @@ def workbook_to_bytes(workbook: Workbook) -> bytes:
     return buffer.getvalue()
 
 
-def generate_excel_response(filename: str, worksheets: list[ExcelWorksheetSpec]) -> StreamingResponse:
+def generate_excel_response(
+    filename: str, worksheets: list[ExcelWorksheetSpec]
+) -> StreamingResponse:
     workbook = build_excel_workbook(worksheets)
     workbook_bytes = workbook_to_bytes(workbook)
     return StreamingResponse(

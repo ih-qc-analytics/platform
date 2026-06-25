@@ -18,15 +18,15 @@ from app.services.utils.currency_rates import FALLBACK_EXCHANGE_RATE, sql_normal
     - the caller's `where_clause` is written against these aliases:
       `pay`, `c`, `sl`, `l`, `z`
     """
+
+
 def build_paid_payment_fact_subquery(
     where_clause: str,
     *,
     fx_table_sql: str | None = None,
 ) -> str:
     payment_rate_expr = (
-        "COALESCE(fx.rate_to_base, :fallback_rate)"
-        if fx_table_sql
-        else str(FALLBACK_EXCHANGE_RATE)
+        "COALESCE(fx.rate_to_base, :fallback_rate)" if fx_table_sql else str(FALLBACK_EXCHANGE_RATE)
     )
     payment_join = (
         f"LEFT JOIN ({fx_table_sql}) fx ON {sql_normalized_country_expr('l.site')} = fx.country_key"
@@ -73,15 +73,15 @@ def build_paid_payment_fact_subquery(
     - the caller's `where_clause` is written against these aliases:
       `pay`, `cp`, `p`, `c`, `sl`, `l`, `z`
     """
+
+
 def build_paid_student_allocation_fact_subquery(
     where_clause: str,
     *,
     fx_table_sql: str | None = None,
 ) -> str:
     allocation_rate_expr = (
-        "COALESCE(fx.rate_to_base, :fallback_rate)"
-        if fx_table_sql
-        else str(FALLBACK_EXCHANGE_RATE)
+        "COALESCE(fx.rate_to_base, :fallback_rate)" if fx_table_sql else str(FALLBACK_EXCHANGE_RATE)
     )
     allocation_join = (
         f"LEFT JOIN ({fx_table_sql}) fx ON {sql_normalized_country_expr('l.site')} = fx.country_key"
@@ -142,6 +142,8 @@ def build_paid_student_allocation_fact_subquery(
       `product_type`, `exam_name`, `seller_id`, `seller_name`, `lead_id`,
       `school_name`, `country`, `zone_name`, `exam_date`, `payment_day`
     """
+
+
 def build_deduped_paid_cart_product_fact_subquery(
     paid_student_allocation_fact_subquery: str,
 ) -> str:

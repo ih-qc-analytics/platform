@@ -57,18 +57,13 @@ export const fetchAsesorReport = async (filters: AsesorFilters): Promise<AsesorR
         body: filters,
     })
 
-export const fetchAsesorDetail = async (
-    sellerId: number,
-    filters: AsesorFilters,
-): Promise<AsesorDetailResponse> =>
+export const fetchAsesorDetail = async (sellerId: number, filters: AsesorFilters): Promise<AsesorDetailResponse> =>
     apiRequest<AsesorDetailResponse>(`/reports/por-asesor/${sellerId}`, {
         method: "POST",
         body: filters,
     })
 
-export const fetchDetalleAsesorReport = async (
-    filters: DetalleAsesorFilters,
-): Promise<DetalleAsesorReportResponse> =>
+export const fetchDetalleAsesorReport = async (filters: DetalleAsesorFilters): Promise<DetalleAsesorReportResponse> =>
     apiRequest<DetalleAsesorReportResponse>("/reports/detalle-asesor", {
         method: "POST",
         body: filters,
@@ -80,10 +75,7 @@ export const fetchPorPaisReport = async (filters: PorPaisFilters): Promise<PorPa
         body: filters,
     })
 
-export const fetchPorPaisDetail = async (
-    country: string,
-    filters: PorPaisFilters,
-): Promise<PorPaisDetailResponse> =>
+export const fetchPorPaisDetail = async (country: string, filters: PorPaisFilters): Promise<PorPaisDetailResponse> =>
     apiRequest<PorPaisDetailResponse>(`/reports/por-pais/${country}`, {
         method: "POST",
         body: filters,

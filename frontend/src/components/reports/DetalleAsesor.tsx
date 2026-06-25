@@ -47,13 +47,7 @@ const tileToneClassNames = {
     indigo: "border-indigo-200 bg-indigo-100/80",
 } as const
 
-export default function DetalleAsesor({
-    sellerId,
-    sellerName,
-    open,
-    onOpenChange,
-    filters,
-}: DetalleAsesorProps) {
+export default function DetalleAsesor({ sellerId, sellerName, open, onOpenChange, filters }: DetalleAsesorProps) {
     const [isExportingPdf, setIsExportingPdf] = useState(false)
     const [exportError, setExportError] = useState<string | null>(null)
     const { data, isLoading, isError } = useAsesorDetail(sellerId, filters, open)
@@ -100,7 +94,11 @@ export default function DetalleAsesor({
                             className="shrink-0 rounded-2xl"
                             disabled={!sellerId || isLoading || isExportingPdf}
                         >
-                            {isExportingPdf ? <Loader2 className="size-4 animate-spin" /> : <FileDown className="size-4" />}
+                            {isExportingPdf ? (
+                                <Loader2 className="size-4 animate-spin" />
+                            ) : (
+                                <FileDown className="size-4" />
+                            )}
                             {isExportingPdf ? "Generando PDF..." : "Exportar PDF"}
                         </Button>
                     </div>
@@ -119,10 +117,41 @@ export default function DetalleAsesor({
                                 <SummaryInfoCard label="Sede" value={joinValues(detail.zones)} />
                                 <SummaryInfoCard label="Estado" value={joinValues(detail.states)} />
                                 <SummaryInfoCard label="Ciudad" value={joinValues(detail.cities)} />
-                                <SummaryInfoCard label="Total Colegios" value={formatInteger(detail.total_schools)} comparisonValue={comparisonDetail ? formatInteger(comparisonDetail.total_schools) : undefined} showComparison={Boolean(filters.show_comparison)} />
-                                <SummaryInfoCard label="Total Exámenes" value={formatInteger(detail.total_exams)} comparisonValue={comparisonDetail ? formatInteger(comparisonDetail.total_exams) : undefined} showComparison={Boolean(filters.show_comparison)} />
-                                <SummaryInfoCard label="Sin Categorizar" value={formatCurrency(detail.uncategorized_revenue)} comparisonValue={comparisonDetail ? formatCurrency(comparisonDetail.uncategorized_revenue) : undefined} showComparison={Boolean(filters.show_comparison)} />
-                                <SummaryInfoCard label="Valor Total" value={formatCurrency(detail.total_revenue)} comparisonValue={comparisonDetail ? formatCurrency(comparisonDetail.total_revenue) : undefined} showComparison={Boolean(filters.show_comparison)} wide />
+                                <SummaryInfoCard
+                                    label="Total Colegios"
+                                    value={formatInteger(detail.total_schools)}
+                                    comparisonValue={
+                                        comparisonDetail ? formatInteger(comparisonDetail.total_schools) : undefined
+                                    }
+                                    showComparison={Boolean(filters.show_comparison)}
+                                />
+                                <SummaryInfoCard
+                                    label="Total Exámenes"
+                                    value={formatInteger(detail.total_exams)}
+                                    comparisonValue={
+                                        comparisonDetail ? formatInteger(comparisonDetail.total_exams) : undefined
+                                    }
+                                    showComparison={Boolean(filters.show_comparison)}
+                                />
+                                <SummaryInfoCard
+                                    label="Sin Categorizar"
+                                    value={formatCurrency(detail.uncategorized_revenue)}
+                                    comparisonValue={
+                                        comparisonDetail
+                                            ? formatCurrency(comparisonDetail.uncategorized_revenue)
+                                            : undefined
+                                    }
+                                    showComparison={Boolean(filters.show_comparison)}
+                                />
+                                <SummaryInfoCard
+                                    label="Valor Total"
+                                    value={formatCurrency(detail.total_revenue)}
+                                    comparisonValue={
+                                        comparisonDetail ? formatCurrency(comparisonDetail.total_revenue) : undefined
+                                    }
+                                    showComparison={Boolean(filters.show_comparison)}
+                                    wide
+                                />
                             </div>
 
                             <section className="flex flex-col gap-3">
@@ -138,17 +167,17 @@ export default function DetalleAsesor({
                                         }
 
                                         return (
-                                        <BreakdownTile
-                                            key={label}
-                                            title={label}
-                                            firstLabel="Exámenes"
-                                            firstValue={categoryDetail.exams}
-                                            secondLabel="Colegios"
-                                            secondValue={categoryDetail.schools}
-                                            totalLabel="Valor"
-                                            totalValue={categoryDetail.revenue}
-                                            tone={(["blue", "purple", "amber"] as const)[index % 3]}
-                                        />
+                                            <BreakdownTile
+                                                key={label}
+                                                title={label}
+                                                firstLabel="Exámenes"
+                                                firstValue={categoryDetail.exams}
+                                                secondLabel="Colegios"
+                                                secondValue={categoryDetail.schools}
+                                                totalLabel="Valor"
+                                                totalValue={categoryDetail.revenue}
+                                                tone={(["blue", "purple", "amber"] as const)[index % 3]}
+                                            />
                                         )
                                     })}
                                 </div>
@@ -182,7 +211,13 @@ export default function DetalleAsesor({
     )
 }
 
-function SummaryInfoCard({ label, value, comparisonValue, showComparison = false, wide = false }: SummaryInfoCardProps) {
+function SummaryInfoCard({
+    label,
+    value,
+    comparisonValue,
+    showComparison = false,
+    wide = false,
+}: SummaryInfoCardProps) {
     return (
         <Card className={cn("rounded-2xl shadow-none", wide && "md:col-span-2")}>
             <CardContent className="flex min-h-20 flex-col justify-between gap-3 p-4">

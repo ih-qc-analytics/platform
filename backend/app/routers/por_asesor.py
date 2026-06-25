@@ -68,7 +68,9 @@ async def export_por_asesor_pdf(filters: AsesorFilters, request: Request):
 async def export_por_asesor_excel(filters: AsesorFilters, request: Request):
     country_rates = resolve_por_asesor_country_rates(request)
     base_currency = get_request_base_currency(request)
-    report = await getAsesorReport(filters, country_rates=country_rates, base_currency=base_currency)
+    report = await getAsesorReport(
+        filters, country_rates=country_rates, base_currency=base_currency
+    )
     details = await getAsesorDetailsForRows(
         report.current.rows,
         filters,

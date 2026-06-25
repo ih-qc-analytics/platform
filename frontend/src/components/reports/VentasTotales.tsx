@@ -1,5 +1,15 @@
 import { useState } from "react"
-import { Users, FileText, BookOpen, GraduationCap, DollarSign, TrendingUp, Percent, Calendar, PackageSearch, Landmark } from "lucide-react"
+import {
+    Users,
+    FileText,
+    BookOpen,
+    GraduationCap,
+    DollarSign,
+    TrendingUp,
+    Percent,
+    PackageSearch,
+    Landmark,
+} from "lucide-react"
 import { exportTotalSalesExcel, exportTotalSalesExcelAll, exportVentasTotalesPdf } from "@/api/reports"
 import FilterBar from "@/components/filters/FilterBar"
 import KpiCard from "@/components/ui/KpiCard"
@@ -202,8 +212,14 @@ export default function VentasTotales() {
                             </div>
 
                             <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-                                <TrendLine data={data.current.trend_points} comparisonData={data.comparison?.data.trend_points} />
-                                <GeoBar data={data.current.geo_points} comparisonData={data.comparison?.data.geo_points} />
+                                <TrendLine
+                                    data={data.current.trend_points}
+                                    comparisonData={data.comparison?.data.trend_points}
+                                />
+                                <GeoBar
+                                    data={data.current.geo_points}
+                                    comparisonData={data.comparison?.data.geo_points}
+                                />
                             </div>
                         </>
                     ) : null}

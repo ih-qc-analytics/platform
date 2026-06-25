@@ -15,7 +15,7 @@ export default function DateRangePicker({ dateFrom, dateTo, onDateFromChange, on
                 <input
                     type="date"
                     value={dateFrom ?? ""}
-                    onChange={e => onDateFromChange(e.target.value)}
+                    onChange={(e) => onDateFromChange(e.target.value)}
                     className={FILTER_CONTROL_CLASS}
                 />
             </FilterFieldShell>
@@ -23,7 +23,7 @@ export default function DateRangePicker({ dateFrom, dateTo, onDateFromChange, on
                 <input
                     type="date"
                     value={dateTo ?? ""}
-                    onChange={e => onDateToChange(e.target.value)}
+                    onChange={(e) => onDateToChange(e.target.value)}
                     className={FILTER_CONTROL_CLASS}
                 />
             </FilterFieldShell>

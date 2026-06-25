@@ -12,21 +12,24 @@ export default function useCursorPagination<TCursor>() {
     }, [])
 
     const goPrevious = useCallback(() => {
-        setPage(current => Math.max(0, current - 1))
+        setPage((current) => Math.max(0, current - 1))
     }, [])
 
-    const goNext = useCallback((nextCursor: TCursor | null | undefined) => {
-        if (nextCursor == null) return
+    const goNext = useCallback(
+        (nextCursor: TCursor | null | undefined) => {
+            if (nextCursor == null) return
 
-        setPageCursors(current => {
-            if (current[page + 1] === nextCursor) return current
+            setPageCursors((current) => {
+                if (current[page + 1] === nextCursor) return current
 
-            const next = current.slice(0, page + 1)
-            next.push(nextCursor)
-            return next
-        })
-        setPage(current => current + 1)
-    }, [page])
+                const next = current.slice(0, page + 1)
+                next.push(nextCursor)
+                return next
+            })
+            setPage((current) => current + 1)
+        },
+        [page],
+    )
 
     return {
         page,

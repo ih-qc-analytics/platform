@@ -8,7 +8,13 @@ from sqlalchemy import text
 
 from app.enums import BaseCurrency
 from app.reporting.database import ReportingSessionLocal
-from app.schemas.pdf import AsesorDetailPDFPayload, PDFKpiItem, PDFTable, PDFTableRow, PorAsesorPDFPayload
+from app.schemas.pdf import (
+    AsesorDetailPDFPayload,
+    PDFKpiItem,
+    PDFTable,
+    PDFTableRow,
+    PorAsesorPDFPayload,
+)
 from app.schemas.reports import (
     AsesorDetailBase,
     AsesorDetailComparison,
@@ -37,7 +43,11 @@ from app.services.por_asesor.repository import (
     _line_where,
     _payment_where,
 )
-from app.services.utils.date_utils import current_year_to_date_range, percent_change, resolve_comparison_range
+from app.services.utils.date_utils import (
+    current_year_to_date_range,
+    percent_change,
+    resolve_comparison_range,
+)
 from app.services.utils.report_currency import line_paid_total_column, payment_amount_column
 
 ASESOR_SUMMARY_COLUMNS = [
@@ -62,42 +72,50 @@ ASESOR_DETAIL_COLUMNS = [
     ExcelColumn("total_revenue", "Total Revenue"),
 ]
 for _cat in EXAM_CATEGORY_ORDER:
-    ASESOR_DETAIL_COLUMNS.extend([
-        ExcelColumn(f"{_cat}_exams", f"{_cat} Exams"),
-        ExcelColumn(f"{_cat}_schools", f"{_cat} Schools"),
-        ExcelColumn(f"{_cat}_revenue", f"{_cat} Revenue"),
-    ])
-ASESOR_DETAIL_COLUMNS.extend([
-    ExcelColumn("ganados_schools", "Ganados Schools"),
-    ExcelColumn("ganados_exams", "Ganados Exams"),
-    ExcelColumn("ganados_revenue", "Ganados Revenue"),
-    ExcelColumn("perdidos_schools", "Perdidos Schools"),
-    ExcelColumn("perdidos_exams", "Perdidos Exams"),
-    ExcelColumn("perdidos_revenue", "Perdidos Revenue"),
-    ExcelColumn("mantenidos_schools", "Mantenidos Schools"),
-    ExcelColumn("mantenidos_exams", "Mantenidos Exams"),
-    ExcelColumn("mantenidos_revenue", "Mantenidos Revenue"),
-])
+    ASESOR_DETAIL_COLUMNS.extend(
+        [
+            ExcelColumn(f"{_cat}_exams", f"{_cat} Exams"),
+            ExcelColumn(f"{_cat}_schools", f"{_cat} Schools"),
+            ExcelColumn(f"{_cat}_revenue", f"{_cat} Revenue"),
+        ]
+    )
+ASESOR_DETAIL_COLUMNS.extend(
+    [
+        ExcelColumn("ganados_schools", "Ganados Schools"),
+        ExcelColumn("ganados_exams", "Ganados Exams"),
+        ExcelColumn("ganados_revenue", "Ganados Revenue"),
+        ExcelColumn("perdidos_schools", "Perdidos Schools"),
+        ExcelColumn("perdidos_exams", "Perdidos Exams"),
+        ExcelColumn("perdidos_revenue", "Perdidos Revenue"),
+        ExcelColumn("mantenidos_schools", "Mantenidos Schools"),
+        ExcelColumn("mantenidos_exams", "Mantenidos Exams"),
+        ExcelColumn("mantenidos_revenue", "Mantenidos Revenue"),
+    ]
+)
 
 
 def _normalized_asesor_filters(filters: AsesorFilters) -> AsesorFilters:
     if filters.date_from and filters.date_to:
         return filters
     if filters.year is not None:
-        return filters.model_copy(update={
-            "date_from": date(filters.year, 1, 1).isoformat(),
-            "date_to": date(filters.year, 12, 31).isoformat(),
-        })
+        return filters.model_copy(
+            update={
+                "date_from": date(filters.year, 1, 1).isoformat(),
+                "date_to": date(filters.year, 12, 31).isoformat(),
+            }
+        )
     date_from, date_to = current_year_to_date_range()
     return filters.model_copy(update={"date_from": date_from, "date_to": date_to})
 
 
 async def fetch_seller_name(seller_id: int) -> str | None:
     async with ReportingSessionLocal() as session:
-        row = (await session.execute(
-            text("SELECT seller_name FROM report_payments WHERE seller_id = :id LIMIT 1"),
-            {"id": seller_id},
-        )).fetchone()
+        row = (
+            await session.execute(
+                text("SELECT seller_name FROM report_payments WHERE seller_id = :id LIMIT 1"),
+                {"id": seller_id},
+            )
+        ).fetchone()
         return row.seller_name if row else None
 
 
@@ -107,43 +125,58 @@ async def fetch_detail_aggregate_row(
     base_currency: BaseCurrency = BaseCurrency.MXN,
 ):
     payment_where, payment_params = _payment_where(filters, seller_id=seller_id)
-    line_where, line_params = _line_where(filters, seller_id=seller_id, require_product_breakdown=True)
+    line_where, line_params = _line_where(
+        filters, seller_id=seller_id, require_product_breakdown=True
+    )
     payment_amount = payment_amount_column(base_currency)
     paid_total = line_paid_total_column(base_currency)
 
     async def fetch_payment_row():
         async with ReportingSessionLocal() as session:
-            return (await session.execute(text(f"""
+            return (
+                await session.execute(
+                    text(f"""
                 SELECT
                     COUNT(DISTINCT lead_id) AS total_schools,
                     COALESCE(SUM({payment_amount}), 0) AS total_revenue
                 FROM report_payments
                 WHERE {payment_where}
-            """), payment_params)).fetchone()
+            """),
+                    payment_params,
+                )
+            ).fetchone()
 
     async def fetch_line_row():
         async with ReportingSessionLocal() as session:
-            return (await session.execute(text(f"""
+            return (
+                await session.execute(
+                    text(f"""
                 SELECT
                     COALESCE(SUM(CASE WHEN product_type = 'exam' THEN quantity ELSE 0 END), 0) AS total_exams,
                     COALESCE(SUM({paid_total}), 0) AS allocated_revenue
                 FROM report_line_items
                 WHERE {line_where}
-            """), line_params)).fetchone()
+            """),
+                    line_params,
+                )
+            ).fetchone()
 
     payment_row, line_row = await asyncio.gather(fetch_payment_row(), fetch_line_row())
     return SimpleNamespace(
         total_schools=int((payment_row.total_schools or 0) if payment_row else 0),
         total_revenue=float((payment_row.total_revenue or 0) if payment_row else 0),
         total_exams=int((line_row.total_exams or 0) if line_row else 0),
-        uncategorized_revenue=float((payment_row.total_revenue or 0) if payment_row else 0) - float((line_row.allocated_revenue or 0) if line_row else 0),
+        uncategorized_revenue=float((payment_row.total_revenue or 0) if payment_row else 0)
+        - float((line_row.allocated_revenue or 0) if line_row else 0),
     )
 
 
 async def fetch_detail_geo_rows(seller_id: int, filters: AsesorFilters) -> list:
     where, params = _payment_where(filters, seller_id=seller_id)
     async with ReportingSessionLocal() as session:
-        return (await session.execute(text(f"""
+        return (
+            await session.execute(
+                text(f"""
             SELECT DISTINCT
                 site AS country,
                 zone_name AS zone,
@@ -151,7 +184,10 @@ async def fetch_detail_geo_rows(seller_id: int, filters: AsesorFilters) -> list:
                 city AS city
             FROM report_payments
             WHERE {where}
-        """), params)).fetchall()
+        """),
+                params,
+            )
+        ).fetchall()
 
 
 def fill_summary_exam_categories(breakdown: dict) -> dict:
@@ -161,14 +197,20 @@ def fill_summary_exam_categories(breakdown: dict) -> dict:
 def map_summary_exam_breakdowns(rows) -> dict[int, dict[str, int]]:
     exam_breakdowns: dict[int, dict[str, int]] = {}
     for row in rows:
-        seller_breakdown = exam_breakdowns.setdefault(int(row.seller_id), {cat: 0 for cat in EXAM_CATEGORY_ORDER})
+        seller_breakdown = exam_breakdowns.setdefault(
+            int(row.seller_id), {cat: 0 for cat in EXAM_CATEGORY_ORDER}
+        )
         if row.exam_category in seller_breakdown:
             seller_breakdown[row.exam_category] += int(row.exam_count or 0)
-    return {sid: fill_summary_exam_categories(breakdown) for sid, breakdown in exam_breakdowns.items()}
+    return {
+        sid: fill_summary_exam_categories(breakdown) for sid, breakdown in exam_breakdowns.items()
+    }
 
 
 def map_detail_exam_breakdown(rows) -> dict[str, ExamBrandDetail]:
-    breakdown = {cat: ExamBrandDetail(exams=0, schools=0, revenue=0.0) for cat in EXAM_CATEGORY_ORDER}
+    breakdown = {
+        cat: ExamBrandDetail(exams=0, schools=0, revenue=0.0) for cat in EXAM_CATEGORY_ORDER
+    }
     for row in rows:
         if row.exam_category in breakdown:
             current = breakdown[row.exam_category]
@@ -210,7 +252,9 @@ def build_status_map(
     for row in current_allocated_metric_rows:
         current_allocated_metrics[(int(row.seller_id), int(row.lead_id))] = float(row.revenue or 0)
     for row in comparison_allocated_metric_rows:
-        comparison_allocated_metrics[(int(row.seller_id), int(row.lead_id))] = float(row.revenue or 0)
+        comparison_allocated_metrics[(int(row.seller_id), int(row.lead_id))] = float(
+            row.revenue or 0
+        )
     for row in current_exam_metric_rows:
         current_exam_metrics[(int(row.seller_id), int(row.lead_id))] = int(row.exams or 0)
     for row in comparison_exam_metric_rows:
@@ -228,7 +272,9 @@ def build_status_map(
         seller_statuses: dict[str, BusinessStatusDetail] = {}
         for status, lead_ids in buckets.items():
             exam_src = comparison_exam_metrics if status == "perdido" else current_exam_metrics
-            revenue_src = comparison_allocated_metrics if status == "perdido" else current_allocated_metrics
+            revenue_src = (
+                comparison_allocated_metrics if status == "perdido" else current_allocated_metrics
+            )
             seller_statuses[status] = BusinessStatusDetail(
                 schools=len(lead_ids),
                 exams=sum(exam_src.get((seller_id, lead_id), 0) for lead_id in lead_ids),
@@ -257,9 +303,15 @@ async def fetch_summary_status_counts(
         comparison_by_seller[int(row.seller_id)].add(int(row.lead_id))
     return {
         seller_id: {
-            "ganado": len(current_by_seller.get(seller_id, set()) - comparison_by_seller.get(seller_id, set())),
-            "perdido": len(comparison_by_seller.get(seller_id, set()) - current_by_seller.get(seller_id, set())),
-            "mantenido": len(current_by_seller.get(seller_id, set()) & comparison_by_seller.get(seller_id, set())),
+            "ganado": len(
+                current_by_seller.get(seller_id, set()) - comparison_by_seller.get(seller_id, set())
+            ),
+            "perdido": len(
+                comparison_by_seller.get(seller_id, set()) - current_by_seller.get(seller_id, set())
+            ),
+            "mantenido": len(
+                current_by_seller.get(seller_id, set()) & comparison_by_seller.get(seller_id, set())
+            ),
         }
         for seller_id in seller_ids
     }
@@ -278,12 +330,15 @@ def build_asesor_report_base(
         AsesorRow(
             seller_id=int(row.seller_id),
             seller_name=row.seller_name,
-            exam_breakdown=exam_breakdowns.get(int(row.seller_id), fill_summary_exam_categories({})),
+            exam_breakdown=exam_breakdowns.get(
+                int(row.seller_id), fill_summary_exam_categories({})
+            ),
             ganados=int(status_counts.get(int(row.seller_id), {}).get("ganado", 0)),
             perdidos=int(status_counts.get(int(row.seller_id), {}).get("perdido", 0)),
             mantenidos=int(status_counts.get(int(row.seller_id), {}).get("mantenido", 0)),
             total_revenue=float(row.total_revenue or 0),
-            uncategorized_revenue=float(row.total_revenue or 0) - allocated_by_seller.get(int(row.seller_id), 0.0),
+            uncategorized_revenue=float(row.total_revenue or 0)
+            - allocated_by_seller.get(int(row.seller_id), 0.0),
         )
         for row in summary_rows
     ]
@@ -306,7 +361,9 @@ def build_asesor_detail_base(
         total_schools=int((aggregate_row.total_schools or 0) if aggregate_row else 0),
         total_exams=int((aggregate_row.total_exams or 0) if aggregate_row else 0),
         total_revenue=float((aggregate_row.total_revenue or 0) if aggregate_row else 0),
-        uncategorized_revenue=float((aggregate_row.uncategorized_revenue or 0) if aggregate_row else 0),
+        uncategorized_revenue=float(
+            (aggregate_row.uncategorized_revenue or 0) if aggregate_row else 0
+        ),
         exam_breakdown=exam_breakdown,
         ganados=status_map.get("ganado", empty_status()),
         perdidos=status_map.get("perdido", empty_status()),
@@ -314,7 +371,9 @@ def build_asesor_detail_base(
     )
 
 
-def _report_deltas(current: AsesorReportBase, comparison: AsesorReportBase) -> dict[str, MetricDelta]:
+def _report_deltas(
+    current: AsesorReportBase, comparison: AsesorReportBase
+) -> dict[str, MetricDelta]:
     current_total_revenue = sum(row.total_revenue for row in current.rows)
     comparison_total_revenue = sum(row.total_revenue for row in comparison.rows)
     current_uncategorized = sum(row.uncategorized_revenue for row in current.rows)
@@ -322,18 +381,43 @@ def _report_deltas(current: AsesorReportBase, comparison: AsesorReportBase) -> d
     current_exams = sum(sum(row.exam_breakdown.values()) for row in current.rows)
     comparison_exams = sum(sum(row.exam_breakdown.values()) for row in comparison.rows)
     return {
-        "total_revenue": MetricDelta(comparison_value=comparison_total_revenue, pct_change=percent_change(current_total_revenue, comparison_total_revenue)),
-        "uncategorized_revenue": MetricDelta(comparison_value=comparison_uncategorized, pct_change=percent_change(current_uncategorized, comparison_uncategorized)),
-        "total_exams": MetricDelta(comparison_value=float(comparison_exams), pct_change=percent_change(current_exams, comparison_exams)),
+        "total_revenue": MetricDelta(
+            comparison_value=comparison_total_revenue,
+            pct_change=percent_change(current_total_revenue, comparison_total_revenue),
+        ),
+        "uncategorized_revenue": MetricDelta(
+            comparison_value=comparison_uncategorized,
+            pct_change=percent_change(current_uncategorized, comparison_uncategorized),
+        ),
+        "total_exams": MetricDelta(
+            comparison_value=float(comparison_exams),
+            pct_change=percent_change(current_exams, comparison_exams),
+        ),
     }
 
 
-def _detail_deltas(current: AsesorDetailBase, comparison: AsesorDetailBase) -> dict[str, MetricDelta]:
+def _detail_deltas(
+    current: AsesorDetailBase, comparison: AsesorDetailBase
+) -> dict[str, MetricDelta]:
     return {
-        "total_schools": MetricDelta(comparison_value=float(comparison.total_schools), pct_change=percent_change(current.total_schools, comparison.total_schools)),
-        "total_exams": MetricDelta(comparison_value=float(comparison.total_exams), pct_change=percent_change(current.total_exams, comparison.total_exams)),
-        "total_revenue": MetricDelta(comparison_value=comparison.total_revenue, pct_change=percent_change(current.total_revenue, comparison.total_revenue)),
-        "uncategorized_revenue": MetricDelta(comparison_value=comparison.uncategorized_revenue, pct_change=percent_change(current.uncategorized_revenue, comparison.uncategorized_revenue)),
+        "total_schools": MetricDelta(
+            comparison_value=float(comparison.total_schools),
+            pct_change=percent_change(current.total_schools, comparison.total_schools),
+        ),
+        "total_exams": MetricDelta(
+            comparison_value=float(comparison.total_exams),
+            pct_change=percent_change(current.total_exams, comparison.total_exams),
+        ),
+        "total_revenue": MetricDelta(
+            comparison_value=comparison.total_revenue,
+            pct_change=percent_change(current.total_revenue, comparison.total_revenue),
+        ),
+        "uncategorized_revenue": MetricDelta(
+            comparison_value=comparison.uncategorized_revenue,
+            pct_change=percent_change(
+                current.uncategorized_revenue, comparison.uncategorized_revenue
+            ),
+        ),
     }
 
 
@@ -354,7 +438,9 @@ async def _get_asesor_report_base(
     seller_ids = [int(row.seller_id) for row in summary_rows]
     breakdown_rows, allocated_rows, status_counts = await asyncio.gather(
         fetch_summary_exam_breakdown_rows_by_seller_ids(seller_ids, current_filters),
-        fetch_summary_allocated_revenue_rows_by_seller_ids(seller_ids, current_filters, base_currency=base_currency),
+        fetch_summary_allocated_revenue_rows_by_seller_ids(
+            seller_ids, current_filters, base_currency=base_currency
+        ),
         fetch_summary_status_counts(current_filters, comparison_filters, seller_ids),
     )
     return build_asesor_report_base(
@@ -376,19 +462,41 @@ async def getAsesorReport(
     comparison_meta = resolve_comparison_range(normalized_filters)
 
     if comparison_meta is None:
-        previous_year_from = date.fromisoformat(normalized_filters.date_from).replace(year=date.fromisoformat(normalized_filters.date_from).year - 1).isoformat()
-        previous_year_to = date.fromisoformat(normalized_filters.date_to).replace(year=date.fromisoformat(normalized_filters.date_to).year - 1).isoformat()
+        previous_year_from = (
+            date.fromisoformat(normalized_filters.date_from)
+            .replace(year=date.fromisoformat(normalized_filters.date_from).year - 1)
+            .isoformat()
+        )
+        previous_year_to = (
+            date.fromisoformat(normalized_filters.date_to)
+            .replace(year=date.fromisoformat(normalized_filters.date_to).year - 1)
+            .isoformat()
+        )
         current = await _get_asesor_report_base(
             normalized_filters,
-            normalized_filters.model_copy(update={"date_from": previous_year_from, "date_to": previous_year_to, "show_comparison": False}),
+            normalized_filters.model_copy(
+                update={
+                    "date_from": previous_year_from,
+                    "date_to": previous_year_to,
+                    "show_comparison": False,
+                }
+            ),
             limit=normalized_filters.limit,
             cursor=normalized_filters.cursor,
             base_currency=base_currency,
         )
         return AsesorReportResponse(current=current, comparison_mode=None, comparison=None)
 
-    current_filters = normalized_filters.model_copy(update={"show_comparison": False, "comparison_date_from": None, "comparison_date_to": None})
-    comparison_filters = current_filters.model_copy(update={"date_from": comparison_meta.date_from, "date_to": comparison_meta.date_to, "cursor": None})
+    current_filters = normalized_filters.model_copy(
+        update={"show_comparison": False, "comparison_date_from": None, "comparison_date_to": None}
+    )
+    comparison_filters = current_filters.model_copy(
+        update={
+            "date_from": comparison_meta.date_from,
+            "date_to": comparison_meta.date_to,
+            "cursor": None,
+        }
+    )
 
     current = await _get_asesor_report_base(
         current_filters,
@@ -398,24 +506,38 @@ async def getAsesorReport(
         base_currency=base_currency,
     )
     seller_ids = [row.seller_id for row in current.rows]
-    comparison_summary_rows, comparison_breakdown_rows, comparison_allocated_rows, comparison_status_counts = await asyncio.gather(
-        fetch_summary_rows_by_seller_ids(seller_ids, comparison_filters, base_currency=base_currency),
+    (
+        comparison_summary_rows,
+        comparison_breakdown_rows,
+        comparison_allocated_rows,
+        comparison_status_counts,
+    ) = await asyncio.gather(
+        fetch_summary_rows_by_seller_ids(
+            seller_ids, comparison_filters, base_currency=base_currency
+        ),
         fetch_summary_exam_breakdown_rows_by_seller_ids(seller_ids, comparison_filters),
-        fetch_summary_allocated_revenue_rows_by_seller_ids(seller_ids, comparison_filters, base_currency=base_currency),
+        fetch_summary_allocated_revenue_rows_by_seller_ids(
+            seller_ids, comparison_filters, base_currency=base_currency
+        ),
         fetch_summary_status_counts(comparison_filters, current_filters, seller_ids),
     )
     comparison = build_asesor_report_base(
         comparison_summary_rows,
         map_summary_exam_breakdowns(comparison_breakdown_rows),
         comparison_status_counts,
-        {int(row.seller_id): float(row.allocated_revenue or 0) for row in comparison_allocated_rows},
+        {
+            int(row.seller_id): float(row.allocated_revenue or 0)
+            for row in comparison_allocated_rows
+        },
         next_cursor=None,
         has_more=False,
     )
     return AsesorReportResponse(
         current=current,
         comparison_mode=comparison_meta.mode,
-        comparison=AsesorReportComparison(meta=comparison_meta, data=comparison, deltas=_report_deltas(current, comparison)),
+        comparison=AsesorReportComparison(
+            meta=comparison_meta, data=comparison, deltas=_report_deltas(current, comparison)
+        ),
     )
 
 
@@ -429,14 +551,28 @@ async def _get_asesor_detail_base(
     if seller_name is None:
         raise HTTPException(status_code=404, detail="Seller not found")
 
-    aggregate_row, geo_rows, breakdown_rows, current_presence, comparison_presence, current_allocated_rows, comparison_allocated_rows, current_exam_rows, comparison_exam_rows = await asyncio.gather(
+    (
+        aggregate_row,
+        geo_rows,
+        breakdown_rows,
+        current_presence,
+        comparison_presence,
+        current_allocated_rows,
+        comparison_allocated_rows,
+        current_exam_rows,
+        comparison_exam_rows,
+    ) = await asyncio.gather(
         fetch_detail_aggregate_row(seller_id, filters, base_currency=base_currency),
         fetch_detail_geo_rows(seller_id, filters),
         fetch_detail_exam_breakdown_rows(seller_id, filters, base_currency=base_currency),
         fetch_school_presence_rows(filters, seller_id=seller_id),
         fetch_school_presence_rows(comparison_filters, seller_id=seller_id),
-        fetch_school_allocated_revenue_metric_rows(filters, seller_id=seller_id, base_currency=base_currency),
-        fetch_school_allocated_revenue_metric_rows(comparison_filters, seller_id=seller_id, base_currency=base_currency),
+        fetch_school_allocated_revenue_metric_rows(
+            filters, seller_id=seller_id, base_currency=base_currency
+        ),
+        fetch_school_allocated_revenue_metric_rows(
+            comparison_filters, seller_id=seller_id, base_currency=base_currency
+        ),
         fetch_school_exam_metric_rows(filters, seller_id=seller_id),
         fetch_school_exam_metric_rows(comparison_filters, seller_id=seller_id),
     )
@@ -466,26 +602,50 @@ async def getAsesorDetail(
     normalized_filters = _normalized_asesor_filters(filters)
     comparison_meta = resolve_comparison_range(normalized_filters)
     if comparison_meta is None:
-        previous_year_from = date.fromisoformat(normalized_filters.date_from).replace(year=date.fromisoformat(normalized_filters.date_from).year - 1).isoformat()
-        previous_year_to = date.fromisoformat(normalized_filters.date_to).replace(year=date.fromisoformat(normalized_filters.date_to).year - 1).isoformat()
+        previous_year_from = (
+            date.fromisoformat(normalized_filters.date_from)
+            .replace(year=date.fromisoformat(normalized_filters.date_from).year - 1)
+            .isoformat()
+        )
+        previous_year_to = (
+            date.fromisoformat(normalized_filters.date_to)
+            .replace(year=date.fromisoformat(normalized_filters.date_to).year - 1)
+            .isoformat()
+        )
         current = await _get_asesor_detail_base(
             seller_id,
             normalized_filters,
-            normalized_filters.model_copy(update={"date_from": previous_year_from, "date_to": previous_year_to, "show_comparison": False}),
+            normalized_filters.model_copy(
+                update={
+                    "date_from": previous_year_from,
+                    "date_to": previous_year_to,
+                    "show_comparison": False,
+                }
+            ),
             base_currency=base_currency,
         )
         return AsesorDetailResponse(current=current, comparison_mode=None, comparison=None)
 
-    current_filters = normalized_filters.model_copy(update={"show_comparison": False, "comparison_date_from": None, "comparison_date_to": None})
-    comparison_filters = current_filters.model_copy(update={"date_from": comparison_meta.date_from, "date_to": comparison_meta.date_to})
+    current_filters = normalized_filters.model_copy(
+        update={"show_comparison": False, "comparison_date_from": None, "comparison_date_to": None}
+    )
+    comparison_filters = current_filters.model_copy(
+        update={"date_from": comparison_meta.date_from, "date_to": comparison_meta.date_to}
+    )
     current, comparison = await asyncio.gather(
-        _get_asesor_detail_base(seller_id, current_filters, comparison_filters, base_currency=base_currency),
-        _get_asesor_detail_base(seller_id, comparison_filters, current_filters, base_currency=base_currency),
+        _get_asesor_detail_base(
+            seller_id, current_filters, comparison_filters, base_currency=base_currency
+        ),
+        _get_asesor_detail_base(
+            seller_id, comparison_filters, current_filters, base_currency=base_currency
+        ),
     )
     return AsesorDetailResponse(
         current=current,
         comparison_mode=comparison_meta.mode,
-        comparison=AsesorDetailComparison(meta=comparison_meta, data=comparison, deltas=_detail_deltas(current, comparison)),
+        comparison=AsesorDetailComparison(
+            meta=comparison_meta, data=comparison, deltas=_detail_deltas(current, comparison)
+        ),
     )
 
 
@@ -524,24 +684,38 @@ async def getAsesorDetailsForRows(
         return []
     normalized_filters = _normalized_asesor_filters(filters)
     comparison_filters = normalized_filters
-    results = await asyncio.gather(*(
-        _get_asesor_detail_base(
-            row.seller_id,
-            normalized_filters,
-            comparison_filters,
-            base_currency=base_currency,
+    results = await asyncio.gather(
+        *(
+            _get_asesor_detail_base(
+                row.seller_id,
+                normalized_filters,
+                comparison_filters,
+                base_currency=base_currency,
+            )
+            for row in rows
         )
-        for row in rows
-    ))
+    )
     return list(results)
 
 
 def build_asesor_export_filters_for_all(filters: AsesorFilters) -> AsesorFilters:
     normalized_filters = _normalized_asesor_filters(filters)
-    return normalized_filters.model_copy(update={"countries": [], "zones": [], "states": [], "cities": [], "sellers": [], "cursor": None, "limit": 100})
+    return normalized_filters.model_copy(
+        update={
+            "countries": [],
+            "zones": [],
+            "states": [],
+            "cities": [],
+            "sellers": [],
+            "cursor": None,
+            "limit": 100,
+        }
+    )
 
 
-def build_asesor_export_worksheets(report: AsesorReportResponse, details: list[AsesorDetailBase]) -> list[ExcelWorksheetSpec]:
+def build_asesor_export_worksheets(
+    report: AsesorReportResponse, details: list[AsesorDetailBase]
+) -> list[ExcelWorksheetSpec]:
     summary_rows = []
     for row in report.current.rows:
         summary_row = {
@@ -579,7 +753,9 @@ def build_asesor_export_worksheets(report: AsesorReportResponse, details: list[A
             "mantenidos_revenue": detail.mantenidos.revenue,
         }
         for cat in EXAM_CATEGORY_ORDER:
-            cat_detail = detail.exam_breakdown.get(cat, ExamBrandDetail(exams=0, schools=0, revenue=0.0))
+            cat_detail = detail.exam_breakdown.get(
+                cat, ExamBrandDetail(exams=0, schools=0, revenue=0.0)
+            )
             detail_row[f"{cat}_exams"] = cat_detail.exams
             detail_row[f"{cat}_schools"] = cat_detail.schools
             detail_row[f"{cat}_revenue"] = cat_detail.revenue
@@ -587,7 +763,9 @@ def build_asesor_export_worksheets(report: AsesorReportResponse, details: list[A
 
     return [
         ExcelWorksheetSpec(name="Por Asesor", columns=ASESOR_SUMMARY_COLUMNS, rows=summary_rows),
-        ExcelWorksheetSpec(name="Por Asesor Detail", columns=ASESOR_DETAIL_COLUMNS, rows=detail_rows),
+        ExcelWorksheetSpec(
+            name="Por Asesor Detail", columns=ASESOR_DETAIL_COLUMNS, rows=detail_rows
+        ),
     ]
 
 
@@ -610,37 +788,61 @@ async def build_por_asesor_pdf_payload(
 
     table_rows = []
     for row in report.current.rows:
-        cambridge = int(row.exam_breakdown.get("Cambridge English (Main Suite)", 0) or 0) + int(row.exam_breakdown.get("Cambridge Teaching & Skills", 0) or 0)
+        cambridge = int(row.exam_breakdown.get("Cambridge English (Main Suite)", 0) or 0) + int(
+            row.exam_breakdown.get("Cambridge Teaching & Skills", 0) or 0
+        )
         ielts = int(row.exam_breakdown.get("IELTS", 0) or 0)
         met = int(row.exam_breakdown.get("Michigan (MET)", 0) or 0)
-        otros = int(row.exam_breakdown.get("TEA (Test of English for Aviation)", 0) or 0) + int(row.exam_breakdown.get("Placement & Otros", 0) or 0)
-        table_rows.append(PDFTableRow(cells=[
-            row.seller_name,
-            format_integer(cambridge),
-            format_integer(ielts),
-            format_integer(met),
-            format_integer(otros),
-            format_integer(row.ganados),
-            format_integer(row.perdidos),
-            format_integer(row.mantenidos),
-            format_currency(row.uncategorized_revenue, base_currency),
-            format_currency(row.total_revenue, base_currency),
-        ]))
+        otros = int(row.exam_breakdown.get("TEA (Test of English for Aviation)", 0) or 0) + int(
+            row.exam_breakdown.get("Placement & Otros", 0) or 0
+        )
+        table_rows.append(
+            PDFTableRow(
+                cells=[
+                    row.seller_name,
+                    format_integer(cambridge),
+                    format_integer(ielts),
+                    format_integer(met),
+                    format_integer(otros),
+                    format_integer(row.ganados),
+                    format_integer(row.perdidos),
+                    format_integer(row.mantenidos),
+                    format_currency(row.uncategorized_revenue, base_currency),
+                    format_currency(row.total_revenue, base_currency),
+                ]
+            )
+        )
 
-    title_suffix = f"{report.current.rows[0].seller_name}" if False else ""
     return PorAsesorPDFPayload(
-        header=build_pdf_header("Resultados por Asesor", "Resumen por asesor con familias de exámenes y valor total", _normalized_asesor_filters(filters)),
+        header=build_pdf_header(
+            "Resultados por Asesor",
+            "Resumen por asesor con familias de exámenes y valor total",
+            _normalized_asesor_filters(filters),
+        ),
         kpis=[
             PDFKpiItem(label="Asesores", value=format_integer(len(report.current.rows))),
             PDFKpiItem(label="Exámenes", value=format_integer(total_exams)),
             PDFKpiItem(label="Ganados", value=format_integer(total_ganados)),
             PDFKpiItem(label="Perdidos", value=format_integer(total_perdidos)),
             PDFKpiItem(label="Mantenidos", value=format_integer(total_mantenidos)),
-            PDFKpiItem(label="Sin Categorizar", value=format_currency(total_uncategorized, base_currency)),
+            PDFKpiItem(
+                label="Sin Categorizar", value=format_currency(total_uncategorized, base_currency)
+            ),
             PDFKpiItem(label="Valor Total", value=format_currency(total_revenue, base_currency)),
         ],
         table=PDFTable(
-            headers=["Asesor", "Cambridge", "IELTS", "MET", "Otros", "Ganados", "Perdidos", "Mantenidos", "Sin Categorizar", "Valor Total"],
+            headers=[
+                "Asesor",
+                "Cambridge",
+                "IELTS",
+                "MET",
+                "Otros",
+                "Ganados",
+                "Perdidos",
+                "Mantenidos",
+                "Sin Categorizar",
+                "Valor Total",
+            ],
             rows=table_rows,
             column_widths=[4, 2, 2, 2, 2, 2, 2, 2, 3, 3],
         ),
@@ -662,25 +864,84 @@ async def build_asesor_detail_pdf_payload(
         )
     ).current
     category_rows = [
-        PDFTableRow(cells=[cat, format_integer(detail.exam_breakdown.get(cat, ExamBrandDetail(exams=0, schools=0, revenue=0.0)).exams), format_integer(detail.exam_breakdown.get(cat, ExamBrandDetail(exams=0, schools=0, revenue=0.0)).schools), format_currency(detail.exam_breakdown.get(cat, ExamBrandDetail(exams=0, schools=0, revenue=0.0)).revenue, base_currency)])
+        PDFTableRow(
+            cells=[
+                cat,
+                format_integer(
+                    detail.exam_breakdown.get(
+                        cat, ExamBrandDetail(exams=0, schools=0, revenue=0.0)
+                    ).exams
+                ),
+                format_integer(
+                    detail.exam_breakdown.get(
+                        cat, ExamBrandDetail(exams=0, schools=0, revenue=0.0)
+                    ).schools
+                ),
+                format_currency(
+                    detail.exam_breakdown.get(
+                        cat, ExamBrandDetail(exams=0, schools=0, revenue=0.0)
+                    ).revenue,
+                    base_currency,
+                ),
+            ]
+        )
         for cat in EXAM_CATEGORY_ORDER
     ]
     status_rows = [
-        PDFTableRow(cells=["Ganados", format_integer(detail.ganados.schools), format_integer(detail.ganados.exams), format_currency(detail.ganados.revenue, base_currency)]),
-        PDFTableRow(cells=["Perdidos", format_integer(detail.perdidos.schools), format_integer(detail.perdidos.exams), format_currency(detail.perdidos.revenue, base_currency)]),
-        PDFTableRow(cells=["Mantenidos", format_integer(detail.mantenidos.schools), format_integer(detail.mantenidos.exams), format_currency(detail.mantenidos.revenue, base_currency)]),
+        PDFTableRow(
+            cells=[
+                "Ganados",
+                format_integer(detail.ganados.schools),
+                format_integer(detail.ganados.exams),
+                format_currency(detail.ganados.revenue, base_currency),
+            ]
+        ),
+        PDFTableRow(
+            cells=[
+                "Perdidos",
+                format_integer(detail.perdidos.schools),
+                format_integer(detail.perdidos.exams),
+                format_currency(detail.perdidos.revenue, base_currency),
+            ]
+        ),
+        PDFTableRow(
+            cells=[
+                "Mantenidos",
+                format_integer(detail.mantenidos.schools),
+                format_integer(detail.mantenidos.exams),
+                format_currency(detail.mantenidos.revenue, base_currency),
+            ]
+        ),
     ]
     return AsesorDetailPDFPayload(
-        header=build_pdf_header(detail.seller_name, "Detalle del asesor por geografía, categorías y estado de colegios", _normalized_asesor_filters(filters)),
+        header=build_pdf_header(
+            detail.seller_name,
+            "Detalle del asesor por geografía, categorías y estado de colegios",
+            _normalized_asesor_filters(filters),
+        ),
         kpis=[
             PDFKpiItem(label="Total Colegios", value=format_integer(detail.total_schools)),
             PDFKpiItem(label="Total Exámenes", value=format_integer(detail.total_exams)),
-            PDFKpiItem(label="Sin Categorizar", value=format_currency(detail.uncategorized_revenue, base_currency)),
-            PDFKpiItem(label="Valor Total", value=format_currency(detail.total_revenue, base_currency)),
+            PDFKpiItem(
+                label="Sin Categorizar",
+                value=format_currency(detail.uncategorized_revenue, base_currency),
+            ),
+            PDFKpiItem(
+                label="Valor Total", value=format_currency(detail.total_revenue, base_currency)
+            ),
         ],
         geo_table=PDFTable(
             headers=["País", "Sede", "Estado", "Ciudad"],
-            rows=[PDFTableRow(cells=[", ".join(detail.countries) or "-", ", ".join(detail.zones) or "-", ", ".join(detail.states) or "-", ", ".join(detail.cities) or "-"])],
+            rows=[
+                PDFTableRow(
+                    cells=[
+                        ", ".join(detail.countries) or "-",
+                        ", ".join(detail.zones) or "-",
+                        ", ".join(detail.states) or "-",
+                        ", ".join(detail.cities) or "-",
+                    ]
+                )
+            ],
             column_widths=[2, 2, 2, 2],
         ),
         categories_table=PDFTable(

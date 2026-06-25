@@ -29,19 +29,15 @@ export default function LoginPage() {
     return (
         <div className="flex min-h-screen items-center justify-center bg-muted/30">
             <div className="w-full max-w-sm rounded-3xl border border-border bg-card p-8 shadow-xl">
-                <h1 className="mb-1 text-2xl font-semibold tracking-tight text-slate-900">
-                    QC Analytics
-                </h1>
-                <p className="mb-6 text-sm text-muted-foreground">
-                    Inicia sesión para continuar.
-                </p>
+                <h1 className="mb-1 text-2xl font-semibold tracking-tight text-slate-900">QC Analytics</h1>
+                <p className="mb-6 text-sm text-muted-foreground">Inicia sesión para continuar.</p>
 
                 <form onSubmit={handleSubmit} className="flex flex-col gap-4">
                     <Input
                         type="email"
                         placeholder="Correo electrónico"
                         value={email}
-                        onChange={e => setEmail(e.target.value)}
+                        onChange={(e) => setEmail(e.target.value)}
                         required
                         autoComplete="email"
                         className="h-11 rounded-2xl"
@@ -50,21 +46,15 @@ export default function LoginPage() {
                         type="password"
                         placeholder="Contraseña"
                         value={password}
-                        onChange={e => setPassword(e.target.value)}
+                        onChange={(e) => setPassword(e.target.value)}
                         required
                         autoComplete="current-password"
                         className="h-11 rounded-2xl"
                     />
 
-                    {error ? (
-                        <p className="text-sm text-destructive">{error}</p>
-                    ) : null}
+                    {error ? <p className="text-sm text-destructive">{error}</p> : null}
 
-                    <Button
-                        type="submit"
-                        className="h-11 rounded-2xl"
-                        disabled={loading}
-                    >
+                    <Button type="submit" className="h-11 rounded-2xl" disabled={loading}>
                         {loading ? "Entrando..." : "Entrar"}
                     </Button>
                 </form>

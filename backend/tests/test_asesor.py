@@ -31,7 +31,9 @@ def test_canonical_exam_category_and_name_collapse_known_exam_families():
     assert canonical_exam_name("MET Digital Retake") == "MET"
     assert canonical_exam_name("MET Go Digital") == "MET Go!"
     assert canonical_exam_name("CAMBRIDGE PLACEMENT TEST (CEPT)") == "Other"
-    assert canonical_exam_category("Linguaskill 1 Skills (Writing)") == "Cambridge Teaching & Skills"
+    assert (
+        canonical_exam_category("Linguaskill 1 Skills (Writing)") == "Cambridge Teaching & Skills"
+    )
 
 
 def test_por_pais_summary_and_detail_helpers_treat_missing_exam_labels_as_other():

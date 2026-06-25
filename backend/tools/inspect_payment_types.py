@@ -5,6 +5,7 @@ what the ETL should be filtering out.
 Run from backend/tools/:
     python inspect_payment_types.py
 """
+
 from pathlib import Path
 import sys
 from urllib.parse import quote_plus
@@ -32,7 +33,6 @@ QUERIES = {
         FROM payment pay
         WHERE pay.quantity < 0 AND pay.status = 'Aprobado'
     """,
-
     # --- cart_product.total / cost ---
     "negative_cart_products": """
         SELECT
@@ -53,7 +53,6 @@ QUERIES = {
         GROUP BY total_negative, cost_negative
         ORDER BY total_negative DESC, cost_negative DESC
     """,
-
     # Sample negative cart_product.total rows with site context
     "negative_cart_product_samples": """
         SELECT
@@ -79,7 +78,6 @@ QUERIES = {
         ORDER BY cp.total ASC
         LIMIT 20
     """,
-
     # --- student_payments.amount ---
     # First, check if the table and column exist
     "student_payments_schema": """
@@ -89,7 +87,6 @@ QUERIES = {
           AND TABLE_NAME = 'student_payments'
         ORDER BY ORDINAL_POSITION
     """,
-
     "negative_student_payments": """
         SELECT
             sp.amount < 0 AS amount_negative,
@@ -103,7 +100,6 @@ QUERIES = {
         GROUP BY amount_negative, pay.status
         ORDER BY amount_negative DESC
     """,
-
     # Aggregated paid_total per cart_product — can the SUM go negative?
     "negative_paid_total_aggregates": """
         SELECT
@@ -128,9 +124,9 @@ QUERIES = {
 
 
 def print_rows(name: str, rows: list[dict]) -> None:
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"  {name}")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
     if not rows:
         print("  (no rows)")
         return

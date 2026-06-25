@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+
 class Settings:
     env_mode = os.getenv("ENVIRONMENT", "dev").lower()
 
@@ -71,5 +72,6 @@ class Settings:
     def payment_upsert_initial_since(self) -> datetime:
         raw_value = os.getenv("PAYMENT_UPSERT_INITIAL_SINCE", "2023-01-01T00:00:00")
         return datetime.fromisoformat(raw_value)
+
 
 settings = Settings()

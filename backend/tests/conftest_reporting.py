@@ -65,9 +65,11 @@ async def clean_reporting_db(reporting_engine):
     """Truncate reporting tables between tests."""
     yield
     async with reporting_engine.begin() as conn:
-        await conn.execute(text(
-            "TRUNCATE report_payment_allocations, report_payments, report_line_items, exchange_rates, etl_meta RESTART IDENTITY"
-        ))
+        await conn.execute(
+            text(
+                "TRUNCATE report_payment_allocations, report_payments, report_line_items, exchange_rates, etl_meta RESTART IDENTITY"
+            )
+        )
 
 
 def bind_test_reporting_database(session_factory):
@@ -80,6 +82,7 @@ def bind_test_reporting_database(session_factory):
     import app.etl.shared as shared
     import app.etl.upsert as up
     import app.reporting.database as rdb
+
     rdb.ReportingSessionLocal = session_factory
     erb.ReportingSessionLocal = session_factory
     er.ReportingSessionLocal = session_factory

@@ -184,7 +184,13 @@ async def _extract_all(since: datetime) -> tuple[list, list, list, list[int], li
             result = await source.execute(text(query), params)
             return [int(row[0]) for row in result.fetchall()]
 
-    payment_rows, line_item_rows, allocation_rows, deleted_cart_product_ids, deleted_cart_ids = await asyncio.gather(
+    (
+        payment_rows,
+        line_item_rows,
+        allocation_rows,
+        deleted_cart_product_ids,
+        deleted_cart_ids,
+    ) = await asyncio.gather(
         _fetch_mappings(
             PAYMENT_EXTRACT_QUERY.format(LEAD_ADDRESS_SUBQUERY=LEAD_ADDRESS_SUBQUERY),
             {"since": since},
@@ -207,7 +213,6 @@ async def _extract_all(since: datetime) -> tuple[list, list, list, list[int], li
         deleted_cart_product_ids,
         deleted_cart_ids,
     )
-
 
 
 async def _build_paid_total_converted(
@@ -246,7 +251,9 @@ async def _build_paid_total_converted(
     return {cp_id: (accum_mxn[cp_id], accum_usd[cp_id]) for cp_id in accum_mxn}
 
 
-async def _transform_payment(row: dict, ganados: set[int], perdidos: set[int], mantenidos: set[int], rates: dict) -> dict:
+async def _transform_payment(
+    row: dict, ganados: set[int], perdidos: set[int], mantenidos: set[int], rates: dict
+) -> dict:
     dims = extract_dimensions(row)
     amount = float(row.get("amount") or 0)
     rate_date = coerce_to_date(row.get("payment_date"), dims["created_at"].date())
@@ -282,8 +289,12 @@ async def _transform_line_item(
     paid_total = float(row.get("paid_total") or 0)
     site = row.get("site", "")
     rate_date = coerce_to_date(row.get("payment_date"), dims["created_at"].date())
-    expected_total_mxn, expected_total_usd = await convert_currency(expected_total, site, rate_date, rates)
-    expected_cost_mxn, expected_cost_usd = await convert_currency(expected_cost, site, rate_date, rates)
+    expected_total_mxn, expected_total_usd = await convert_currency(
+        expected_total, site, rate_date, rates
+    )
+    expected_cost_mxn, expected_cost_usd = await convert_currency(
+        expected_cost, site, rate_date, rates
+    )
     # Use the per-payment-date conversion if available; fall back to MAX-date
     # conversion only for cart_products not covered by the breakdown query.
     cp_id = int(row["cart_product_id"])
@@ -299,10 +310,16 @@ async def _transform_line_item(
         "cart_product_id": row["cart_product_id"],
         "cart_id": row["cart_id"],
         "product_id": row["product_id"],
-        "product_type": product_type if product_type in [e.value for e in ProductType] else ProductType.UNCATEGORIZED.value,
+        "product_type": product_type
+        if product_type in [e.value for e in ProductType]
+        else ProductType.UNCATEGORIZED.value,
         "exam_cat_name": exam_cat_name or None,
-        "exam_category": canonical_exam_category(exam_cat_name) if exam_cat_name else ExamCategory.UNCATEGORIZED.value,
-        "exam_canonical_name": canonical_exam_name(exam_cat_name) if exam_cat_name else "UNCATEGORIZED",
+        "exam_category": canonical_exam_category(exam_cat_name)
+        if exam_cat_name
+        else ExamCategory.UNCATEGORIZED.value,
+        "exam_canonical_name": canonical_exam_name(exam_cat_name)
+        if exam_cat_name
+        else "UNCATEGORIZED",
         "exam_date_type": row.get("exam_date_type"),
         "billing_status": PaymentStatus.APROBADO.value,
         "payment_status": PaymentStatus.APROBADO.value,
@@ -313,8 +330,12 @@ async def _transform_line_item(
         "expected_total": expected_total,
         "expected_cost": expected_cost,
         "discount": float(row["discount"]) if row.get("discount") is not None else None,
-        "book_commission": float(row["book_commission"]) if row.get("book_commission") is not None else None,
-        "exam_commission": float(row["exam_commission"]) if row.get("exam_commission") is not None else None,
+        "book_commission": float(row["book_commission"])
+        if row.get("book_commission") is not None
+        else None,
+        "exam_commission": float(row["exam_commission"])
+        if row.get("exam_commission") is not None
+        else None,
         "expected_total_mxn": expected_total_mxn,
         "expected_total_usd": expected_total_usd,
         "expected_cost_mxn": expected_cost_mxn,
@@ -336,7 +357,9 @@ async def _transform_line_item(
 async def _build_allocation_rows(allocation_rows_raw: list, rates: dict) -> list[dict]:
     cart_totals: dict[int, float] = {}
     for row in allocation_rows_raw:
-        cart_totals[int(row["cart_id"])] = cart_totals.get(int(row["cart_id"]), 0.0) + float(row["cp_total"] or 0)
+        cart_totals[int(row["cart_id"])] = cart_totals.get(int(row["cart_id"]), 0.0) + float(
+            row["cp_total"] or 0
+        )
 
     rows: list[dict] = []
     for raw_row in allocation_rows_raw:
@@ -371,7 +394,7 @@ async def _upsert_payments(session, rows: list[dict]) -> None:
         return
     chunk_size = 500
     for start in range(0, len(rows), chunk_size):
-        chunk = rows[start:start + chunk_size]
+        chunk = rows[start : start + chunk_size]
         await session.execute(
             text("""
                 INSERT INTO report_payments (
@@ -416,7 +439,7 @@ async def _upsert_line_items(session, rows: list[dict]) -> None:
         return
     chunk_size = 500
     for start in range(0, len(rows), chunk_size):
-        chunk = rows[start:start + chunk_size]
+        chunk = rows[start : start + chunk_size]
         await session.execute(
             text("""
                 INSERT INTO report_line_items (
@@ -497,7 +520,7 @@ async def _upsert_allocations(session, rows: list[dict]) -> None:
         return
     chunk_size = 500
     for start in range(0, len(rows), chunk_size):
-        chunk = rows[start:start + chunk_size]
+        chunk = rows[start : start + chunk_size]
         await session.execute(
             text("""
                 INSERT INTO report_payment_allocations (
@@ -530,22 +553,32 @@ async def _delete_line_items(session, cart_product_ids: list[int], cart_ids: lis
         )
 
 
-async def run_upsert(*, since: datetime | None = None, job_name: ETLJobName = ETLJobName.UPSERT) -> None:
+async def run_upsert(
+    *, since: datetime | None = None, job_name: ETLJobName = ETLJobName.UPSERT
+) -> None:
     start = datetime.now()
     since = since or (datetime.now() - timedelta(hours=3))
     try:
-        payment_rows_raw, line_item_rows_raw, allocation_rows_raw, deleted_cart_product_ids, deleted_cart_ids = await _extract_all(since)
-        if not payment_rows_raw and not line_item_rows_raw and not deleted_cart_product_ids and not deleted_cart_ids:
+        (
+            payment_rows_raw,
+            line_item_rows_raw,
+            allocation_rows_raw,
+            deleted_cart_product_ids,
+            deleted_cart_ids,
+        ) = await _extract_all(since)
+        if (
+            not payment_rows_raw
+            and not line_item_rows_raw
+            and not deleted_cart_product_ids
+            and not deleted_cart_ids
+        ):
             await log_etl_run(job_name, 0, "success", start)
             return
 
         all_lead_ids = {int(row["lead_id"]) for row in [*payment_rows_raw, *line_item_rows_raw]}
         all_rows = [*payment_rows_raw, *line_item_rows_raw, *allocation_rows_raw]
         all_dates = {dict(row)["created_at"].date() for row in all_rows}
-        all_dates |= {
-            d for row in all_rows
-            if (d := coerce_to_date(dict(row).get("payment_date")))
-        }
+        all_dates |= {d for row in all_rows if (d := coerce_to_date(dict(row).get("payment_date")))}
         ganados, perdidos, mantenidos = await calculate_business_status(all_lead_ids)
 
         # Fetch per-payment-date paid_total breakdown for all affected cart_products.
@@ -569,15 +602,22 @@ async def run_upsert(*, since: datetime | None = None, job_name: ETLJobName = ET
 
         # Include any new payment dates from the breakdown rows in the prefetch set.
         all_dates |= {
-            d for row in paid_total_date_rows
-            if (d := coerce_to_date(row.get("payment_date")))
+            d for row in paid_total_date_rows if (d := coerce_to_date(row.get("payment_date")))
         }
         rates = await prefetch_rates(all_dates)
 
         paid_total_converted = await _build_paid_total_converted(paid_total_date_rows, rates)
 
-        payment_rows = [await _transform_payment(dict(row), ganados, perdidos, mantenidos, rates) for row in payment_rows_raw]
-        line_item_rows = [await _transform_line_item(dict(row), ganados, perdidos, mantenidos, rates, paid_total_converted) for row in line_item_rows_raw]
+        payment_rows = [
+            await _transform_payment(dict(row), ganados, perdidos, mantenidos, rates)
+            for row in payment_rows_raw
+        ]
+        line_item_rows = [
+            await _transform_line_item(
+                dict(row), ganados, perdidos, mantenidos, rates, paid_total_converted
+            )
+            for row in line_item_rows_raw
+        ]
         allocation_rows = await _build_allocation_rows(allocation_rows_raw, rates)
 
         async with ReportingSessionLocal() as reporting:

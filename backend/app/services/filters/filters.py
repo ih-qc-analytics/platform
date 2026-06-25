@@ -3,6 +3,7 @@ from sqlalchemy import text
 from app.enums import PaymentStatus
 from app.schemas.reports import FilterOptionsResponse, SellerOptionsResponse
 
+
 # obtener los filtros geograficos disponibles en los datos, es decir todas las ciudades/zonas... donde
 # hay operaciones
 async def getFilters() -> FilterOptionsResponse:
@@ -27,13 +28,15 @@ async def getFilters() -> FilterOptionsResponse:
         result = await session.execute(t, {"payment_status": PaymentStatus.APROBADO.value})
         rows = result.fetchall()
         options = {"country": [], "zone": [], "state": [], "city": []}
-        for row in rows: 
+        for row in rows:
             options[row.filter_type].append(row.value)
-        
-        return FilterOptionsResponse(countries=options["country"],
-                                      zones=options["zone"],
-                                      states=options["state"], 
-                                      cities=options["city"])
+
+        return FilterOptionsResponse(
+            countries=options["country"],
+            zones=options["zone"],
+            states=options["state"],
+            cities=options["city"],
+        )
 
 
 async def getSellerOptions() -> SellerOptionsResponse:

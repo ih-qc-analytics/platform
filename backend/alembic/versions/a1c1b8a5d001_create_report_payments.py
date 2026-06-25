@@ -4,6 +4,7 @@ Revision ID: a1c1b8a5d001
 Revises: f41ed75db763
 Create Date: 2026-05-18
 """
+
 from typing import Sequence, Union
 
 from alembic import op
@@ -54,14 +55,22 @@ def upgrade() -> None:
     op.execute("CREATE INDEX IF NOT EXISTS idx_rp_zone           ON report_payments (zone_name)")
     op.execute("CREATE INDEX IF NOT EXISTS idx_rp_seller         ON report_payments (seller_id)")
     op.execute("CREATE INDEX IF NOT EXISTS idx_rp_lead           ON report_payments (lead_id)")
-    op.execute("CREATE INDEX IF NOT EXISTS idx_rp_payment_status ON report_payments (payment_status)")
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS idx_rp_payment_status ON report_payments (payment_status)"
+    )
     op.execute("CREATE INDEX IF NOT EXISTS idx_rp_is_active      ON report_payments (is_active)")
-    op.execute("CREATE INDEX IF NOT EXISTS idx_rp_business       ON report_payments (business_status)")
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS idx_rp_business       ON report_payments (business_status)"
+    )
     op.execute("CREATE INDEX IF NOT EXISTS idx_rp_created_at     ON report_payments (created_at)")
     op.execute("CREATE INDEX IF NOT EXISTS idx_rp_payment_date   ON report_payments (payment_date)")
-    op.execute("CREATE INDEX IF NOT EXISTS idx_rp_payment_active ON report_payments (payment_status, is_active)")
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS idx_rp_payment_active ON report_payments (payment_status, is_active)"
+    )
     op.execute("CREATE INDEX IF NOT EXISTS idx_rp_site_year      ON report_payments (site, year)")
-    op.execute("CREATE INDEX IF NOT EXISTS idx_rp_seller_year    ON report_payments (seller_id, year)")
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS idx_rp_seller_year    ON report_payments (seller_id, year)"
+    )
 
 
 def downgrade() -> None:

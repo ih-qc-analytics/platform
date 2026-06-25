@@ -4,6 +4,7 @@ Revision ID: a1c1b8a5d002
 Revises: a1c1b8a5d001
 Create Date: 2026-05-18
 """
+
 from typing import Sequence, Union
 
 from alembic import op
@@ -82,23 +83,43 @@ def upgrade() -> None:
     op.execute("CREATE INDEX IF NOT EXISTS idx_rli_seller       ON report_line_items (seller_id)")
     op.execute("CREATE INDEX IF NOT EXISTS idx_rli_lead         ON report_line_items (lead_id)")
     op.execute("CREATE INDEX IF NOT EXISTS idx_rli_cart         ON report_line_items (cart_id)")
-    op.execute("CREATE INDEX IF NOT EXISTS idx_rli_product_type ON report_line_items (product_type)")
-    op.execute("CREATE INDEX IF NOT EXISTS idx_rli_exam_cat     ON report_line_items (exam_category)")
-    op.execute("CREATE INDEX IF NOT EXISTS idx_rli_exam_name    ON report_line_items (exam_canonical_name)")
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS idx_rli_product_type ON report_line_items (product_type)"
+    )
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS idx_rli_exam_cat     ON report_line_items (exam_category)"
+    )
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS idx_rli_exam_name    ON report_line_items (exam_canonical_name)"
+    )
     op.execute("CREATE INDEX IF NOT EXISTS idx_rli_created_at   ON report_line_items (created_at)")
-    op.execute("CREATE INDEX IF NOT EXISTS idx_rli_payment_date ON report_line_items (payment_date)")
-    op.execute("CREATE INDEX IF NOT EXISTS idx_rli_seller_year  ON report_line_items (seller_id, year)")
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS idx_rli_payment_date ON report_line_items (payment_date)"
+    )
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS idx_rli_seller_year  ON report_line_items (seller_id, year)"
+    )
     op.execute("CREATE INDEX IF NOT EXISTS idx_rli_site_year    ON report_line_items (site, year)")
-    op.execute("CREATE INDEX IF NOT EXISTS idx_rli_year_product ON report_line_items (year, product_type)")
-    op.execute("CREATE INDEX IF NOT EXISTS idx_rli_payment_stat ON report_line_items (payment_status)")
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS idx_rli_year_product ON report_line_items (year, product_type)"
+    )
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS idx_rli_payment_stat ON report_line_items (payment_status)"
+    )
     op.execute("CREATE INDEX IF NOT EXISTS idx_rli_active       ON report_line_items (is_active)")
-    op.execute("CREATE INDEX IF NOT EXISTS idx_rli_include_pd   ON report_line_items (include_in_product_breakdown)")
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS idx_rli_include_pd   ON report_line_items (include_in_product_breakdown)"
+    )
     op.execute("""
         CREATE INDEX IF NOT EXISTS idx_rli_search ON report_line_items
         USING gin(to_tsvector('spanish', coalesce(seller_name,'') || ' ' || coalesce(school_name,'')))
     """)
-    op.execute("CREATE INDEX IF NOT EXISTS idx_rli_state_names_gin ON report_line_items USING gin (state_names)")
-    op.execute("CREATE INDEX IF NOT EXISTS idx_rli_city_names_gin ON report_line_items USING gin (city_names)")
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS idx_rli_state_names_gin ON report_line_items USING gin (state_names)"
+    )
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS idx_rli_city_names_gin ON report_line_items USING gin (city_names)"
+    )
 
 
 def downgrade() -> None:

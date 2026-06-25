@@ -11,7 +11,10 @@ from app.services.exports.pdf_helpers import (
     scale_series,
 )
 from app.services.total_sales.total_sales import build_ventas_totales_pdf_payload
-from app.services.utils.currency_rates import build_country_rates_for_mxn, build_country_rates_derived_table
+from app.services.utils.currency_rates import (
+    build_country_rates_for_mxn,
+    build_country_rates_derived_table,
+)
 
 
 MOCK_RESPONSE = TotalSalesResponse(
@@ -70,7 +73,12 @@ async def test_build_ventas_totales_pdf_payload_formats_kpis_and_scales_series()
     assert [item.model_dump() for item in payload.kpis[:4]] == [
         {"label": "Total Clientes", "value": "3", "growth": None, "growth_positive": None},
         {"label": "Total Exámenes", "value": "6", "growth": None, "growth_positive": None},
-        {"label": "Ingreso por Exámenes", "value": "$6,000", "growth": None, "growth_positive": None},
+        {
+            "label": "Ingreso por Exámenes",
+            "value": "$6,000",
+            "growth": None,
+            "growth_positive": None,
+        },
         {"label": "Total Libros", "value": "3", "growth": None, "growth_positive": None},
     ]
     assert any(item.label == "Otros" and item.value == "2" for item in payload.kpis)
@@ -78,9 +86,7 @@ async def test_build_ventas_totales_pdf_payload_formats_kpis_and_scales_series()
     assert any(item.label == "Ingreso Esperado" and item.value == "$7,300" for item in payload.kpis)
     assert any(item.label == "Sin Categorizar" and item.value == "$800" for item in payload.kpis)
     assert any(
-        item.label == "Ingreso Total"
-        and item.growth == "+5.4%"
-        and item.growth_positive is True
+        item.label == "Ingreso Total" and item.growth == "+5.4%" and item.growth_positive is True
         for item in payload.kpis
     )
     assert payload.trend_points[0].model_dump() == {

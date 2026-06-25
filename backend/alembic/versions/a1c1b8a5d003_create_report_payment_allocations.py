@@ -4,6 +4,7 @@ Revision ID: a1c1b8a5d003
 Revises: a1c1b8a5d002
 Create Date: 2026-05-18
 """
+
 from typing import Sequence, Union
 
 from alembic import op
@@ -28,8 +29,12 @@ def upgrade() -> None:
             CONSTRAINT uq_payment_cart_product UNIQUE (payment_id, cart_product_id)
         )
     """)
-    op.execute("CREATE INDEX IF NOT EXISTS idx_rpa_payment      ON report_payment_allocations (payment_id)")
-    op.execute("CREATE INDEX IF NOT EXISTS idx_rpa_cart_product ON report_payment_allocations (cart_product_id)")
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS idx_rpa_payment      ON report_payment_allocations (payment_id)"
+    )
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS idx_rpa_cart_product ON report_payment_allocations (cart_product_id)"
+    )
 
 
 def downgrade() -> None:

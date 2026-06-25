@@ -1,6 +1,7 @@
 PYTEST   = .venv/bin/pytest
 UVICORN  = .venv/bin/uvicorn
 PYTHON   = .venv/bin/python
+RUFF     = .venv/bin/ruff
 
 run:
 	$(UVICORN) app.main:app --host 0.0.0.0 --port 8000 --reload
@@ -37,3 +38,30 @@ migrate-status:
 
 exchange-rate-backfill:
 	$(PYTHON) tools/backfill_exchange_rates.py
+
+lint:
+	$(RUFF) check .
+
+format:
+	$(RUFF) format .
+
+format-check:
+	$(RUFF) format --check .
+
+build-check:
+	$(PYTHON) -m compileall -q app
+
+ci: lint format-check build-check test
+
+db-up:
+	docker-compose -f ../docker-compose.yml up mysql -d
+
+db-down:
+	docker-compose -f ../docker-compose.yml down
+
+db-logs:
+	docker logs platform-mysql-1
+
+db-reset:
+	docker-compose -f ../docker-compose.yml down -v
+	docker-compose -f ../docker-compose.yml up mysql -d

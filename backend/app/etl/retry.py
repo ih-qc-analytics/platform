@@ -24,7 +24,7 @@ async def async_retry(
         except exceptions as exc:
             last_exc = exc
             if attempt < attempts - 1:
-                delay = backoff_base ** attempt  # 1s, 2s, 4s
+                delay = backoff_base**attempt  # 1s, 2s, 4s
                 logger.warning(
                     "Attempt %d/%d failed (%s), retrying in %.0fs",
                     attempt + 1,

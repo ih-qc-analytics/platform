@@ -17,7 +17,7 @@ const readStoredBaseCurrency = (): BaseCurrency => {
 let currentBaseCurrency: BaseCurrency = readStoredBaseCurrency()
 
 const emitChange = () => {
-    listeners.forEach(listener => listener())
+    listeners.forEach((listener) => listener())
 }
 
 export const getStoredBaseCurrency = (): BaseCurrency => {
@@ -40,5 +40,4 @@ const subscribe = (listener: () => void) => {
     return () => listeners.delete(listener)
 }
 
-export const useBaseCurrency = (): BaseCurrency =>
-    useSyncExternalStore(subscribe, getStoredBaseCurrency, () => "MXN")
+export const useBaseCurrency = (): BaseCurrency => useSyncExternalStore(subscribe, getStoredBaseCurrency, () => "MXN")

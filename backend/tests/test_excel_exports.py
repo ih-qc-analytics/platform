@@ -79,7 +79,9 @@ async def test_excel_response_round_trips_headers_unicode_and_content_type():
     workbook = await workbook_from_response(response)
     sheet = workbook["Resumen"]
 
-    assert response.media_type == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    assert (
+        response.media_type == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
     assert response.headers["content-disposition"] == 'attachment; filename="demo.xlsx"'
     assert row_values(sheet, 1, 2) == ["Name", "Notes"]
     assert row_values(sheet, 2, 2) == ["José", "x" * 80]
@@ -130,7 +132,9 @@ async def test_total_sales_export_builds_summary_and_chart_sheets(ui_dev_reporti
 
 
 @pytest.mark.asyncio(loop_scope="session")
-async def test_por_asesor_export_all_ignores_optional_filters_and_adds_detail_sheet(ui_dev_reporting_db):
+async def test_por_asesor_export_all_ignores_optional_filters_and_adds_detail_sheet(
+    ui_dev_reporting_db,
+):
     filters = AsesorFilters(
         year=2025,
         sellers=["Carlos Rodriguez"],
@@ -178,26 +182,40 @@ async def test_por_asesor_export_all_ignores_optional_filters_and_adds_detail_sh
     assert detail_sheet["A2"].value == "Carlos Rodriguez"
     assert detail_sheet["B2"].value == "colombia"
     assert detail_sheet["F2"].value == 2
-    assert detail_sheet.cell(
-        row=2,
-        column=header_index(detail_sheet, "Cambridge English (Main Suite) Exams"),
-    ).value == 2
-    assert detail_sheet.cell(
-        row=2,
-        column=header_index(detail_sheet, "Ganados Schools"),
-    ).value == 1
-    assert detail_sheet.cell(
-        row=2,
-        column=header_index(detail_sheet, "Ganados Exams"),
-    ).value == 3
-    assert detail_sheet.cell(
-        row=2,
-        column=header_index(detail_sheet, "Ganados Revenue"),
-    ).value == 3500
+    assert (
+        detail_sheet.cell(
+            row=2,
+            column=header_index(detail_sheet, "Cambridge English (Main Suite) Exams"),
+        ).value
+        == 2
+    )
+    assert (
+        detail_sheet.cell(
+            row=2,
+            column=header_index(detail_sheet, "Ganados Schools"),
+        ).value
+        == 1
+    )
+    assert (
+        detail_sheet.cell(
+            row=2,
+            column=header_index(detail_sheet, "Ganados Exams"),
+        ).value
+        == 3
+    )
+    assert (
+        detail_sheet.cell(
+            row=2,
+            column=header_index(detail_sheet, "Ganados Revenue"),
+        ).value
+        == 3500
+    )
 
 
 @pytest.mark.asyncio(loop_scope="session")
-async def test_detalle_export_preserves_canonical_exam_columns_and_headers_only_for_empty_ranges(ui_dev_reporting_db):
+async def test_detalle_export_preserves_canonical_exam_columns_and_headers_only_for_empty_ranges(
+    ui_dev_reporting_db,
+):
     export_filters = build_detalle_export_filters_for_all(
         DetalleFilters(
             date_from="2025-01-01",
@@ -217,7 +235,9 @@ async def test_detalle_export_preserves_canonical_exam_columns_and_headers_only_
         generate_excel_response("detalle-asesor-all", build_detalle_export_worksheets(report))
     )
     empty_workbook = await workbook_from_response(
-        generate_excel_response("detalle-asesor-empty", build_detalle_export_worksheets(empty_report))
+        generate_excel_response(
+            "detalle-asesor-empty", build_detalle_export_worksheets(empty_report)
+        )
     )
 
     sheet = workbook["Detalle Asesor"]

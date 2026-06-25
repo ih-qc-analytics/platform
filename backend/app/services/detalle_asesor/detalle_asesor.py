@@ -92,7 +92,7 @@ async def _fetch_current_base(filters: DetalleFilters) -> DetalleReportBase:
     """
     async with ReportingSessionLocal() as session:
         records = (await session.execute(text(query), params)).fetchall()
-    rows = [_row_from_record(row) for row in records[:filters.page_size]]
+    rows = [_row_from_record(row) for row in records[: filters.page_size]]
     has_more = len(records) > filters.page_size
     next_cursor = rows[-1].id if has_more and rows else None
     return DetalleReportBase(rows=rows, next_cursor=next_cursor, has_more=has_more)
@@ -104,25 +104,47 @@ async def getDetalleData(filters: DetalleFilters) -> DetalleReportResponse:
 
 
 def build_detalle_export_filters_for_all(filters: DetalleFilters) -> DetalleFilters:
-    return filters.model_copy(update={"countries": [], "zones": [], "states": [], "cities": [], "search": None, "cursor": None, "page_size": 500, "show_comparison": False})
+    return filters.model_copy(
+        update={
+            "countries": [],
+            "zones": [],
+            "states": [],
+            "cities": [],
+            "search": None,
+            "cursor": None,
+            "page_size": 500,
+            "show_comparison": False,
+        }
+    )
 
 
 async def getAllDetalleRows(filters: DetalleFilters) -> DetalleReportResponse:
     all_rows: list[DetalleRow] = []
     cursor = filters.cursor
     while True:
-        page = await getDetalleData(filters.model_copy(update={"cursor": cursor, "show_comparison": False}))
+        page = await getDetalleData(
+            filters.model_copy(update={"cursor": cursor, "show_comparison": False})
+        )
         all_rows.extend(page.current.rows)
         if not page.current.has_more or page.current.next_cursor is None:
             break
         cursor = page.current.next_cursor
-    return DetalleReportResponse(current=DetalleReportBase(rows=all_rows, next_cursor=None, has_more=False), comparison_mode=None, comparison=None)
+    return DetalleReportResponse(
+        current=DetalleReportBase(rows=all_rows, next_cursor=None, has_more=False),
+        comparison_mode=None,
+        comparison=None,
+    )
 
 
 def build_detalle_export_worksheets(report: DetalleReportResponse) -> list[ExcelWorksheetSpec]:
     rows = []
     for row in report.current.rows:
-        export_row = {"seller_name": row.seller_name, "school_name": row.school_name, "exam_date": row.exam_date, "total": row.total}
+        export_row = {
+            "seller_name": row.seller_name,
+            "school_name": row.school_name,
+            "exam_date": row.exam_date,
+            "total": row.total,
+        }
         for name in DETALLE_EXAM_NAME_ORDER:
             export_row[name] = int(row.exam_counts.get(name, 0) or 0)
         rows.append(export_row)
@@ -132,16 +154,43 @@ def build_detalle_export_worksheets(report: DetalleReportResponse) -> list[Excel
 async def build_detalle_asesor_pdf_payload(filters: DetalleFilters) -> DetalleAsesorPDFPayload:
     report = await getAllDetalleRows(build_detalle_export_filters_for_all(filters))
     identity_rows = [
-        PDFTableRow(cells=[row.seller_name, row.school_name, format_date(row.exam_date) if row.exam_date else "-", format_integer(row.total)])
+        PDFTableRow(
+            cells=[
+                row.seller_name,
+                row.school_name,
+                format_date(row.exam_date) if row.exam_date else "-",
+                format_integer(row.total),
+            ]
+        )
         for row in report.current.rows
     ]
     exam_rows = [
-        PDFTableRow(cells=[row.seller_name, row.school_name, *[format_integer(row.exam_counts.get(name, 0) or 0) for name in DETALLE_EXAM_NAME_ORDER], format_integer(row.total)])
+        PDFTableRow(
+            cells=[
+                row.seller_name,
+                row.school_name,
+                *[
+                    format_integer(row.exam_counts.get(name, 0) or 0)
+                    for name in DETALLE_EXAM_NAME_ORDER
+                ],
+                format_integer(row.total),
+            ]
+        )
         for row in report.current.rows
     ]
     return DetalleAsesorPDFPayload(
-        header=build_pdf_header("Detalle por Asesor", "Desglose por asesor, escuela y fecha de examen", filters),
-        table_identity=PDFTable(headers=["Asesor", "Escuela", "Fecha", "Total"], rows=identity_rows, column_widths=[3, 4, 2, 1]),
-        table_exams=PDFTable(headers=["Asesor", "Escuela", *DETALLE_EXAM_NAME_ORDER, "Total"], rows=exam_rows, column_widths=[3, 4, *([1] * len(DETALLE_EXAM_NAME_ORDER)), 1]),
+        header=build_pdf_header(
+            "Detalle por Asesor", "Desglose por asesor, escuela y fecha de examen", filters
+        ),
+        table_identity=PDFTable(
+            headers=["Asesor", "Escuela", "Fecha", "Total"],
+            rows=identity_rows,
+            column_widths=[3, 4, 2, 1],
+        ),
+        table_exams=PDFTable(
+            headers=["Asesor", "Escuela", *DETALLE_EXAM_NAME_ORDER, "Total"],
+            rows=exam_rows,
+            column_widths=[3, 4, *([1] * len(DETALLE_EXAM_NAME_ORDER)), 1],
+        ),
         orientation="landscape",
     )

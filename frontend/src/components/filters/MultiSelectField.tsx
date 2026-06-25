@@ -30,22 +30,18 @@ export default function MultiSelectField({
     triggerClassName = "",
 }: MultiSelectFieldProps) {
     const cleanedOptions = cleanOptions(options)
-    const selected = values.filter(value => cleanedOptions.includes(value))
+    const selected = values.filter((value) => cleanedOptions.includes(value))
 
     const toggleValue = (value: string) => {
         if (selected.includes(value)) {
-            onChange(selected.filter(item => item !== value))
+            onChange(selected.filter((item) => item !== value))
             return
         }
         onChange([...selected, value])
     }
 
     const triggerLabel =
-        selected.length === 0
-            ? label
-            : selected.length === 1
-              ? selected[0]
-              : `${selected.length} seleccionados`
+        selected.length === 0 ? label : selected.length === 1 ? selected[0] : `${selected.length} seleccionados`
 
     return (
         <FilterFieldShell label={label} className={cn(FILTER_FIELD_WIDTH_CLASS, triggerClassName)}>
@@ -53,11 +49,7 @@ export default function MultiSelectField({
                 <DropdownMenuTrigger asChild>
                     <Button
                         variant="outline"
-                        className={cn(
-                            FILTER_BUTTON_CLASS,
-                            FILTER_CONTROL_CLASS,
-                            "justify-between text-left",
-                        )}
+                        className={cn(FILTER_BUTTON_CLASS, FILTER_CONTROL_CLASS, "justify-between text-left")}
                     >
                         <span className="truncate">{triggerLabel}</span>
                         <ChevronDown className="size-4 text-slate-500" />
@@ -76,7 +68,7 @@ export default function MultiSelectField({
                         Limpiar selección
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
-                    {cleanedOptions.map(option => (
+                    {cleanedOptions.map((option) => (
                         <DropdownMenuCheckboxItem
                             key={option}
                             className="rounded-xl py-2 pl-8 pr-3"
@@ -92,6 +84,7 @@ export default function MultiSelectField({
     )
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function cleanOptions(options: string[]) {
-    return [...new Set(options.map(option => option.trim()).filter(Boolean))]
+    return [...new Set(options.map((option) => option.trim()).filter(Boolean))]
 }

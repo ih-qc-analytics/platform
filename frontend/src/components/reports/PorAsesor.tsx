@@ -8,14 +8,7 @@ import ReportPagination from "@/components/reports/ReportPagination"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
-import {
-    Table,
-    TableBody,
-    TableCell,
-    TableHead,
-    TableHeader,
-    TableRow,
-} from "@/components/ui/table"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { useAsesorReport, useFilterOptions, useSellerOptions } from "@/hooks/useReports"
 import useCursorPagination from "@/hooks/useCursorPagination"
 import type { AsesorFilters, AsesorRow } from "@/types"
@@ -38,11 +31,10 @@ export default function PorAsesor() {
     const { data: sellerOptionsResponse } = useSellerOptions()
     const sellerOptions = useMemo(() => sellerOptionsResponse?.sellers ?? [], [sellerOptionsResponse?.sellers])
     const normalizedFilters = useMemo(
-        () =>
-            ({
-                ...filters,
-                sellers: (filters.sellers ?? []).filter(seller => sellerOptions.includes(seller)),
-            }),
+        () => ({
+            ...filters,
+            sellers: (filters.sellers ?? []).filter((seller) => sellerOptions.includes(seller)),
+        }),
         [filters, sellerOptions],
     )
     const requestFilters = useMemo(
@@ -56,7 +48,7 @@ export default function PorAsesor() {
     const { data, isLoading, isError } = useAsesorReport(requestFilters)
     const showComparisonValues = Boolean(filters.show_comparison && data?.comparison)
     const comparisonRowsBySeller = useMemo(
-        () => new Map((data?.comparison?.data.rows ?? []).map(row => [row.seller_id, row])),
+        () => new Map((data?.comparison?.data.rows ?? []).map((row) => [row.seller_id, row])),
         [data?.comparison?.data.rows],
     )
 
@@ -98,7 +90,7 @@ export default function PorAsesor() {
                 filters={normalizedFilters}
                 options={filterOptions}
                 sellerOptions={sellerOptions}
-                onFiltersChange={nextFilters => {
+                onFiltersChange={(nextFilters) => {
                     reset()
                     setExportError(null)
                     setFilters(nextFilters)
@@ -125,12 +117,14 @@ export default function PorAsesor() {
                         </div>
                     )}
 
-                {isLoading ? (
-                    <SummaryTableSkeleton />
-                ) : rows.length === 0 ? (
-                    <div className="px-6 py-10 text-sm text-muted-foreground">No hay resultados para los filtros seleccionados.</div>
-                ) : (
-                    <>
+                    {isLoading ? (
+                        <SummaryTableSkeleton />
+                    ) : rows.length === 0 ? (
+                        <div className="px-6 py-10 text-sm text-muted-foreground">
+                            No hay resultados para los filtros seleccionados.
+                        </div>
+                    ) : (
+                        <>
                             <div className="overflow-x-auto">
                                 <Table className="min-w-max">
                                     <TableHeader>
@@ -138,21 +132,34 @@ export default function PorAsesor() {
                                             <TableHeadCell className="sticky left-0 z-10 min-w-44 whitespace-nowrap bg-card text-left">
                                                 Asesor
                                             </TableHeadCell>
-                                            {TABLE_DISPLAY_GROUPS.map(group => (
-                                                <TableHeadCell key={group.label} className="min-w-28 whitespace-nowrap text-right">
+                                            {TABLE_DISPLAY_GROUPS.map((group) => (
+                                                <TableHeadCell
+                                                    key={group.label}
+                                                    className="min-w-28 whitespace-nowrap text-right"
+                                                >
                                                     {group.label}
                                                 </TableHeadCell>
                                             ))}
-                                            <TableHeadCell className="min-w-24 whitespace-nowrap text-center">Ganados</TableHeadCell>
-                                            <TableHeadCell className="min-w-24 whitespace-nowrap text-center">Perdidos</TableHeadCell>
-                                            <TableHeadCell className="min-w-28 whitespace-nowrap text-center">Mantenidos</TableHeadCell>
-                                            <TableHeadCell className="min-w-36 whitespace-nowrap text-right">Sin Categorizar</TableHeadCell>
-                                            <TableHeadCell className="min-w-36 whitespace-nowrap text-right">Valor Total</TableHeadCell>
+                                            <TableHeadCell className="min-w-24 whitespace-nowrap text-center">
+                                                Ganados
+                                            </TableHeadCell>
+                                            <TableHeadCell className="min-w-24 whitespace-nowrap text-center">
+                                                Perdidos
+                                            </TableHeadCell>
+                                            <TableHeadCell className="min-w-28 whitespace-nowrap text-center">
+                                                Mantenidos
+                                            </TableHeadCell>
+                                            <TableHeadCell className="min-w-36 whitespace-nowrap text-right">
+                                                Sin Categorizar
+                                            </TableHeadCell>
+                                            <TableHeadCell className="min-w-36 whitespace-nowrap text-right">
+                                                Valor Total
+                                            </TableHeadCell>
                                             <TableHeadCell className="w-10" />
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
-                                        {rows.map(row => {
+                                        {rows.map((row) => {
                                             const previousRow = comparisonRowsBySeller.get(row.seller_id)
 
                                             return (
@@ -161,7 +168,7 @@ export default function PorAsesor() {
                                                     tabIndex={0}
                                                     role="button"
                                                     onClick={() => setSelectedRow(row)}
-                                                    onKeyDown={event => {
+                                                    onKeyDown={(event) => {
                                                         if (event.key === "Enter" || event.key === " ") {
                                                             event.preventDefault()
                                                             setSelectedRow(row)
@@ -172,14 +179,15 @@ export default function PorAsesor() {
                                                     <TableBodyCell className="sticky left-0 z-10 bg-card font-semibold text-slate-900 group-hover:bg-muted/30 group-focus-visible:bg-muted/30">
                                                         {row.seller_name}
                                                     </TableBodyCell>
-                                                    {TABLE_DISPLAY_GROUPS.map(group => {
+                                                    {TABLE_DISPLAY_GROUPS.map((group) => {
                                                         const value = group.categories.reduce(
                                                             (sum, cat) => sum + (row.exam_breakdown[cat] ?? 0),
                                                             0,
                                                         )
                                                         const previousValue = previousRow
                                                             ? group.categories.reduce(
-                                                                  (sum, cat) => sum + (previousRow.exam_breakdown[cat] ?? 0),
+                                                                  (sum, cat) =>
+                                                                      sum + (previousRow.exam_breakdown[cat] ?? 0),
                                                                   0,
                                                               )
                                                             : undefined
@@ -250,7 +258,7 @@ export default function PorAsesor() {
 
             <DetalleAsesor
                 open={selectedRow !== null}
-                onOpenChange={open => {
+                onOpenChange={(open) => {
                     if (!open) setSelectedRow(null)
                 }}
                 sellerId={selectedRow?.seller_id ?? null}
@@ -261,13 +269,7 @@ export default function PorAsesor() {
     )
 }
 
-function TableHeadCell({
-    className,
-    children,
-}: {
-    className?: string
-    children?: React.ReactNode
-}) {
+function TableHeadCell({ className, children }: { className?: string; children?: React.ReactNode }) {
     return (
         <TableHead className={cn("px-3 py-3 text-xs font-semibold uppercase tracking-wide text-slate-700", className)}>
             {children}
@@ -275,13 +277,7 @@ function TableHeadCell({
     )
 }
 
-function TableBodyCell({
-    className,
-    children,
-}: {
-    className?: string
-    children: React.ReactNode
-}) {
+function TableBodyCell({ className, children }: { className?: string; children: React.ReactNode }) {
     return <TableCell className={cn("px-3 py-3 text-sm text-slate-700", className)}>{children}</TableCell>
 }
 
@@ -302,15 +298,17 @@ function TableMetricCell({
 }) {
     const comparison = getPercentChange(value, previousValue)
     const alignmentClassName =
-        align === "right" ? "items-end text-right" : align === "left" ? "items-start text-left" : "items-center text-center"
+        align === "right"
+            ? "items-end text-right"
+            : align === "left"
+              ? "items-start text-left"
+              : "items-center text-center"
 
     return (
         <TableBodyCell>
             <div className={cn("flex flex-col gap-1", alignmentClassName)}>
                 <span className={cn("text-sm", emphasize && "font-semibold text-slate-900")}>{format(value)}</span>
-                {showComparison && (
-                    <ComparisonText value={comparison} />
-                )}
+                {showComparison && <ComparisonText value={comparison} />}
             </div>
         </TableBodyCell>
     )
@@ -328,12 +326,7 @@ function TableBadgeCell({
     showComparison: boolean
 }) {
     const comparison = getPercentChange(value, previousValue)
-    const badgeVariant =
-        tone === "success"
-            ? "success"
-            : tone === "danger"
-              ? "danger"
-              : "info"
+    const badgeVariant = tone === "success" ? "success" : tone === "danger" ? "danger" : "info"
 
     return (
         <TableBodyCell>

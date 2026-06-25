@@ -18,7 +18,9 @@ async def test_por_asesor_2025_summary_orders_sellers_by_payment_revenue(ui_dev_
 
 
 @pytest.mark.asyncio(loop_scope="session")
-async def test_por_asesor_2025_summary_uses_allocated_exam_breakdowns_and_payment_status_sets(ui_dev_reporting_db):
+async def test_por_asesor_2025_summary_uses_allocated_exam_breakdowns_and_payment_status_sets(
+    ui_dev_reporting_db,
+):
     result = await getAsesorReport(AsesorFilters(year=2025))
     by_name = {row.seller_name: row for row in result.rows}
 
@@ -109,7 +111,9 @@ async def test_por_asesor_summary_supports_seller_country_and_zone_filters(ui_de
 
 
 @pytest.mark.asyncio(loop_scope="session")
-async def test_por_asesor_detail_for_ana_matches_expected_paid_geo_breakdown_and_statuses(ui_dev_reporting_db):
+async def test_por_asesor_detail_for_ana_matches_expected_paid_geo_breakdown_and_statuses(
+    ui_dev_reporting_db,
+):
     result = await getAsesorDetail(1, AsesorFilters(year=2025))
 
     assert result.model_dump() == {
@@ -137,7 +141,9 @@ async def test_por_asesor_detail_for_ana_matches_expected_paid_geo_breakdown_and
 
 
 @pytest.mark.asyncio(loop_scope="session")
-async def test_por_asesor_detail_for_carlos_matches_expected_paid_geo_breakdown_and_statuses(ui_dev_reporting_db):
+async def test_por_asesor_detail_for_carlos_matches_expected_paid_geo_breakdown_and_statuses(
+    ui_dev_reporting_db,
+):
     result = await getAsesorDetail(2, AsesorFilters(year=2025))
 
     assert result.model_dump() == {
@@ -165,14 +171,18 @@ async def test_por_asesor_detail_for_carlos_matches_expected_paid_geo_breakdown_
 
 
 @pytest.mark.asyncio(loop_scope="session")
-async def test_por_asesor_detail_for_fully_allocated_sellers_reconciles_total_to_ganados_plus_mantenidos(ui_dev_reporting_db):
+async def test_por_asesor_detail_for_fully_allocated_sellers_reconciles_total_to_ganados_plus_mantenidos(
+    ui_dev_reporting_db,
+):
     for seller_id in (1, 2, 3):
         result = await getAsesorDetail(seller_id, AsesorFilters(year=2025))
         assert result.total_revenue == result.ganados.revenue + result.mantenidos.revenue
 
 
 @pytest.mark.asyncio(loop_scope="session")
-async def test_por_asesor_detail_for_miguel_keeps_unallocated_payment_gap_visible(ui_dev_reporting_db):
+async def test_por_asesor_detail_for_miguel_keeps_unallocated_payment_gap_visible(
+    ui_dev_reporting_db,
+):
     result = await getAsesorDetail(4, AsesorFilters(year=2025))
 
     assert result.total_revenue == 1000.0

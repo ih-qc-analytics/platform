@@ -28,11 +28,7 @@ export const useAsesorReport = (filters: AsesorFilters, enabled = true) => {
     })
 }
 
-export const useAsesorDetail = (
-    sellerId: number | null,
-    filters: AsesorFilters,
-    enabled = true,
-) => {
+export const useAsesorDetail = (sellerId: number | null, filters: AsesorFilters, enabled = true) => {
     const baseCurrency = useBaseCurrency()
     return useQuery({
         queryKey: ["por-asesor-detail", baseCurrency, sellerId, JSON.stringify(filters)],
@@ -59,11 +55,7 @@ export const usePorPaisReport = (filters: PorPaisFilters, enabled = true) => {
     })
 }
 
-export const usePorPaisDetail = (
-    country: string | null,
-    filters: PorPaisFilters,
-    enabled = true,
-) => {
+export const usePorPaisDetail = (country: string | null, filters: PorPaisFilters, enabled = true) => {
     const baseCurrency = useBaseCurrency()
     return useQuery({
         queryKey: ["por-pais-detail", baseCurrency, country, JSON.stringify(filters)],

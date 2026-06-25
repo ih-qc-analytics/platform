@@ -7,7 +7,11 @@ from sqlalchemy import text
 from app.config import settings
 from app.etl.dimensional_refresh import run_dimensional_refresh
 from app.etl.exchange_rate_backfill import ensure_exchange_rates_for_range
-from app.etl.frankfurter import FXRateFetchError, fetch_frankfurter_rate, fetch_frankfurter_time_series
+from app.etl.frankfurter import (
+    FXRateFetchError,
+    fetch_frankfurter_rate,
+    fetch_frankfurter_time_series,
+)
 from app.etl.startup_backfill import (
     STARTUP_BACKFILL_FLOOR,
     get_startup_backfill_since,
@@ -215,7 +219,9 @@ async def test_exchange_rate_backfill_honors_full_requested_range(
     bind_test_reporting_database(reporting_session_factory)
     async with reporting_engine.begin() as conn:
         await conn.execute(
-            text("TRUNCATE report_payment_allocations, report_payments, report_line_items, exchange_rates, etl_meta RESTART IDENTITY")
+            text(
+                "TRUNCATE report_payment_allocations, report_payments, report_line_items, exchange_rates, etl_meta RESTART IDENTITY"
+            )
         )
 
     async def fake_fetch_time_series(
@@ -242,14 +248,14 @@ async def test_exchange_rate_backfill_honors_full_requested_range(
             current_date += timedelta(days=1)
         return rows
 
-    monkeypatch.setattr("app.etl.exchange_rate_backfill.fetch_frankfurter_time_series", fake_fetch_time_series)
+    monkeypatch.setattr(
+        "app.etl.exchange_rate_backfill.fetch_frankfurter_time_series", fake_fetch_time_series
+    )
 
     await ensure_exchange_rates_for_range(date(2025, 1, 1), date(2025, 1, 2))
 
     async with reporting_engine.connect() as conn:
-        count = (
-            await conn.execute(text("SELECT COUNT(*) FROM exchange_rates"))
-        ).scalar()
+        count = (await conn.execute(text("SELECT COUNT(*) FROM exchange_rates"))).scalar()
 
     assert count == 10
 
@@ -262,7 +268,9 @@ async def test_business_status_classifies_seeded_leads(ui_dev_db):
     perdido_id = await seed_lead_with_payment(year_current=False, year_prior=True)
     mantenido_id = await seed_lead_with_payment(year_current=True, year_prior=True)
 
-    ganados, perdidos, mantenidos = await calculate_business_status({ganado_id, perdido_id, mantenido_id})
+    ganados, perdidos, mantenidos = await calculate_business_status(
+        {ganado_id, perdido_id, mantenido_id}
+    )
     assert ganado_id in ganados
     assert perdido_id in perdidos
     assert mantenido_id in mantenidos
@@ -272,8 +280,12 @@ async def test_business_status_classifies_seeded_leads(ui_dev_db):
 async def test_upsert_populates_all_three_reporting_tables(ui_dev_reporting_db, reporting_engine):
     async with reporting_engine.connect() as conn:
         payment_count = (await conn.execute(text("SELECT COUNT(*) FROM report_payments"))).scalar()
-        line_item_count = (await conn.execute(text("SELECT COUNT(*) FROM report_line_items"))).scalar()
-        allocation_count = (await conn.execute(text("SELECT COUNT(*) FROM report_payment_allocations"))).scalar()
+        line_item_count = (
+            await conn.execute(text("SELECT COUNT(*) FROM report_line_items"))
+        ).scalar()
+        allocation_count = (
+            await conn.execute(text("SELECT COUNT(*) FROM report_payment_allocations"))
+        ).scalar()
 
     assert payment_count == 14
     assert line_item_count == 14
@@ -281,7 +293,9 @@ async def test_upsert_populates_all_three_reporting_tables(ui_dev_reporting_db, 
 
 
 @pytest.mark.asyncio(loop_scope="session")
-async def test_line_items_include_unpaid_products_in_approved_payment_carts(ui_dev_reporting_db, reporting_engine):
+async def test_line_items_include_unpaid_products_in_approved_payment_carts(
+    ui_dev_reporting_db, reporting_engine
+):
     async with reporting_engine.connect() as conn:
         row = (
             await conn.execute(
@@ -301,7 +315,9 @@ async def test_line_items_include_unpaid_products_in_approved_payment_carts(ui_d
 
 
 @pytest.mark.asyncio(loop_scope="session")
-async def test_line_items_aggregate_paid_totals_without_duplication(ui_dev_reporting_db, reporting_engine):
+async def test_line_items_aggregate_paid_totals_without_duplication(
+    ui_dev_reporting_db, reporting_engine
+):
     async with reporting_engine.connect() as conn:
         row = (
             await conn.execute(
@@ -320,7 +336,9 @@ async def test_line_items_aggregate_paid_totals_without_duplication(ui_dev_repor
 
 
 @pytest.mark.asyncio(loop_scope="session")
-async def test_payment_allocations_sum_back_to_payment_amount(ui_dev_reporting_db, reporting_engine):
+async def test_payment_allocations_sum_back_to_payment_amount(
+    ui_dev_reporting_db, reporting_engine
+):
     async with reporting_engine.connect() as conn:
         payment_total = (
             await conn.execute(text("SELECT amount FROM report_payments WHERE payment_id = 5"))
@@ -350,7 +368,9 @@ async def test_deleted_cart_products_are_removed_on_rerun(
 
     async with reporting_engine.begin() as conn:
         await conn.execute(
-            text("TRUNCATE report_payment_allocations, report_payments, report_line_items, exchange_rates, etl_meta RESTART IDENTITY")
+            text(
+                "TRUNCATE report_payment_allocations, report_payments, report_line_items, exchange_rates, etl_meta RESTART IDENTITY"
+            )
         )
 
     async with reporting_session_factory() as session:
@@ -385,7 +405,9 @@ async def test_deleted_cart_products_are_removed_on_rerun(
 
     async with reporting_engine.connect() as conn:
         row = (
-            await conn.execute(text("SELECT COUNT(*) FROM report_line_items WHERE cart_product_id = 4"))
+            await conn.execute(
+                text("SELECT COUNT(*) FROM report_line_items WHERE cart_product_id = 4")
+            )
         ).scalar()
 
     assert row == 0
@@ -402,7 +424,9 @@ async def test_dimensional_refresh_updates_both_main_tables(
 
     async with reporting_engine.begin() as conn:
         await conn.execute(
-            text("TRUNCATE report_payment_allocations, report_payments, report_line_items, exchange_rates, etl_meta RESTART IDENTITY")
+            text(
+                "TRUNCATE report_payment_allocations, report_payments, report_line_items, exchange_rates, etl_meta RESTART IDENTITY"
+            )
         )
 
     async with reporting_session_factory() as session:
@@ -429,16 +453,22 @@ async def test_dimensional_refresh_updates_both_main_tables(
 
     async with session_factory() as session:
         async with session.begin():
-            await session.execute(text("UPDATE `lead` SET name = 'Colegio Renombrado' WHERE id = 1"))
+            await session.execute(
+                text("UPDATE `lead` SET name = 'Colegio Renombrado' WHERE id = 1")
+            )
 
     await run_dimensional_refresh()
 
     async with reporting_engine.connect() as conn:
         payment_name = (
-            await conn.execute(text("SELECT school_name FROM report_payments WHERE lead_id = 1 LIMIT 1"))
+            await conn.execute(
+                text("SELECT school_name FROM report_payments WHERE lead_id = 1 LIMIT 1")
+            )
         ).scalar()
         line_item_name = (
-            await conn.execute(text("SELECT school_name FROM report_line_items WHERE lead_id = 1 LIMIT 1"))
+            await conn.execute(
+                text("SELECT school_name FROM report_line_items WHERE lead_id = 1 LIMIT 1")
+            )
         ).scalar()
 
     assert payment_name == "Colegio Renombrado"
@@ -454,7 +484,9 @@ async def test_startup_backfill_uses_floor_when_no_successful_payment_sync_runs(
     bind_test_reporting_database(reporting_session_factory)
     async with reporting_engine.begin() as conn:
         await conn.execute(
-            text("TRUNCATE report_payment_allocations, report_payments, report_line_items, exchange_rates, etl_meta RESTART IDENTITY")
+            text(
+                "TRUNCATE report_payment_allocations, report_payments, report_line_items, exchange_rates, etl_meta RESTART IDENTITY"
+            )
         )
 
     since = await get_startup_backfill_since(now=datetime(2026, 5, 21, 12, 0, 0))
@@ -472,7 +504,9 @@ async def test_startup_backfill_skips_when_latest_upsert_is_recent(
     current_time = datetime(2026, 5, 21, 12, 0, 0)
     async with reporting_engine.begin() as conn:
         await conn.execute(
-            text("TRUNCATE report_payment_allocations, report_payments, report_line_items, exchange_rates, etl_meta RESTART IDENTITY")
+            text(
+                "TRUNCATE report_payment_allocations, report_payments, report_line_items, exchange_rates, etl_meta RESTART IDENTITY"
+            )
         )
 
     async with reporting_session_factory() as session:
@@ -504,7 +538,9 @@ async def test_startup_backfill_uses_latest_successful_payment_sync_run(
     expected_since = current_time - timedelta(hours=5)
     async with reporting_engine.begin() as conn:
         await conn.execute(
-            text("TRUNCATE report_payment_allocations, report_payments, report_line_items, exchange_rates, etl_meta RESTART IDENTITY")
+            text(
+                "TRUNCATE report_payment_allocations, report_payments, report_line_items, exchange_rates, etl_meta RESTART IDENTITY"
+            )
         )
 
     async with reporting_session_factory() as session:
@@ -542,11 +578,15 @@ async def test_run_startup_backfill_if_needed_calls_run_upsert_with_startup_job_
     bind_test_reporting_database(reporting_session_factory)
     async with reporting_engine.begin() as conn:
         await conn.execute(
-            text("TRUNCATE report_payment_allocations, report_payments, report_line_items, exchange_rates, etl_meta RESTART IDENTITY")
+            text(
+                "TRUNCATE report_payment_allocations, report_payments, report_line_items, exchange_rates, etl_meta RESTART IDENTITY"
+            )
         )
     calls: list[tuple[datetime, ETLJobName]] = []
 
-    async def fake_run_upsert(*, since: datetime | None = None, job_name: ETLJobName = ETLJobName.UPSERT) -> None:
+    async def fake_run_upsert(
+        *, since: datetime | None = None, job_name: ETLJobName = ETLJobName.UPSERT
+    ) -> None:
         calls.append((since, job_name))
 
     monkeypatch.setattr("app.etl.startup_backfill.run_upsert", fake_run_upsert)

@@ -5,6 +5,7 @@ Seed rows directly into report_line_items — no Jones DB needed.
 The service re-computes ganado/perdido/mantenido from year presence data,
 so rows with year=filters.year vs year=filters.year-1 determine the status.
 """
+
 import pytest
 from datetime import datetime, date
 from sqlalchemy import text
@@ -18,61 +19,62 @@ from tests.conftest_reporting import bind_test_reporting_database
 # Helpers
 # ─────────────────────────────────────────────────────────────
 
+
 def make_row(**overrides) -> dict:
     created_at = overrides.get("created_at", datetime(2025, 1, 15))
     payment_date = overrides.get("payment_date", created_at.date())
     defaults = {
-        "cart_product_id":      1,
-        "etl_date":             date.today(),
-        "seller_id":            1,
-        "seller_name":          "Ana Garcia",
-        "lead_id":              1,
-        "school_name":          "Colegio Test",
-        "site":                 "mexico",
-        "zone_name":            "IH Mexico",
-        "state_name":           "CDMX",
-        "state_names":          ["CDMX"],
-        "city":                 "Ciudad de Mexico",
-        "city_names":           ["Ciudad de Mexico"],
-        "business_status":      "ganado",
-        "cart_id":              1,
-        "created_at":           created_at,
-        "year":                 2025,
-        "month":                1,
-        "payment_status":       "Aprobado",
-        "payment_date":         payment_date,
-        "payment_day":          payment_date,
-        "billing_status":       "Aprobado",
-        "product_id":           1,
-        "product_type":         "exam",
-        "exam_cat_name":        "KET",
-        "exam_category":        "Cambridge English (Main Suite)",
-        "exam_canonical_name":  "A2 Key",
-        "exam_date_type":       "fixed",
-        "quantity":             5,
-        "total":                5000.00,
-        "cost":                 2000.00,
-        "discount":             0,
-        "book_commission":      0,
-        "exam_commission":      0,
-        "base_currency":        "MXN",
+        "cart_product_id": 1,
+        "etl_date": date.today(),
+        "seller_id": 1,
+        "seller_name": "Ana Garcia",
+        "lead_id": 1,
+        "school_name": "Colegio Test",
+        "site": "mexico",
+        "zone_name": "IH Mexico",
+        "state_name": "CDMX",
+        "state_names": ["CDMX"],
+        "city": "Ciudad de Mexico",
+        "city_names": ["Ciudad de Mexico"],
+        "business_status": "ganado",
+        "cart_id": 1,
+        "created_at": created_at,
+        "year": 2025,
+        "month": 1,
+        "payment_status": "Aprobado",
+        "payment_date": payment_date,
+        "payment_day": payment_date,
+        "billing_status": "Aprobado",
+        "product_id": 1,
+        "product_type": "exam",
+        "exam_cat_name": "KET",
+        "exam_category": "Cambridge English (Main Suite)",
+        "exam_canonical_name": "A2 Key",
+        "exam_date_type": "fixed",
+        "quantity": 5,
+        "total": 5000.00,
+        "cost": 2000.00,
+        "discount": 0,
+        "book_commission": 0,
+        "exam_commission": 0,
+        "base_currency": "MXN",
         "include_in_product_breakdown": True,
-        "expected_total":        5000.00,
-        "expected_cost":         2000.00,
-        "expected_total_mxn":    5000.00,
-        "expected_total_usd":    None,
-        "expected_cost_mxn":     2000.00,
-        "expected_cost_usd":     None,
-        "paid_total":            5000.00,
-        "paid_total_mxn":        5000.00,
-        "paid_total_usd":        None,
-        "student_count":         1,
-        "payment_count":         1,
-        "total_mxn":            5000.00,
-        "cost_mxn":             2000.00,
-        "total_usd":            None,
-        "cost_usd":             None,
-        "is_active":            True,
+        "expected_total": 5000.00,
+        "expected_cost": 2000.00,
+        "expected_total_mxn": 5000.00,
+        "expected_total_usd": None,
+        "expected_cost_mxn": 2000.00,
+        "expected_cost_usd": None,
+        "paid_total": 5000.00,
+        "paid_total_mxn": 5000.00,
+        "paid_total_usd": None,
+        "student_count": 1,
+        "payment_count": 1,
+        "total_mxn": 5000.00,
+        "cost_mxn": 2000.00,
+        "total_usd": None,
+        "cost_usd": None,
+        "is_active": True,
     }
     row = {**defaults, **overrides}
     if "expected_total" not in overrides:
@@ -87,7 +89,9 @@ def make_row(**overrides) -> dict:
         row["paid_total"] = row["total"]
     if "paid_total_mxn" not in overrides:
         row["paid_total_mxn"] = row["total_mxn"]
-    row["state_names"] = overrides.get("state_names", [row["state_name"]] if row.get("state_name") else [])
+    row["state_names"] = overrides.get(
+        "state_names", [row["state_name"]] if row.get("state_name") else []
+    )
     row["city_names"] = overrides.get("city_names", [row["city"]] if row.get("city") else [])
     row["payment_day"] = overrides.get("payment_day", row["payment_date"])
     return row
@@ -102,7 +106,8 @@ async def _insert(session_factory, *rows):
         async with session.begin():
             for row in rows:
                 await session.execute(sql, row)
-                await session.execute(text("""
+                await session.execute(
+                    text("""
                     INSERT INTO report_payments (
                         payment_id, etl_date, seller_id, seller_name, lead_id, school_name, site, zone_name,
                         state_name, city, all_states, all_cities, state_names, city_names, year, month,
@@ -114,40 +119,43 @@ async def _insert(session_factory, *rows):
                         :created_at, :payment_date, :base_currency, :cart_id, :payment_status, :business_status,
                         :is_active, :amount, :amount_mxn, :amount_usd
                     )
-                """), {
-                    "payment_id": row["cart_product_id"],
-                    "etl_date": row["etl_date"],
-                    "seller_id": row["seller_id"],
-                    "seller_name": row["seller_name"],
-                    "lead_id": row["lead_id"],
-                    "school_name": row["school_name"],
-                    "site": row["site"],
-                    "zone_name": row["zone_name"],
-                    "state_name": row["state_name"],
-                    "city": row["city"],
-                    "all_states": row.get("state_names", []),
-                    "all_cities": row.get("city_names", []),
-                    "state_names": row.get("state_names", []),
-                    "city_names": row.get("city_names", []),
-                    "year": row["year"],
-                    "month": row["month"],
-                    "created_at": row["created_at"],
-                    "payment_date": row["payment_date"],
-                    "base_currency": row["base_currency"],
-                    "cart_id": row["cart_id"],
-                    "payment_status": row["payment_status"],
-                    "business_status": row["business_status"],
-                    "is_active": row["is_active"],
-                    "amount": row["paid_total"],
-                    "amount_mxn": row["paid_total_mxn"],
-                    "amount_usd": None,
-                })
+                """),
+                    {
+                        "payment_id": row["cart_product_id"],
+                        "etl_date": row["etl_date"],
+                        "seller_id": row["seller_id"],
+                        "seller_name": row["seller_name"],
+                        "lead_id": row["lead_id"],
+                        "school_name": row["school_name"],
+                        "site": row["site"],
+                        "zone_name": row["zone_name"],
+                        "state_name": row["state_name"],
+                        "city": row["city"],
+                        "all_states": row.get("state_names", []),
+                        "all_cities": row.get("city_names", []),
+                        "state_names": row.get("state_names", []),
+                        "city_names": row.get("city_names", []),
+                        "year": row["year"],
+                        "month": row["month"],
+                        "created_at": row["created_at"],
+                        "payment_date": row["payment_date"],
+                        "base_currency": row["base_currency"],
+                        "cart_id": row["cart_id"],
+                        "payment_status": row["payment_status"],
+                        "business_status": row["business_status"],
+                        "is_active": row["is_active"],
+                        "amount": row["paid_total"],
+                        "amount_mxn": row["paid_total_mxn"],
+                        "amount_usd": None,
+                    },
+                )
 
 
 def _bind(session_factory):
     bind_test_reporting_database(session_factory)
     import app.services.por_asesor.por_asesor as svc
     import app.services.por_asesor.repository as repo
+
     svc.ReportingSessionLocal = session_factory
     repo.ReportingSessionLocal = session_factory
 
@@ -161,14 +169,38 @@ def _filters(**overrides) -> AsesorFilters:
 # Summary rows
 # ─────────────────────────────────────────────────────────────
 
+
 @pytest.mark.asyncio
 async def test_returns_one_row_per_seller(reporting_session_factory, clean_reporting_db):
     _bind(reporting_session_factory)
     await _insert(
         reporting_session_factory,
-        make_row(cart_product_id=1, seller_id=1, seller_name="Ana",  year=2025, total_mxn=1000.0, cost_mxn=400.0),
-        make_row(cart_product_id=2, seller_id=1, seller_name="Ana",  year=2025, total_mxn=500.0,  cost_mxn=200.0, lead_id=2),
-        make_row(cart_product_id=3, seller_id=2, seller_name="Luis", year=2025, total_mxn=2000.0, cost_mxn=800.0, lead_id=3),
+        make_row(
+            cart_product_id=1,
+            seller_id=1,
+            seller_name="Ana",
+            year=2025,
+            total_mxn=1000.0,
+            cost_mxn=400.0,
+        ),
+        make_row(
+            cart_product_id=2,
+            seller_id=1,
+            seller_name="Ana",
+            year=2025,
+            total_mxn=500.0,
+            cost_mxn=200.0,
+            lead_id=2,
+        ),
+        make_row(
+            cart_product_id=3,
+            seller_id=2,
+            seller_name="Luis",
+            year=2025,
+            total_mxn=2000.0,
+            cost_mxn=800.0,
+            lead_id=3,
+        ),
     )
     result = await getAsesorReport(_filters(year=2025))
     assert len(result.rows) == 2
@@ -181,8 +213,23 @@ async def test_total_revenue_per_seller(reporting_session_factory, clean_reporti
     _bind(reporting_session_factory)
     await _insert(
         reporting_session_factory,
-        make_row(cart_product_id=1, seller_id=1, seller_name="Ana", year=2025, total_mxn=1000.0, cost_mxn=400.0),
-        make_row(cart_product_id=2, seller_id=1, seller_name="Ana", year=2025, total_mxn=500.0,  cost_mxn=200.0, lead_id=2),
+        make_row(
+            cart_product_id=1,
+            seller_id=1,
+            seller_name="Ana",
+            year=2025,
+            total_mxn=1000.0,
+            cost_mxn=400.0,
+        ),
+        make_row(
+            cart_product_id=2,
+            seller_id=1,
+            seller_name="Ana",
+            year=2025,
+            total_mxn=500.0,
+            cost_mxn=200.0,
+            lead_id=2,
+        ),
     )
     result = await getAsesorReport(_filters(year=2025))
     assert len(result.rows) == 1
@@ -193,16 +240,22 @@ async def test_total_revenue_per_seller(reporting_session_factory, clean_reporti
 # Exam breakdown
 # ─────────────────────────────────────────────────────────────
 
+
 @pytest.mark.asyncio
-async def test_exam_breakdown_keyed_by_canonical_name(reporting_session_factory, clean_reporting_db):
+async def test_exam_breakdown_keyed_by_canonical_name(
+    reporting_session_factory, clean_reporting_db
+):
     _bind(reporting_session_factory)
     await _insert(
         reporting_session_factory,
         make_row(
-            cart_product_id=1, seller_id=1, year=2025,
+            cart_product_id=1,
+            seller_id=1,
+            year=2025,
             product_type="exam",
             exam_category="Cambridge English (Main Suite)",
-            total_mxn=1000.0, cost_mxn=400.0,
+            total_mxn=1000.0,
+            cost_mxn=400.0,
         ),
     )
     result = await getAsesorReport(_filters(year=2025))
@@ -216,10 +269,27 @@ async def test_exam_breakdown_sums_correctly(reporting_session_factory, clean_re
     _bind(reporting_session_factory)
     await _insert(
         reporting_session_factory,
-        make_row(cart_product_id=1, seller_id=1, year=2025, product_type="exam",
-                 exam_category="Cambridge English (Main Suite)", quantity=3, total_mxn=1000.0, cost_mxn=400.0),
-        make_row(cart_product_id=2, seller_id=1, year=2025, product_type="exam",
-                 exam_category="Cambridge English (Main Suite)", quantity=7, total_mxn=2000.0, cost_mxn=800.0, lead_id=2),
+        make_row(
+            cart_product_id=1,
+            seller_id=1,
+            year=2025,
+            product_type="exam",
+            exam_category="Cambridge English (Main Suite)",
+            quantity=3,
+            total_mxn=1000.0,
+            cost_mxn=400.0,
+        ),
+        make_row(
+            cart_product_id=2,
+            seller_id=1,
+            year=2025,
+            product_type="exam",
+            exam_category="Cambridge English (Main Suite)",
+            quantity=7,
+            total_mxn=2000.0,
+            cost_mxn=800.0,
+            lead_id=2,
+        ),
     )
     result = await getAsesorReport(_filters(year=2025))
     assert len(result.rows) == 1
@@ -231,13 +301,16 @@ async def test_exam_breakdown_sums_correctly(reporting_session_factory, clean_re
 # Business status counts (re-computed from year presence data)
 # ─────────────────────────────────────────────────────────────
 
+
 @pytest.mark.asyncio
 async def test_ganado_count_correct(reporting_session_factory, clean_reporting_db):
     """Lead present in 2025 but NOT in 2024 → ganado."""
     _bind(reporting_session_factory)
     await _insert(
         reporting_session_factory,
-        make_row(cart_product_id=1, seller_id=1, lead_id=10, year=2025, total_mxn=1000.0, cost_mxn=400.0),
+        make_row(
+            cart_product_id=1, seller_id=1, lead_id=10, year=2025, total_mxn=1000.0, cost_mxn=400.0
+        ),
     )
     result = await getAsesorReport(_filters(year=2025))
     assert len(result.rows) == 1
@@ -253,15 +326,24 @@ async def test_perdido_count_correct(reporting_session_factory, clean_reporting_
     await _insert(
         reporting_session_factory,
         # 2025 row for a different lead (so seller appears in current summary)
-        make_row(cart_product_id=1, seller_id=1, lead_id=10, year=2025, total_mxn=1000.0, cost_mxn=400.0),
+        make_row(
+            cart_product_id=1, seller_id=1, lead_id=10, year=2025, total_mxn=1000.0, cost_mxn=400.0
+        ),
         # 2024 row for lead_id=20 (not present in 2025 → perdido)
-        make_row(cart_product_id=2, seller_id=1, lead_id=20, year=2024,
-                 created_at=datetime(2024, 6, 1), total_mxn=800.0, cost_mxn=320.0),
+        make_row(
+            cart_product_id=2,
+            seller_id=1,
+            lead_id=20,
+            year=2024,
+            created_at=datetime(2024, 6, 1),
+            total_mxn=800.0,
+            cost_mxn=320.0,
+        ),
     )
     result = await getAsesorReport(_filters(year=2025))
     assert len(result.rows) == 1
-    assert result.rows[0].perdidos == 1   # lead_id=20 was in 2024 not in 2025
-    assert result.rows[0].ganados == 1    # lead_id=10 is new in 2025
+    assert result.rows[0].perdidos == 1  # lead_id=20 was in 2024 not in 2025
+    assert result.rows[0].ganados == 1  # lead_id=10 is new in 2025
 
 
 @pytest.mark.asyncio
@@ -270,9 +352,18 @@ async def test_mantenido_count_correct(reporting_session_factory, clean_reportin
     _bind(reporting_session_factory)
     await _insert(
         reporting_session_factory,
-        make_row(cart_product_id=1, seller_id=1, lead_id=10, year=2025, total_mxn=1000.0, cost_mxn=400.0),
-        make_row(cart_product_id=2, seller_id=1, lead_id=10, year=2024,
-                 created_at=datetime(2024, 6, 1), total_mxn=800.0, cost_mxn=320.0),
+        make_row(
+            cart_product_id=1, seller_id=1, lead_id=10, year=2025, total_mxn=1000.0, cost_mxn=400.0
+        ),
+        make_row(
+            cart_product_id=2,
+            seller_id=1,
+            lead_id=10,
+            year=2024,
+            created_at=datetime(2024, 6, 1),
+            total_mxn=800.0,
+            cost_mxn=320.0,
+        ),
     )
     result = await getAsesorReport(_filters(year=2025))
     assert len(result.rows) == 1
@@ -282,13 +373,22 @@ async def test_mantenido_count_correct(reporting_session_factory, clean_reportin
 
 
 @pytest.mark.asyncio
-async def test_uncategorized_business_status_row_still_classified_by_year(reporting_session_factory, clean_reporting_db):
+async def test_uncategorized_business_status_row_still_classified_by_year(
+    reporting_session_factory, clean_reporting_db
+):
     """A row with business_status=UNCATEGORIZED is still classified by year data."""
     _bind(reporting_session_factory)
     await _insert(
         reporting_session_factory,
-        make_row(cart_product_id=1, seller_id=1, lead_id=10, year=2025,
-                 business_status="UNCATEGORIZED", total_mxn=1000.0, cost_mxn=400.0),
+        make_row(
+            cart_product_id=1,
+            seller_id=1,
+            lead_id=10,
+            year=2025,
+            business_status="UNCATEGORIZED",
+            total_mxn=1000.0,
+            cost_mxn=400.0,
+        ),
     )
     # Service ignores business_status column; recomputes from year presence
     result = await getAsesorReport(_filters(year=2025))
@@ -301,14 +401,21 @@ async def test_uncategorized_business_status_row_still_classified_by_year(report
 # Filters
 # ─────────────────────────────────────────────────────────────
 
+
 @pytest.mark.asyncio
 async def test_year_filter(reporting_session_factory, clean_reporting_db):
     _bind(reporting_session_factory)
     await _insert(
         reporting_session_factory,
         make_row(cart_product_id=1, seller_id=1, year=2025, total_mxn=1000.0, cost_mxn=400.0),
-        make_row(cart_product_id=2, seller_id=1, year=2024,
-                 created_at=datetime(2024, 6, 1), total_mxn=500.0, cost_mxn=200.0),
+        make_row(
+            cart_product_id=2,
+            seller_id=1,
+            year=2024,
+            created_at=datetime(2024, 6, 1),
+            total_mxn=500.0,
+            cost_mxn=200.0,
+        ),
     )
     result_2025 = await getAsesorReport(_filters(year=2025))
     assert len(result_2025.rows) == 1
@@ -324,8 +431,23 @@ async def test_country_filter(reporting_session_factory, clean_reporting_db):
     _bind(reporting_session_factory)
     await _insert(
         reporting_session_factory,
-        make_row(cart_product_id=1, seller_id=1, site="mexico",   year=2025, total_mxn=1000.0, cost_mxn=400.0),
-        make_row(cart_product_id=2, seller_id=2, site="colombia", year=2025, total_mxn=2000.0, cost_mxn=800.0, lead_id=2),
+        make_row(
+            cart_product_id=1,
+            seller_id=1,
+            site="mexico",
+            year=2025,
+            total_mxn=1000.0,
+            cost_mxn=400.0,
+        ),
+        make_row(
+            cart_product_id=2,
+            seller_id=2,
+            site="colombia",
+            year=2025,
+            total_mxn=2000.0,
+            cost_mxn=800.0,
+            lead_id=2,
+        ),
     )
     result = await getAsesorReport(_filters(year=2025, countries=["mexico"]))
     assert len(result.rows) == 1
@@ -337,8 +459,23 @@ async def test_seller_filter(reporting_session_factory, clean_reporting_db):
     _bind(reporting_session_factory)
     await _insert(
         reporting_session_factory,
-        make_row(cart_product_id=1, seller_id=1, seller_name="Ana",  year=2025, total_mxn=1000.0, cost_mxn=400.0),
-        make_row(cart_product_id=2, seller_id=2, seller_name="Luis", year=2025, total_mxn=2000.0, cost_mxn=800.0, lead_id=2),
+        make_row(
+            cart_product_id=1,
+            seller_id=1,
+            seller_name="Ana",
+            year=2025,
+            total_mxn=1000.0,
+            cost_mxn=400.0,
+        ),
+        make_row(
+            cart_product_id=2,
+            seller_id=2,
+            seller_name="Luis",
+            year=2025,
+            total_mxn=2000.0,
+            cost_mxn=800.0,
+            lead_id=2,
+        ),
     )
     result = await getAsesorReport(_filters(year=2025, sellers=["Ana"]))
     assert len(result.rows) == 1
@@ -350,8 +487,24 @@ async def test_multiple_sellers_independent(reporting_session_factory, clean_rep
     _bind(reporting_session_factory)
     await _insert(
         reporting_session_factory,
-        make_row(cart_product_id=1, seller_id=1, seller_name="Ana",  lead_id=10, year=2025, total_mxn=1000.0, cost_mxn=400.0),
-        make_row(cart_product_id=2, seller_id=2, seller_name="Luis", lead_id=20, year=2025, total_mxn=3000.0, cost_mxn=1200.0),
+        make_row(
+            cart_product_id=1,
+            seller_id=1,
+            seller_name="Ana",
+            lead_id=10,
+            year=2025,
+            total_mxn=1000.0,
+            cost_mxn=400.0,
+        ),
+        make_row(
+            cart_product_id=2,
+            seller_id=2,
+            seller_name="Luis",
+            lead_id=20,
+            year=2025,
+            total_mxn=3000.0,
+            cost_mxn=1200.0,
+        ),
     )
     result = await getAsesorReport(_filters(year=2025))
     revenues = {row.seller_id: row.total_revenue for row in result.rows}

@@ -5,7 +5,9 @@ from app.services.total_sales.total_sales import getTotalSalesData
 
 
 @pytest.mark.asyncio(loop_scope="session")
-async def test_total_sales_full_dataset_uses_payment_totals_and_allocated_breakdowns(ui_dev_reporting_db):
+async def test_total_sales_full_dataset_uses_payment_totals_and_allocated_breakdowns(
+    ui_dev_reporting_db,
+):
     result = await getTotalSalesData(ReportFilters())
 
     assert result.total_clients == 6
@@ -33,27 +35,26 @@ async def test_total_sales_full_dataset_uses_payment_totals_and_allocated_breakd
 
 
 @pytest.mark.asyncio(loop_scope="session")
-async def test_total_sales_2025_gap_between_payment_total_and_allocated_breakdown_is_preserved(ui_dev_reporting_db):
-    result = await getTotalSalesData(
-        ReportFilters(date_from="2025-01-01", date_to="2025-12-31")
-    )
+async def test_total_sales_2025_gap_between_payment_total_and_allocated_breakdown_is_preserved(
+    ui_dev_reporting_db,
+):
+    result = await getTotalSalesData(ReportFilters(date_from="2025-01-01", date_to="2025-12-31"))
 
     allocated_breakdown_total = (
-        result.exam_revenue
-        + result.book_revenue
-        + result.course_revenue
-        + result.otros_revenue
+        result.exam_revenue + result.book_revenue + result.course_revenue + result.otros_revenue
     )
 
     assert result.total_revenue == 14200.0
-    assert result.uncategorized_revenue == pytest.approx(result.total_revenue - allocated_breakdown_total)
+    assert result.uncategorized_revenue == pytest.approx(
+        result.total_revenue - allocated_breakdown_total
+    )
 
 
 @pytest.mark.asyncio(loop_scope="session")
-async def test_total_sales_2025_excludes_pending_deleted_and_deleted_cart_product_rows(ui_dev_reporting_db):
-    result = await getTotalSalesData(
-        ReportFilters(date_from="2025-01-01", date_to="2025-12-31")
-    )
+async def test_total_sales_2025_excludes_pending_deleted_and_deleted_cart_product_rows(
+    ui_dev_reporting_db,
+):
+    result = await getTotalSalesData(ReportFilters(date_from="2025-01-01", date_to="2025-12-31"))
 
     assert result.total_revenue == 14200.0
     assert result.total_exams == 11
@@ -100,7 +101,9 @@ async def test_total_sales_country_breakdowns_match_expected_2025_slices(ui_dev_
 
 
 @pytest.mark.asyncio(loop_scope="session")
-async def test_total_sales_state_and_city_filters_do_not_duplicate_multi_address_leads(ui_dev_reporting_db):
+async def test_total_sales_state_and_city_filters_do_not_duplicate_multi_address_leads(
+    ui_dev_reporting_db,
+):
     by_state = await getTotalSalesData(
         ReportFilters(date_from="2025-01-01", date_to="2025-12-31", states=["CDMX"])
     )
@@ -117,7 +120,9 @@ async def test_total_sales_state_and_city_filters_do_not_duplicate_multi_address
 
 
 @pytest.mark.asyncio(loop_scope="session")
-async def test_total_sales_zone_filter_matches_country_parent_dimension_without_duplication(ui_dev_reporting_db):
+async def test_total_sales_zone_filter_matches_country_parent_dimension_without_duplication(
+    ui_dev_reporting_db,
+):
     result = await getTotalSalesData(
         ReportFilters(date_from="2025-01-01", date_to="2025-12-31", zones=["IH Mexico"])
     )
@@ -128,10 +133,10 @@ async def test_total_sales_zone_filter_matches_country_parent_dimension_without_
 
 
 @pytest.mark.asyncio(loop_scope="session")
-async def test_total_sales_jan_to_mar_uses_payment_date_range_and_prior_year_only_when_available(ui_dev_reporting_db):
-    result = await getTotalSalesData(
-        ReportFilters(date_from="2025-01-01", date_to="2025-03-31")
-    )
+async def test_total_sales_jan_to_mar_uses_payment_date_range_and_prior_year_only_when_available(
+    ui_dev_reporting_db,
+):
+    result = await getTotalSalesData(ReportFilters(date_from="2025-01-01", date_to="2025-03-31"))
 
     assert result.total_revenue == 4400.0
     assert result.total_clients == 2
@@ -147,9 +152,7 @@ async def test_total_sales_jan_to_mar_uses_payment_date_range_and_prior_year_onl
 
 @pytest.mark.asyncio(loop_scope="session")
 async def test_total_sales_future_empty_slice_returns_zeros_and_no_mix(ui_dev_reporting_db):
-    result = await getTotalSalesData(
-        ReportFilters(date_from="2030-01-01", date_to="2030-12-31")
-    )
+    result = await getTotalSalesData(ReportFilters(date_from="2030-01-01", date_to="2030-12-31"))
 
     assert result.total_revenue == 0.0
     assert result.total_clients == 0

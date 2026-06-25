@@ -11,10 +11,10 @@ import { supabase } from "@/lib/supabase"
 import type { Session } from "@supabase/supabase-js"
 
 const TITLES: Record<string, string> = {
-    "/ventas-totales":  "Ventas Totales",
-    "/por-asesor":      "Resultados por Asesor",
-    "/detalle-asesor":  "Detalle por Asesor",
-    "/por-pais":        "Resultado por País",
+    "/ventas-totales": "Ventas Totales",
+    "/por-asesor": "Resultados por Asesor",
+    "/detalle-asesor": "Detalle por Asesor",
+    "/por-pais": "Resultado por País",
 }
 
 function PageTitle() {
@@ -47,7 +47,9 @@ export default function App() {
 
     useEffect(() => {
         supabase.auth.getSession().then(({ data }) => setSession(data.session))
-        const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+        const {
+            data: { subscription },
+        } = supabase.auth.onAuthStateChange((_event, session) => {
             setSession(session)
         })
         return () => subscription.unsubscribe()
@@ -55,9 +57,7 @@ export default function App() {
 
     return (
         <Routes>
-            <Route path="/login" element={
-                session ? <Navigate to="/ventas-totales" replace /> : <LoginPage />
-            } />
+            <Route path="/login" element={session ? <Navigate to="/ventas-totales" replace /> : <LoginPage />} />
             <Route element={<ProtectedLayout session={session} />}>
                 <Route path="/" element={<Navigate to="/ventas-totales" replace />} />
                 <Route path="/ventas-totales" element={<VentasTotales />} />

@@ -10,13 +10,7 @@ type ReportPaginationProps = {
     onNext: () => void
 }
 
-export default function ReportPagination({
-    page,
-    currentCount,
-    hasMore,
-    onPrevious,
-    onNext,
-}: ReportPaginationProps) {
+export default function ReportPagination({ page, currentCount, hasMore, onPrevious, onNext }: ReportPaginationProps) {
     if (currentCount === 0) return null
 
     return (
@@ -25,24 +19,12 @@ export default function ReportPagination({
                 Pagina {page + 1} · {currentCount} resultados
             </p>
             <div className="flex items-center gap-2 self-end sm:self-auto">
-                <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={onPrevious}
-                    disabled={page === 0}
-                >
+                <Button variant="outline" size="sm" onClick={onPrevious} disabled={page === 0}>
                     <ChevronLeft className="size-4" />
                     Anterior
                 </Button>
-                <span className="min-w-20 text-center text-sm font-medium text-foreground">
-                    Pagina {page + 1}
-                </span>
-                <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={onNext}
-                    disabled={!hasMore}
-                >
+                <span className="min-w-20 text-center text-sm font-medium text-foreground">Pagina {page + 1}</span>
+                <Button variant="outline" size="sm" onClick={onNext} disabled={!hasMore}>
                     Siguiente
                     <ChevronRight className="size-4" />
                 </Button>
