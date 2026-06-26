@@ -46,22 +46,26 @@ export default function KpiCard({
                         {formatted}
                         {suffix}
                     </span>
-                    {showComparison && comparisonFormatted !== null ? (
-                        <div className="flex flex-col gap-1">
-                            <span className="text-xs text-muted-foreground">
-                                {comparisonLabel}: {prefix}
-                                {comparisonFormatted}
-                                {suffix}
-                            </span>
-                            {comparisonPct !== null && comparisonPct !== undefined ? (
-                                <span
-                                    className={`text-sm font-medium ${comparisonPct >= 0 ? "text-success" : "text-destructive"}`}
-                                >
-                                    {comparisonPct >= 0 ? "+" : ""}
-                                    {comparisonPct.toFixed(1)}%
+                    {showComparison ? (
+                        comparisonFormatted !== null ? (
+                            <div className="flex flex-col gap-1">
+                                <span className="text-xs text-muted-foreground">
+                                    {comparisonLabel}: {prefix}
+                                    {comparisonFormatted}
+                                    {suffix}
                                 </span>
-                            ) : null}
-                        </div>
+                                {comparisonPct !== null && comparisonPct !== undefined ? (
+                                    <span
+                                        className={`text-sm font-medium ${comparisonPct >= 0 ? "text-success" : "text-destructive"}`}
+                                    >
+                                        {comparisonPct >= 0 ? "+" : ""}
+                                        {comparisonPct.toFixed(1)}%
+                                    </span>
+                                ) : null}
+                            </div>
+                        ) : (
+                            <span className="text-xs text-muted-foreground">N/A</span>
+                        )
                     ) : null}
                 </div>
                 <div className="flex items-center justify-center rounded-xl bg-primary/10 p-3 text-primary [&>svg]:size-5">

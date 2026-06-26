@@ -1,8 +1,11 @@
 from datetime import datetime
-from typing import Callable, Optional
+from typing import TYPE_CHECKING, Callable, Optional
 
 from app.enums import BaseCurrency
 from app.schemas.pdf import PDFHeader, PDFTableCellDelta
+
+if TYPE_CHECKING:
+    from app.schemas.reports import ComparisonMeta
 
 MONTH_LABELS = {
     "01": "Ene",
@@ -89,10 +92,18 @@ def filters_summary(filters) -> dict[str, str]:
     return summary
 
 
-def build_pdf_header(title: str, subtitle: str, filters) -> PDFHeader:
+def build_pdf_header(
+    title: str,
+    subtitle: str,
+    filters,
+    comparison_meta: "ComparisonMeta | None" = None,
+) -> PDFHeader:
+    summary = filters_summary(filters)
+    if comparison_meta:
+        summary["Vs."] = f"{format_date(comparison_meta.date_from)} – {format_date(comparison_meta.date_to)}"
     return PDFHeader(
         title=title,
         subtitle=subtitle,
         generated_at=datetime.now().strftime("%d/%m/%Y %H:%M"),
-        filters_summary=filters_summary(filters),
+        filters_summary=summary,
     )

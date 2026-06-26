@@ -367,6 +367,7 @@ def build_por_pais_export_worksheets(
                     ExcelColumn("ielts_pct", "IELTS Δ%"),
                 ],
                 rows=comparison_rows,
+                note=f"Período comparativo: {report.comparison.meta.date_from} – {report.comparison.meta.date_to}",
             )
         )
 
@@ -415,7 +416,10 @@ async def build_por_pais_pdf_payload(
 
     return PorPaisPDFPayload(
         header=build_pdf_header(
-            "Resultado por País", "Resumen por país y estado de colegios/exámenes", filters
+            "Resultado por País",
+            "Resumen por país y estado de colegios/exámenes",
+            filters,
+            comparison_meta=report.comparison.meta if report.comparison else None,
         ),
         kpis=[
             PDFKpiItem(label="Países", value=format_integer(len(current.summary_rows))),

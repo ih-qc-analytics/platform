@@ -1,5 +1,5 @@
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts"
-import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart"
+import { ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import type { GeoPoint } from "@/types"
 import { formatRevenue } from "@/lib/utils"
@@ -12,7 +12,7 @@ type GeoBarProps = {
 
 const chartConfig = {
     revenue: {
-        label: "Ingresos",
+        label: "Actual",
         color: "hsl(var(--chart-1))",
     },
     comparison_revenue: {
@@ -56,6 +56,9 @@ export default function GeoBar({ data, comparisonData }: GeoBarProps) {
                             axisLine={false}
                         />
                         <YAxis type="category" dataKey="dimension" tickLine={false} axisLine={false} width={80} />
+                        {comparisonData?.length ? (
+                            <ChartLegend content={<ChartLegendContent />} />
+                        ) : null}
                         <ChartTooltip
                             content={<ChartTooltipContent formatter={(val) => formatRevenue(val as number)} />}
                         />

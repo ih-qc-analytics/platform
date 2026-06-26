@@ -134,34 +134,52 @@ export default function VentasTotales() {
                                     title="Total Libros"
                                     icon={<BookOpen className="size-6" />}
                                     value={data.current.total_books}
+                                    showComparison={Boolean(data.comparison)}
+                                    comparisonValue={data.comparison?.deltas.total_books?.comparison_value}
+                                    comparisonPct={data.comparison?.deltas.total_books?.pct_change}
                                 />
                                 <KpiCard
                                     title="Ingreso por Libros"
                                     icon={<BookOpen className="size-6" />}
                                     value={data.current.book_revenue}
                                     prefix="$"
+                                    showComparison={Boolean(data.comparison)}
+                                    comparisonValue={data.comparison?.deltas.book_revenue?.comparison_value}
+                                    comparisonPct={data.comparison?.deltas.book_revenue?.pct_change}
                                 />
                                 <KpiCard
                                     title="Total Cursos"
                                     icon={<GraduationCap className="size-6" />}
                                     value={data.current.total_courses}
+                                    showComparison={Boolean(data.comparison)}
+                                    comparisonValue={data.comparison?.deltas.total_courses?.comparison_value}
+                                    comparisonPct={data.comparison?.deltas.total_courses?.pct_change}
                                 />
                                 <KpiCard
                                     title="Ingreso por Cursos"
                                     icon={<GraduationCap className="size-6" />}
                                     value={data.current.course_revenue}
                                     prefix="$"
+                                    showComparison={Boolean(data.comparison)}
+                                    comparisonValue={data.comparison?.deltas.course_revenue?.comparison_value}
+                                    comparisonPct={data.comparison?.deltas.course_revenue?.pct_change}
                                 />
                                 <KpiCard
                                     title="Otros"
                                     icon={<FileText className="size-6" />}
                                     value={data.current.total_otros}
+                                    showComparison={Boolean(data.comparison)}
+                                    comparisonValue={data.comparison?.deltas.total_otros?.comparison_value}
+                                    comparisonPct={data.comparison?.deltas.total_otros?.pct_change}
                                 />
                                 <KpiCard
                                     title="Ingreso por Otros"
                                     icon={<DollarSign className="size-6" />}
                                     value={data.current.otros_revenue}
                                     prefix="$"
+                                    showComparison={Boolean(data.comparison)}
+                                    comparisonValue={data.comparison?.deltas.otros_revenue?.comparison_value}
+                                    comparisonPct={data.comparison?.deltas.otros_revenue?.pct_change}
                                 />
                                 <KpiCard
                                     title="Ingreso Total"
@@ -177,30 +195,45 @@ export default function VentasTotales() {
                                     icon={<Landmark className="size-6" />}
                                     value={data.current.expected_revenue}
                                     prefix="$"
+                                    showComparison={Boolean(data.comparison)}
+                                    comparisonValue={data.comparison?.deltas.expected_revenue?.comparison_value}
+                                    comparisonPct={data.comparison?.deltas.expected_revenue?.pct_change}
                                 />
                                 <KpiCard
                                     title="Costo Esperado"
                                     icon={<PackageSearch className="size-6" />}
                                     value={data.current.expected_cost}
                                     prefix="$"
+                                    showComparison={Boolean(data.comparison)}
+                                    comparisonValue={data.comparison?.deltas.expected_cost?.comparison_value}
+                                    comparisonPct={data.comparison?.deltas.expected_cost?.pct_change}
                                 />
                                 <KpiCard
                                     title="Ingreso Sin Categorizar"
                                     icon={<DollarSign className="size-6" />}
                                     value={data.current.uncategorized_revenue}
                                     prefix="$"
+                                    showComparison={Boolean(data.comparison)}
+                                    comparisonValue={data.comparison?.deltas.uncategorized_revenue?.comparison_value}
+                                    comparisonPct={data.comparison?.deltas.uncategorized_revenue?.pct_change}
                                 />
                                 <KpiCard
                                     title="Ingreso Sitio Desconocido"
                                     icon={<FileText className="size-6" />}
                                     value={data.current.unknown_site_revenue}
                                     prefix="$"
+                                    showComparison={Boolean(data.comparison)}
+                                    comparisonValue={data.comparison?.deltas.unknown_site_revenue?.comparison_value}
+                                    comparisonPct={data.comparison?.deltas.unknown_site_revenue?.pct_change}
                                 />
                                 <KpiCard
                                     title="Esperado Sitio Desconocido"
                                     icon={<FileText className="size-6" />}
                                     value={data.current.unknown_site_expected_revenue}
                                     prefix="$"
+                                    showComparison={Boolean(data.comparison)}
+                                    comparisonValue={data.comparison?.deltas.unknown_site_expected_revenue?.comparison_value}
+                                    comparisonPct={data.comparison?.deltas.unknown_site_expected_revenue?.pct_change}
                                 />
                                 <KpiCard
                                     title="Margen de Utilidad"
@@ -208,6 +241,9 @@ export default function VentasTotales() {
                                     value={data.current.profit_margin}
                                     suffix="%"
                                     decimals={1}
+                                    showComparison={Boolean(data.comparison)}
+                                    comparisonValue={data.comparison?.deltas.profit_margin?.comparison_value}
+                                    comparisonPct={data.comparison?.deltas.profit_margin?.pct_change}
                                 />
                             </div>
 

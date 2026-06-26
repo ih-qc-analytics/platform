@@ -820,6 +820,7 @@ def build_asesor_export_worksheets(
                     ExcelColumn("revenue_pct", "Valor Total Δ%"),
                 ],
                 rows=comparison_rows,
+                note=f"Período comparativo: {report.comparison.meta.date_from} – {report.comparison.meta.date_to}",
             )
         )
 
@@ -902,6 +903,7 @@ async def build_por_asesor_pdf_payload(
             "Resultados por Asesor",
             "Resumen por asesor con familias de exámenes y valor total",
             _normalized_asesor_filters(filters),
+            comparison_meta=report.comparison.meta if report.comparison else None,
         ),
         kpis=[
             PDFKpiItem(label="Asesores", value=format_integer(len(report.current.rows))),

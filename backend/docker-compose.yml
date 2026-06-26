@@ -1,12 +1,12 @@
 services:
   backend:
-    build: ./backend
+    build: .
     ports:
       - "8000:8000"
     volumes:
-      - ./backend:/app
+      - .:/app
     env_file:
-      - ./backend/.env
+      - .env
     depends_on:
       - mysql
 
@@ -20,7 +20,7 @@ services:
     ports:
       - "3307:3306"
     volumes:
-      - ./backend/tests/schema.sql:/docker-entrypoint-initdb.d/schema.sql
+      - ./tests/schema.sql:/docker-entrypoint-initdb.d/schema.sql
       - mysqldata:/var/lib/mysql
 
 volumes:

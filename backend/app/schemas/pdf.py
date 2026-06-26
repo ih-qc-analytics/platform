@@ -21,12 +21,16 @@ class PDFTrendPoint(BaseModel):
     label: str
     value: float
     scaled: float
+    comparison_value: Optional[float] = None
+    comparison_scaled: Optional[float] = None
 
 
 class PDFGeoPoint(BaseModel):
     label: str
     value: float
     scaled: float
+    comparison_value: Optional[float] = None
+    comparison_scaled: Optional[float] = None
 
 
 class PDFTableCellDelta(BaseModel):

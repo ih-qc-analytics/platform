@@ -328,76 +328,50 @@ async def build_ventas_totales_pdf_payload(
     )
     base = response.current
 
+    comp = response.comparison
+    # Comparison trend: match by index (months shift by a year in PREVIOUS_YEAR mode so key lookup fails)
+    comp_trend_pts = comp.data.trend_points if comp else []
+    comp_geo_by_dim = {p.dimension: p.revenue for p in comp.data.geo_points} if comp else {}
+
     trend_values = [point.revenue for point in base.trend_points]
+    comp_trend_values = [
+        comp_trend_pts[i].revenue if i < len(comp_trend_pts) else 0.0
+        for i in range(len(base.trend_points))
+    ]
     geo_values = [point.revenue for point in base.geo_points]
-    scaled_trend = scale_series(trend_values)
-    scaled_geo = scale_series(geo_values)
+    comp_geo_values = [comp_geo_by_dim.get(p.dimension, 0.0) for p in base.geo_points]
 
-    def _kpi_growth(delta_key: str) -> tuple[str | None, bool | None]:
-        delta = response.comparison.deltas.get(delta_key) if response.comparison else None
-        return format_growth(delta.pct_change if delta else None)
+    max_trend = max(trend_values + comp_trend_values) if trend_values else 1.0
+    max_geo = max(geo_values + comp_geo_values) if geo_values else 1.0
+    scaled_trend = [v / max_trend if max_trend else 0.0 for v in trend_values]
+    scaled_comp_trend = [v / max_trend if max_trend else 0.0 for v in comp_trend_values]
+    scaled_geo = [v / max_geo if max_geo else 0.0 for v in geo_values]
+    scaled_comp_geo = [v / max_geo if max_geo else 0.0 for v in comp_geo_values]
 
-    clients_growth, clients_growth_pos = _kpi_growth("total_clients")
-    exams_growth, exams_growth_pos = _kpi_growth("total_exams")
-    exam_revenue_growth, exam_revenue_growth_pos = _kpi_growth("exam_revenue")
-    total_revenue_growth, total_revenue_growth_pos = _kpi_growth("total_revenue")
+    def _kw(delta_key: str) -> dict:
+        if not comp:
+            return {}
+        delta = comp.deltas.get(delta_key)
+        growth_str, positive = format_growth(delta.pct_change if delta else None)
+        return {"growth": growth_str if growth_str is not None else "N/A", "growth_positive": positive}
 
     kpis = [
-        PDFKpiItem(
-            label="Total Clientes",
-            value=str(base.total_clients),
-            growth=clients_growth,
-            growth_positive=clients_growth_pos,
-        ),
-        PDFKpiItem(
-            label="Total Exámenes",
-            value=str(base.total_exams),
-            growth=exams_growth,
-            growth_positive=exams_growth_pos,
-        ),
-        PDFKpiItem(
-            label="Ingreso por Exámenes",
-            value=format_currency(base.exam_revenue, base_currency),
-            growth=exam_revenue_growth,
-            growth_positive=exam_revenue_growth_pos,
-        ),
-        PDFKpiItem(label="Total Libros", value=str(base.total_books)),
-        PDFKpiItem(
-            label="Ingreso por Libros", value=format_currency(base.book_revenue, base_currency)
-        ),
-        PDFKpiItem(label="Total Cursos", value=str(base.total_courses)),
-        PDFKpiItem(
-            label="Ingreso por Cursos", value=format_currency(base.course_revenue, base_currency)
-        ),
-        PDFKpiItem(label="Otros", value=str(base.total_otros)),
-        PDFKpiItem(
-            label="Ingreso por Otros", value=format_currency(base.otros_revenue, base_currency)
-        ),
-        PDFKpiItem(
-            label="Ingreso Esperado", value=format_currency(base.expected_revenue, base_currency)
-        ),
-        PDFKpiItem(
-            label="Costo Esperado", value=format_currency(base.expected_cost, base_currency)
-        ),
-        PDFKpiItem(
-            label="Sin Categorizar",
-            value=format_currency(base.uncategorized_revenue, base_currency),
-        ),
-        PDFKpiItem(
-            label="Ingreso Sitio Desconocido",
-            value=format_currency(base.unknown_site_revenue, base_currency),
-        ),
-        PDFKpiItem(
-            label="Esperado Sitio Desconocido",
-            value=format_currency(base.unknown_site_expected_revenue, base_currency),
-        ),
-        PDFKpiItem(
-            label="Ingreso Total",
-            value=format_currency(base.total_revenue, base_currency),
-            growth=total_revenue_growth,
-            growth_positive=total_revenue_growth_pos,
-        ),
-        PDFKpiItem(label="Margen de Utilidad", value=format_percent(base.profit_margin)),
+        PDFKpiItem(label="Total Clientes", value=str(base.total_clients), **_kw("total_clients")),
+        PDFKpiItem(label="Total Exámenes", value=str(base.total_exams), **_kw("total_exams")),
+        PDFKpiItem(label="Ingreso por Exámenes", value=format_currency(base.exam_revenue, base_currency), **_kw("exam_revenue")),
+        PDFKpiItem(label="Total Libros", value=str(base.total_books), **_kw("total_books")),
+        PDFKpiItem(label="Ingreso por Libros", value=format_currency(base.book_revenue, base_currency), **_kw("book_revenue")),
+        PDFKpiItem(label="Total Cursos", value=str(base.total_courses), **_kw("total_courses")),
+        PDFKpiItem(label="Ingreso por Cursos", value=format_currency(base.course_revenue, base_currency), **_kw("course_revenue")),
+        PDFKpiItem(label="Otros", value=str(base.total_otros), **_kw("total_otros")),
+        PDFKpiItem(label="Ingreso por Otros", value=format_currency(base.otros_revenue, base_currency), **_kw("otros_revenue")),
+        PDFKpiItem(label="Ingreso Esperado", value=format_currency(base.expected_revenue, base_currency), **_kw("expected_revenue")),
+        PDFKpiItem(label="Costo Esperado", value=format_currency(base.expected_cost, base_currency), **_kw("expected_cost")),
+        PDFKpiItem(label="Sin Categorizar", value=format_currency(base.uncategorized_revenue, base_currency), **_kw("uncategorized_revenue")),
+        PDFKpiItem(label="Ingreso Sitio Desconocido", value=format_currency(base.unknown_site_revenue, base_currency), **_kw("unknown_site_revenue")),
+        PDFKpiItem(label="Esperado Sitio Desconocido", value=format_currency(base.unknown_site_expected_revenue, base_currency), **_kw("unknown_site_expected_revenue")),
+        PDFKpiItem(label="Ingreso Total", value=format_currency(base.total_revenue, base_currency), **_kw("total_revenue")),
+        PDFKpiItem(label="Margen de Utilidad", value=format_percent(base.profit_margin), **_kw("profit_margin")),
     ]
 
     return VentasTotalesPDFPayload(
@@ -405,6 +379,7 @@ async def build_ventas_totales_pdf_payload(
             "Ventas Totales",
             "Resumen general de ventas por período y región",
             filters,
+            comparison_meta=comp.meta if comp else None,
         ),
         kpis=kpis,
         trend_points=[
@@ -412,6 +387,8 @@ async def build_ventas_totales_pdf_payload(
                 label=format_month_label(point.month),
                 value=point.revenue,
                 scaled=scaled_trend[index],
+                comparison_value=comp_trend_pts[index].revenue if comp and index < len(comp_trend_pts) else None,
+                comparison_scaled=scaled_comp_trend[index] if comp and index < len(comp_trend_pts) else None,
             )
             for index, point in enumerate(base.trend_points)
         ],
@@ -420,6 +397,8 @@ async def build_ventas_totales_pdf_payload(
                 label=point.dimension,
                 value=point.revenue,
                 scaled=scaled_geo[index],
+                comparison_value=comp_geo_by_dim.get(point.dimension) if comp else None,
+                comparison_scaled=scaled_comp_geo[index] if comp else None,
             )
             for index, point in enumerate(base.geo_points)
         ],
@@ -430,12 +409,40 @@ def build_total_sales_export_filters_for_all(filters: ReportFilters) -> ReportFi
     return filters.model_copy(update={"countries": [], "zones": [], "states": [], "cities": []})
 
 
+_COMPARISON_KPI_KEYS: list[tuple[str, str]] = [
+    ("total_clients", "Total Clientes"),
+    ("total_exams", "Total Exámenes"),
+    ("exam_revenue", "Ingreso por Exámenes"),
+    ("total_books", "Total Libros"),
+    ("book_revenue", "Ingreso por Libros"),
+    ("total_courses", "Total Cursos"),
+    ("course_revenue", "Ingreso por Cursos"),
+    ("total_otros", "Otros"),
+    ("otros_revenue", "Ingreso por Otros"),
+    ("total_revenue", "Ingreso Total"),
+    ("expected_revenue", "Ingreso Esperado"),
+    ("expected_cost", "Costo Esperado"),
+    ("uncategorized_revenue", "Sin Categorizar"),
+    ("unknown_site_revenue", "Ingreso Sitio Desconocido"),
+    ("unknown_site_expected_revenue", "Esperado Sitio Desconocido"),
+    ("profit_margin", "Margen de Utilidad"),
+]
+
+_COMPARISON_COLUMNS = [
+    ExcelColumn("metric", "Métrica"),
+    ExcelColumn("actual", "Actual"),
+    ExcelColumn("anterior", "Anterior"),
+    ExcelColumn("delta_pct", "Δ%"),
+]
+
+
 def build_total_sales_export_worksheets(
     response: TotalSalesResponse,
     *,
     include_charts: bool = True,
 ) -> list[ExcelWorksheetSpec]:
     base = response.current
+    comp = response.comparison
     summary_row = {
         "total_clients": base.total_clients,
         "total_exams": base.total_exams,
@@ -453,12 +460,8 @@ def build_total_sales_export_worksheets(
         "unknown_site_revenue": base.unknown_site_revenue,
         "unknown_site_expected_revenue": base.unknown_site_expected_revenue,
         "profit_margin": base.profit_margin,
-        "prior_year_revenue": response.comparison.data.total_revenue
-        if response.comparison
-        else 0.0,
-        "growth_pct": response.comparison.deltas.get("total_revenue").pct_change
-        if response.comparison
-        else None,
+        "prior_year_revenue": comp.data.total_revenue if comp else 0.0,
+        "growth_pct": comp.deltas.get("total_revenue").pct_change if comp else None,
     }
     worksheets = [
         ExcelWorksheetSpec(
@@ -467,26 +470,60 @@ def build_total_sales_export_worksheets(
             rows=[summary_row],
         )
     ]
+
+    if comp:
+        comp_data = comp.data
+        comp_rows = []
+        for key, label in _COMPARISON_KPI_KEYS:
+            actual = getattr(base, key)
+            anterior = getattr(comp_data, key)
+            delta = comp.deltas.get(key)
+            delta_pct = round(delta.pct_change, 1) if delta and delta.pct_change is not None else None
+            comp_rows.append({"metric": label, "actual": actual, "anterior": anterior, "delta_pct": delta_pct})
+        worksheets.append(
+            ExcelWorksheetSpec(
+                name="Comparación",
+                columns=_COMPARISON_COLUMNS,
+                rows=comp_rows,
+                note=f"Período comparativo: {comp.meta.date_from} – {comp.meta.date_to}",
+            )
+        )
+
     if include_charts:
+        comp_trend_pts = comp.data.trend_points if comp else []
+        comp_geo_by_dim = {p.dimension: p.revenue for p in comp.data.geo_points} if comp else {}
         max_length = max(len(base.trend_points), len(base.geo_points), 1)
         chart_rows = []
         for index in range(max_length):
             trend_point = base.trend_points[index] if index < len(base.trend_points) else None
             geo_point = base.geo_points[index] if index < len(base.geo_points) else None
-            chart_rows.append(
-                {
-                    "month": trend_point.month if trend_point else "",
-                    "trend_revenue": trend_point.revenue if trend_point else 0,
-                    "dimension": geo_point.dimension if geo_point else "",
-                    "geo_revenue": geo_point.revenue if geo_point else 0,
-                }
-            )
+            row: dict = {
+                "month": trend_point.month if trend_point else "",
+                "trend_revenue": trend_point.revenue if trend_point else 0,
+                "dimension": geo_point.dimension if geo_point else "",
+                "geo_revenue": geo_point.revenue if geo_point else 0,
+            }
+            if comp:
+                row["comp_trend_revenue"] = comp_trend_pts[index].revenue if index < len(comp_trend_pts) else 0
+                row["comp_geo_revenue"] = comp_geo_by_dim.get(geo_point.dimension, 0) if geo_point else 0
+            chart_rows.append(row)
+        chart_columns = list(TOTAL_SALES_CHART_COLUMNS)
+        if comp:
+            chart_columns = [
+                ExcelColumn("month", "Month"),
+                ExcelColumn("trend_revenue", "Ingresos (Actual)"),
+                ExcelColumn("comp_trend_revenue", "Ingresos (Anterior)"),
+                ExcelColumn("dimension", "Country"),
+                ExcelColumn("geo_revenue", "Ingresos (Actual)"),
+                ExcelColumn("comp_geo_revenue", "Ingresos (Anterior)"),
+            ]
         worksheets.append(
             ExcelWorksheetSpec(
                 name="Ventas Totales Charts",
-                columns=TOTAL_SALES_CHART_COLUMNS,
+                columns=chart_columns,
                 rows=chart_rows,
                 post_process=add_total_sales_charts,
+                note=f"Período comparativo: {comp.meta.date_from} – {comp.meta.date_to}" if comp else None,
             )
         )
     return worksheets

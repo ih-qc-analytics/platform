@@ -36,6 +36,7 @@ class ExcelWorksheetSpec:
     columns: list[ExcelColumn]
     rows: list[Mapping[str, Any]]
     post_process: PostProcessHook | None = None
+    note: str | None = None  # rendered as a styled row above the column headers
 
 
 def _safe_sheet_name(name: str, existing: set[str]) -> str:
@@ -57,17 +58,17 @@ def _cell_value(value: Any) -> Any:
     return value
 
 
-def _style_header_row(worksheet: Worksheet, header_count: int) -> None:
+def _style_header_row(worksheet: Worksheet, header_count: int, header_row: int = 1) -> None:
     for column_index in range(1, header_count + 1):
-        cell = worksheet.cell(row=1, column=column_index)
+        cell = worksheet.cell(row=header_row, column=column_index)
         cell.fill = HEADER_FILL
         cell.font = HEADER_FONT
         cell.alignment = Alignment(horizontal="center", vertical="center")
         cell.border = THIN_BORDER
 
 
-def _apply_body_styles(worksheet: Worksheet) -> None:
-    for row in worksheet.iter_rows(min_row=2):
+def _apply_body_styles(worksheet: Worksheet, data_start_row: int = 2) -> None:
+    for row in worksheet.iter_rows(min_row=data_start_row):
         for cell in row:
             cell.alignment = Alignment(vertical="top", wrap_text=True)
             cell.border = THIN_BORDER
@@ -94,13 +95,27 @@ def build_excel_workbook(worksheets: list[ExcelWorksheetSpec]) -> Workbook:
         existing_names.add(sheet_name)
         worksheet = workbook.create_sheet(title=sheet_name)
 
+        header_row = 1
+        if spec.note:
+            note_cell = worksheet.cell(row=1, column=1, value=spec.note)
+            note_cell.font = Font(italic=True, color="6B7280", size=9)
+            note_cell.alignment = Alignment(vertical="center")
+            if len(spec.columns) > 1:
+                worksheet.merge_cells(
+                    start_row=1, start_column=1,
+                    end_row=1, end_column=len(spec.columns),
+                )
+            worksheet.row_dimensions[1].height = 16
+            header_row = 2
+
         worksheet.append([column.header for column in spec.columns])
         for row in spec.rows:
             worksheet.append([_cell_value(row.get(column.key)) for column in spec.columns])
 
-        worksheet.freeze_panes = "A2"
-        _style_header_row(worksheet, len(spec.columns))
-        _apply_body_styles(worksheet)
+        freeze_col = get_column_letter(1)
+        worksheet.freeze_panes = f"{freeze_col}{header_row + 1}"
+        _style_header_row(worksheet, len(spec.columns), header_row=header_row)
+        _apply_body_styles(worksheet, data_start_row=header_row + 1)
         _autosize_columns(worksheet)
 
         if spec.post_process is not None:
@@ -135,22 +150,43 @@ def add_total_sales_charts(
     if len(rows) <= 1:
         return
 
+    col_keys = [c.key for c in columns]
+    has_comparison = "comp_trend_revenue" in col_keys
+    data_rows = len(rows)
+
+    # Detect whether there's a note row above the column headers
+    header_row = 1 if worksheet.cell(row=1, column=1).value == columns[0].header else 2
+    data_start = header_row + 1
+    data_end = header_row + data_rows
+
+    trend_col = col_keys.index("trend_revenue") + 1
+    dim_col = col_keys.index("dimension") + 1
+    geo_col = col_keys.index("geo_revenue") + 1
+
     trend_chart = LineChart()
     trend_chart.title = "Revenue Trend"
     trend_chart.y_axis.title = "Revenue"
     trend_chart.x_axis.title = "Month"
-    trend_data = Reference(worksheet, min_col=2, min_row=1, max_row=len(rows) + 1)
-    trend_categories = Reference(worksheet, min_col=1, min_row=2, max_row=len(rows) + 1)
+    trend_data = Reference(worksheet, min_col=trend_col, min_row=header_row, max_row=data_end)
+    trend_categories = Reference(worksheet, min_col=1, min_row=data_start, max_row=data_end)
     trend_chart.add_data(trend_data, titles_from_data=True)
     trend_chart.set_categories(trend_categories)
-    worksheet.add_chart(trend_chart, "F2")
+    if has_comparison:
+        comp_trend_col = col_keys.index("comp_trend_revenue") + 1
+        comp_trend_data = Reference(worksheet, min_col=comp_trend_col, min_row=header_row, max_row=data_end)
+        trend_chart.add_data(comp_trend_data, titles_from_data=True)
+    worksheet.add_chart(trend_chart, "G2")
 
     geo_chart = BarChart()
     geo_chart.title = "Revenue by Country"
     geo_chart.y_axis.title = "Revenue"
     geo_chart.x_axis.title = "Country"
-    geo_data = Reference(worksheet, min_col=4, min_row=1, max_row=len(rows) + 1)
-    geo_categories = Reference(worksheet, min_col=3, min_row=2, max_row=len(rows) + 1)
+    geo_data = Reference(worksheet, min_col=geo_col, min_row=header_row, max_row=data_end)
+    geo_categories = Reference(worksheet, min_col=dim_col, min_row=data_start, max_row=data_end)
     geo_chart.add_data(geo_data, titles_from_data=True)
     geo_chart.set_categories(geo_categories)
-    worksheet.add_chart(geo_chart, "F20")
+    if has_comparison:
+        comp_geo_col = col_keys.index("comp_geo_revenue") + 1
+        comp_geo_data = Reference(worksheet, min_col=comp_geo_col, min_row=header_row, max_row=data_end)
+        geo_chart.add_data(comp_geo_data, titles_from_data=True)
+    worksheet.add_chart(geo_chart, "G20")

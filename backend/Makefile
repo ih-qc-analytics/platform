@@ -53,15 +53,20 @@ build-check:
 
 ci: lint format-check build-check test
 
+dev:
+	supabase status > /dev/null 2>&1 || supabase start
+	docker-compose -p platform up mysql -d
+	ENVIRONMENT=dev $(UVICORN) app.main:app --host 0.0.0.0 --port 8000 --reload
+
 db-up:
-	docker-compose -f ../docker-compose.yml up mysql -d
+	docker-compose -p platform up mysql -d
 
 db-down:
-	docker-compose -f ../docker-compose.yml down
+	docker-compose -p platform down
 
 db-logs:
 	docker logs platform-mysql-1
 
 db-reset:
-	docker-compose -f ../docker-compose.yml down -v
-	docker-compose -f ../docker-compose.yml up mysql -d
+	docker-compose -p platform down -v
+	docker-compose -p platform up mysql -d
