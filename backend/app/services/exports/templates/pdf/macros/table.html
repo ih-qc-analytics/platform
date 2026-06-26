@@ -24,7 +24,14 @@
       {% for row in table.rows %}
       <tr {% if loop.index is odd %}{% else %}class="alt-row"{% endif %}>
         {% for cell in row.cells %}
-        <td>{{ cell }}</td>
+        {% set delta = row.deltas[loop.index0] if row.deltas and loop.index0 < row.deltas|length else none %}
+        <td>
+          {{ cell }}
+          {% if delta %}
+            {% if delta.comparison_value %}<span class="cell-prev">ant. {{ delta.comparison_value }}</span>{% endif %}
+            {% if delta.pct_change %}<span class="cell-delta {% if delta.positive %}cell-delta-pos{% elif delta.positive == false %}cell-delta-neg{% endif %}">{{ delta.pct_change }}</span>{% endif %}
+          {% endif %}
+        </td>
         {% endfor %}
       </tr>
       {% endfor %}

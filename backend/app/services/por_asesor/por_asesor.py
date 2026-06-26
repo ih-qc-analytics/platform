@@ -12,6 +12,7 @@ from app.schemas.pdf import (
     AsesorDetailPDFPayload,
     PDFKpiItem,
     PDFTable,
+    PDFTableCellDelta,
     PDFTableRow,
     PorAsesorPDFPayload,
 )
@@ -29,7 +30,13 @@ from app.schemas.reports import (
     MetricDelta,
 )
 from app.services.exports.excel import ExcelColumn, ExcelWorksheetSpec
-from app.services.exports.pdf_helpers import build_pdf_header, format_currency, format_integer
+from app.services.exports.pdf_helpers import (
+    build_pdf_header,
+    format_currency,
+    format_delta,
+    format_growth,
+    format_integer,
+)
 from app.services.por_asesor.product_grouping import EXAM_CATEGORY_ORDER
 from app.services.por_asesor.repository import (
     fetch_detail_exam_breakdown_rows,
@@ -761,12 +768,62 @@ def build_asesor_export_worksheets(
             detail_row[f"{cat}_revenue"] = cat_detail.revenue
         detail_rows.append(detail_row)
 
-    return [
+    specs = [
         ExcelWorksheetSpec(name="Por Asesor", columns=ASESOR_SUMMARY_COLUMNS, rows=summary_rows),
         ExcelWorksheetSpec(
             name="Por Asesor Detail", columns=ASESOR_DETAIL_COLUMNS, rows=detail_rows
         ),
     ]
+
+    if report.comparison:
+        comp_by_seller = {r.seller_name: r for r in report.comparison.data.rows}
+        comparison_rows = []
+        for row in report.current.rows:
+            comp = comp_by_seller.get(row.seller_name)
+
+            def _pct(act: float, ant: float) -> float | None:
+                return round((act - ant) / ant * 100, 1) if ant else None
+
+            comparison_rows.append(
+                {
+                    "seller_name": row.seller_name,
+                    "ganados_act": row.ganados,
+                    "ganados_ant": comp.ganados if comp else None,
+                    "ganados_pct": _pct(row.ganados, comp.ganados) if comp else None,
+                    "perdidos_act": row.perdidos,
+                    "perdidos_ant": comp.perdidos if comp else None,
+                    "perdidos_pct": _pct(row.perdidos, comp.perdidos) if comp else None,
+                    "uncategorized_act": row.uncategorized_revenue,
+                    "uncategorized_ant": comp.uncategorized_revenue if comp else None,
+                    "uncategorized_pct": _pct(row.uncategorized_revenue, comp.uncategorized_revenue) if comp else None,
+                    "revenue_act": row.total_revenue,
+                    "revenue_ant": comp.total_revenue if comp else None,
+                    "revenue_pct": _pct(row.total_revenue, comp.total_revenue) if comp else None,
+                }
+            )
+        specs.append(
+            ExcelWorksheetSpec(
+                name="Comparación",
+                columns=[
+                    ExcelColumn("seller_name", "Asesor"),
+                    ExcelColumn("ganados_act", "Ganados (Act.)"),
+                    ExcelColumn("ganados_ant", "Ganados (Ant.)"),
+                    ExcelColumn("ganados_pct", "Ganados Δ%"),
+                    ExcelColumn("perdidos_act", "Perdidos (Act.)"),
+                    ExcelColumn("perdidos_ant", "Perdidos (Ant.)"),
+                    ExcelColumn("perdidos_pct", "Perdidos Δ%"),
+                    ExcelColumn("uncategorized_act", "Sin Cat. (Act.)"),
+                    ExcelColumn("uncategorized_ant", "Sin Cat. (Ant.)"),
+                    ExcelColumn("uncategorized_pct", "Sin Cat. Δ%"),
+                    ExcelColumn("revenue_act", "Valor Total (Act.)"),
+                    ExcelColumn("revenue_ant", "Valor Total (Ant.)"),
+                    ExcelColumn("revenue_pct", "Valor Total Δ%"),
+                ],
+                rows=comparison_rows,
+            )
+        )
+
+    return specs
 
 
 async def build_por_asesor_pdf_payload(
@@ -786,6 +843,12 @@ async def build_por_asesor_pdf_payload(
     total_perdidos = sum(row.perdidos for row in report.current.rows)
     total_mantenidos = sum(row.mantenidos for row in report.current.rows)
 
+    comp_by_seller = (
+        {r.seller_name: r for r in report.comparison.data.rows}
+        if report.comparison
+        else {}
+    )
+
     table_rows = []
     for row in report.current.rows:
         cambridge = int(row.exam_breakdown.get("Cambridge English (Main Suite)", 0) or 0) + int(
@@ -796,6 +859,19 @@ async def build_por_asesor_pdf_payload(
         otros = int(row.exam_breakdown.get("TEA (Test of English for Aviation)", 0) or 0) + int(
             row.exam_breakdown.get("Placement & Otros", 0) or 0
         )
+        comp = comp_by_seller.get(row.seller_name)
+        deltas: list = [None] * 10
+        if comp:
+            deltas[8] = format_delta(
+                row.uncategorized_revenue,
+                comp.uncategorized_revenue,
+                lambda v: format_currency(v, base_currency),
+            )
+            deltas[9] = format_delta(
+                row.total_revenue,
+                comp.total_revenue,
+                lambda v: format_currency(v, base_currency),
+            )
         table_rows.append(
             PDFTableRow(
                 cells=[
@@ -809,9 +885,17 @@ async def build_por_asesor_pdf_payload(
                     format_integer(row.mantenidos),
                     format_currency(row.uncategorized_revenue, base_currency),
                     format_currency(row.total_revenue, base_currency),
-                ]
+                ],
+                deltas=deltas,
             )
         )
+
+    comp_total_revenue = sum(r.total_revenue for r in report.comparison.data.rows) if report.comparison else None
+    revenue_growth, revenue_growth_positive = format_growth(
+        ((total_revenue - comp_total_revenue) / comp_total_revenue * 100)
+        if comp_total_revenue
+        else None
+    )
 
     return PorAsesorPDFPayload(
         header=build_pdf_header(
@@ -828,7 +912,12 @@ async def build_por_asesor_pdf_payload(
             PDFKpiItem(
                 label="Sin Categorizar", value=format_currency(total_uncategorized, base_currency)
             ),
-            PDFKpiItem(label="Valor Total", value=format_currency(total_revenue, base_currency)),
+            PDFKpiItem(
+                label="Valor Total",
+                value=format_currency(total_revenue, base_currency),
+                growth=revenue_growth,
+                growth_positive=revenue_growth_positive,
+            ),
         ],
         table=PDFTable(
             headers=[

@@ -333,15 +333,33 @@ async def build_ventas_totales_pdf_payload(
     scaled_trend = scale_series(trend_values)
     scaled_geo = scale_series(geo_values)
 
-    growth_delta = response.comparison.deltas.get("total_revenue") if response.comparison else None
-    growth_value = growth_delta.pct_change if growth_delta else None
-    growth, growth_positive = format_growth(growth_value)
+    def _kpi_growth(delta_key: str) -> tuple[str | None, bool | None]:
+        delta = response.comparison.deltas.get(delta_key) if response.comparison else None
+        return format_growth(delta.pct_change if delta else None)
+
+    clients_growth, clients_growth_pos = _kpi_growth("total_clients")
+    exams_growth, exams_growth_pos = _kpi_growth("total_exams")
+    exam_revenue_growth, exam_revenue_growth_pos = _kpi_growth("exam_revenue")
+    total_revenue_growth, total_revenue_growth_pos = _kpi_growth("total_revenue")
 
     kpis = [
-        PDFKpiItem(label="Total Clientes", value=str(base.total_clients)),
-        PDFKpiItem(label="Total Exámenes", value=str(base.total_exams)),
         PDFKpiItem(
-            label="Ingreso por Exámenes", value=format_currency(base.exam_revenue, base_currency)
+            label="Total Clientes",
+            value=str(base.total_clients),
+            growth=clients_growth,
+            growth_positive=clients_growth_pos,
+        ),
+        PDFKpiItem(
+            label="Total Exámenes",
+            value=str(base.total_exams),
+            growth=exams_growth,
+            growth_positive=exams_growth_pos,
+        ),
+        PDFKpiItem(
+            label="Ingreso por Exámenes",
+            value=format_currency(base.exam_revenue, base_currency),
+            growth=exam_revenue_growth,
+            growth_positive=exam_revenue_growth_pos,
         ),
         PDFKpiItem(label="Total Libros", value=str(base.total_books)),
         PDFKpiItem(
@@ -376,18 +394,11 @@ async def build_ventas_totales_pdf_payload(
         PDFKpiItem(
             label="Ingreso Total",
             value=format_currency(base.total_revenue, base_currency),
-            growth=growth,
-            growth_positive=growth_positive,
+            growth=total_revenue_growth,
+            growth_positive=total_revenue_growth_pos,
         ),
         PDFKpiItem(label="Margen de Utilidad", value=format_percent(base.profit_margin)),
     ]
-    if response.comparison is not None:
-        kpis.append(
-            PDFKpiItem(
-                label="Ingreso Comparativo",
-                value=format_currency(response.comparison.data.total_revenue, base_currency),
-            )
-        )
 
     return VentasTotalesPDFPayload(
         header=build_pdf_header(

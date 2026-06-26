@@ -29,8 +29,15 @@ class PDFGeoPoint(BaseModel):
     scaled: float
 
 
+class PDFTableCellDelta(BaseModel):
+    comparison_value: Optional[str] = None
+    pct_change: Optional[str] = None
+    positive: Optional[bool] = None
+
+
 class PDFTableRow(BaseModel):
     cells: list[str]
+    deltas: list[Optional[PDFTableCellDelta]] = []
 
 
 class PDFTable(BaseModel):

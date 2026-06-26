@@ -1,8 +1,8 @@
 from datetime import datetime
-from typing import Optional
+from typing import Callable, Optional
 
 from app.enums import BaseCurrency
-from app.schemas.pdf import PDFHeader
+from app.schemas.pdf import PDFHeader, PDFTableCellDelta
 
 MONTH_LABELS = {
     "01": "Ene",
@@ -34,6 +34,20 @@ def format_growth(value: Optional[float]) -> tuple[Optional[str], Optional[bool]
         return None, None
     sign = "+" if value >= 0 else ""
     return f"{sign}{value:.1f}%", value >= 0
+
+
+def format_delta(
+    current: float,
+    comparison: float,
+    formatter: Callable[[float], str],
+) -> PDFTableCellDelta:
+    pct = ((current - comparison) / comparison * 100) if comparison else None
+    growth_str, positive = format_growth(pct)
+    return PDFTableCellDelta(
+        comparison_value=formatter(comparison),
+        pct_change=growth_str,
+        positive=positive,
+    )
 
 
 def format_date(date_str: str) -> str:

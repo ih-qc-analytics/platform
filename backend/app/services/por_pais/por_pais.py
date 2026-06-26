@@ -5,6 +5,7 @@ from app.enums import BaseCurrency, ComparisonMode, ProductType
 from app.schemas.pdf import (
     PDFKpiItem,
     PDFTable,
+    PDFTableCellDelta,
     PDFTableRow,
     PorPaisDetailPDFPayload,
     PorPaisPDFPayload,
@@ -18,7 +19,13 @@ from app.schemas.reports import (
     PorPaisStatusRow,
     PorPaisSummaryRow,
 )
-from app.services.exports.pdf_helpers import build_pdf_header, format_currency, format_integer
+from app.services.exports.pdf_helpers import (
+    build_pdf_header,
+    format_currency,
+    format_delta,
+    format_growth,
+    format_integer,
+)
 from app.services.exports.excel import ExcelColumn, ExcelWorksheetSpec
 from app.services.por_asesor.product_grouping import EXAM_NAME_ORDER, canonical_exam_name
 from app.services.utils.date_utils import resolve_comparison_range
@@ -299,7 +306,7 @@ def build_por_pais_export_worksheets(
             row[name] = int(detail.exam_counts.get(name, 0) or 0)
         detail_rows.append(row)
 
-    return [
+    specs = [
         ExcelWorksheetSpec(
             name="Por Pais Summary",
             columns=POR_PAIS_SUMMARY_COLUMNS,
@@ -314,6 +321,56 @@ def build_por_pais_export_worksheets(
             name="Por Pais Detail", columns=POR_PAIS_DETAIL_COLUMNS, rows=detail_rows
         ),
     ]
+
+    if report.comparison:
+        comp_by_country = {r.country: r for r in report.comparison.data.summary_rows}
+        comparison_rows = []
+        for r in report.current.summary_rows:
+            comp = comp_by_country.get(r.country)
+
+            def _pct(act: float, ant: float) -> float | None:
+                return round((act - ant) / ant * 100, 1) if ant else None
+
+            comparison_rows.append(
+                {
+                    "country": r.country,
+                    "revenue_act": r.total_revenue,
+                    "revenue_ant": comp.total_revenue if comp else None,
+                    "revenue_pct": _pct(r.total_revenue, comp.total_revenue) if comp else None,
+                    "uncategorized_act": r.uncategorized_revenue,
+                    "uncategorized_ant": comp.uncategorized_revenue if comp else None,
+                    "uncategorized_pct": _pct(r.uncategorized_revenue, comp.uncategorized_revenue) if comp else None,
+                    "cambridge_act": r.cambridge,
+                    "cambridge_ant": comp.cambridge if comp else None,
+                    "cambridge_pct": _pct(r.cambridge, comp.cambridge) if comp else None,
+                    "ielts_act": r.ielts,
+                    "ielts_ant": comp.ielts if comp else None,
+                    "ielts_pct": _pct(r.ielts, comp.ielts) if comp else None,
+                }
+            )
+        specs.append(
+            ExcelWorksheetSpec(
+                name="Comparación",
+                columns=[
+                    ExcelColumn("country", "País"),
+                    ExcelColumn("revenue_act", "Ingreso (Act.)"),
+                    ExcelColumn("revenue_ant", "Ingreso (Ant.)"),
+                    ExcelColumn("revenue_pct", "Ingreso Δ%"),
+                    ExcelColumn("uncategorized_act", "Sin Cat. (Act.)"),
+                    ExcelColumn("uncategorized_ant", "Sin Cat. (Ant.)"),
+                    ExcelColumn("uncategorized_pct", "Sin Cat. Δ%"),
+                    ExcelColumn("cambridge_act", "Cambridge (Act.)"),
+                    ExcelColumn("cambridge_ant", "Cambridge (Ant.)"),
+                    ExcelColumn("cambridge_pct", "Cambridge Δ%"),
+                    ExcelColumn("ielts_act", "IELTS (Act.)"),
+                    ExcelColumn("ielts_ant", "IELTS (Ant.)"),
+                    ExcelColumn("ielts_pct", "IELTS Δ%"),
+                ],
+                rows=comparison_rows,
+            )
+        )
+
+    return specs
 
 
 async def build_por_pais_pdf_payload(
@@ -331,6 +388,31 @@ async def build_por_pais_pdf_payload(
     total_met = sum(r.michigan for r in current.summary_rows)
     total_otros = sum(r.tea + r.other for r in current.summary_rows)
 
+    comp_by_country = (
+        {r.country: r for r in report.comparison.data.summary_rows}
+        if report.comparison
+        else {}
+    )
+    comp_total_revenue = (
+        sum(r.total_revenue for r in report.comparison.data.summary_rows)
+        if report.comparison
+        else None
+    )
+    revenue_growth, revenue_growth_positive = format_growth(
+        ((total_revenue - comp_total_revenue) / comp_total_revenue * 100)
+        if comp_total_revenue
+        else None
+    )
+
+    def _summary_row_deltas(r: PorPaisSummaryRow) -> list:
+        comp = comp_by_country.get(r.country)
+        if not comp:
+            return []
+        deltas: list = [None] * 9
+        deltas[2] = format_delta(r.total_revenue, comp.total_revenue, lambda v: format_currency(v, base_currency))
+        deltas[3] = format_delta(r.uncategorized_revenue, comp.uncategorized_revenue, lambda v: format_currency(v, base_currency))
+        return deltas
+
     return PorPaisPDFPayload(
         header=build_pdf_header(
             "Resultado por País", "Resumen por país y estado de colegios/exámenes", filters
@@ -338,7 +420,12 @@ async def build_por_pais_pdf_payload(
         kpis=[
             PDFKpiItem(label="Países", value=format_integer(len(current.summary_rows))),
             PDFKpiItem(label="Colegios", value=format_integer(total_schools)),
-            PDFKpiItem(label="Ingreso Total", value=format_currency(total_revenue, base_currency)),
+            PDFKpiItem(
+                label="Ingreso Total",
+                value=format_currency(total_revenue, base_currency),
+                growth=revenue_growth,
+                growth_positive=revenue_growth_positive,
+            ),
             PDFKpiItem(
                 label="Sin Categorizar", value=format_currency(total_uncategorized, base_currency)
             ),
@@ -371,7 +458,8 @@ async def build_por_pais_pdf_payload(
                         format_integer(r.michigan),
                         format_integer(r.tea),
                         format_integer(r.other),
-                    ]
+                    ],
+                    deltas=_summary_row_deltas(r),
                 )
                 for r in current.summary_rows
             ],
