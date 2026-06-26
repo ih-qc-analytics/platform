@@ -70,7 +70,9 @@ async def test_build_por_asesor_pdf_payload_formats_summary():
         "app.services.por_asesor.por_asesor.getAllAsesorReportRows",
         new=AsyncMock(return_value=report),
     ):
-        payload = await build_por_asesor_pdf_payload(AsesorFilters(year=2025))
+        payload = await build_por_asesor_pdf_payload(
+            AsesorFilters(date_from="2025-01-01", date_to="2025-12-31")
+        )
 
     assert payload.kpis[0].value == "1"
     assert payload.kpis[-1].value == "$19,200"
@@ -211,7 +213,9 @@ async def test_build_asesor_detail_pdf_payload_contains_drawer_sections():
         "app.services.por_asesor.por_asesor.getAsesorDetail",
         new=AsyncMock(return_value=detail),
     ):
-        payload = await build_asesor_detail_pdf_payload(1, AsesorFilters(year=2025))
+        payload = await build_asesor_detail_pdf_payload(
+            1, AsesorFilters(date_from="2025-01-01", date_to="2025-12-31")
+        )
 
     assert payload.header.title == "Ana Garcia"
     assert payload.kpis[0].value == "3"
@@ -333,9 +337,13 @@ async def test_pdf_endpoints_return_payload_shapes():
     ):
         app.dependency_overrides[verify_token] = lambda: {"sub": "test-user"}
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:  # type: ignore[arg-type]
-            por_asesor = await client.post("/reports/por-asesor/export/pdf", json={"year": 2025})
+            por_asesor = await client.post(
+                "/reports/por-asesor/export/pdf",
+                json={"date_from": "2025-01-01", "date_to": "2025-12-31"},
+            )
             asesor_detail = await client.post(
-                "/reports/por-asesor/1/export/pdf", json={"year": 2025}
+                "/reports/por-asesor/1/export/pdf",
+                json={"date_from": "2025-01-01", "date_to": "2025-12-31"},
             )
             detalle = await client.post(
                 "/reports/detalle-asesor/export/pdf",

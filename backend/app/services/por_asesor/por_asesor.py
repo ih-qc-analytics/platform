@@ -1,6 +1,5 @@
 import asyncio
 from collections import defaultdict
-from datetime import date
 from types import SimpleNamespace
 
 from fastapi import HTTPException
@@ -51,7 +50,6 @@ from app.services.por_asesor.repository import (
     _payment_where,
 )
 from app.services.utils.date_utils import (
-    current_year_to_date_range,
     percent_change,
     resolve_comparison_range,
 )
@@ -66,20 +64,6 @@ ASESOR_SUMMARY_COLUMNS = [
     ExcelColumn("uncategorized_revenue", "Uncategorized Revenue"),
     ExcelColumn("total_revenue", "Total Revenue"),
 ]
-
-
-def _normalized_asesor_filters(filters: AsesorFilters) -> AsesorFilters:
-    if filters.date_from and filters.date_to:
-        return filters
-    if filters.year is not None:
-        return filters.model_copy(
-            update={
-                "date_from": date(filters.year, 1, 1).isoformat(),
-                "date_to": date(filters.year, 12, 31).isoformat(),
-            }
-        )
-    date_from, date_to = current_year_to_date_range()
-    return filters.model_copy(update={"date_from": date_from, "date_to": date_to})
 
 
 async def fetch_seller_name(seller_id: int) -> str | None:
@@ -432,44 +416,25 @@ async def getAsesorReport(
     country_rates: dict | None = None,
     base_currency: BaseCurrency = BaseCurrency.MXN,
 ) -> AsesorReportResponse:
-    normalized_filters = _normalized_asesor_filters(filters)
-    comparison_meta = resolve_comparison_range(normalized_filters)
+    current_filters = filters.model_copy(
+        update={"show_comparison": False, "comparison_date_from": None, "comparison_date_to": None}
+    )
+    comparison_meta = resolve_comparison_range(filters)
 
     if comparison_meta is None:
-        previous_year_from = (
-            date.fromisoformat(normalized_filters.date_from)
-            .replace(year=date.fromisoformat(normalized_filters.date_from).year - 1)
-            .isoformat()
-        )
-        previous_year_to = (
-            date.fromisoformat(normalized_filters.date_to)
-            .replace(year=date.fromisoformat(normalized_filters.date_to).year - 1)
-            .isoformat()
-        )
         current = await _get_asesor_report_base(
-            normalized_filters,
-            normalized_filters.model_copy(
-                update={
-                    "date_from": previous_year_from,
-                    "date_to": previous_year_to,
-                    "year": None,
-                    "show_comparison": False,
-                }
-            ),
-            limit=normalized_filters.limit,
-            cursor=normalized_filters.cursor,
+            current_filters,
+            current_filters,
+            limit=current_filters.limit,
+            cursor=current_filters.cursor,
             base_currency=base_currency,
         )
         return AsesorReportResponse(current=current, comparison_mode=None, comparison=None)
 
-    current_filters = normalized_filters.model_copy(
-        update={"show_comparison": False, "comparison_date_from": None, "comparison_date_to": None}
-    )
     comparison_filters = current_filters.model_copy(
         update={
             "date_from": comparison_meta.date_from,
             "date_to": comparison_meta.date_to,
-            "year": None,
             "cursor": None,
         }
     )
@@ -575,38 +540,25 @@ async def getAsesorDetail(
     country_rates: dict | None = None,
     base_currency: BaseCurrency = BaseCurrency.MXN,
 ) -> AsesorDetailResponse:
-    normalized_filters = _normalized_asesor_filters(filters)
-    comparison_meta = resolve_comparison_range(normalized_filters)
+    current_filters = filters.model_copy(
+        update={"show_comparison": False, "comparison_date_from": None, "comparison_date_to": None}
+    )
+    comparison_meta = resolve_comparison_range(filters)
+
     if comparison_meta is None:
-        previous_year_from = (
-            date.fromisoformat(normalized_filters.date_from)
-            .replace(year=date.fromisoformat(normalized_filters.date_from).year - 1)
-            .isoformat()
-        )
-        previous_year_to = (
-            date.fromisoformat(normalized_filters.date_to)
-            .replace(year=date.fromisoformat(normalized_filters.date_to).year - 1)
-            .isoformat()
-        )
         current = await _get_asesor_detail_base(
             seller_id,
-            normalized_filters,
-            normalized_filters.model_copy(
-                update={
-                    "date_from": previous_year_from,
-                    "date_to": previous_year_to,
-                    "show_comparison": False,
-                }
-            ),
+            current_filters,
+            current_filters,
             base_currency=base_currency,
         )
         return AsesorDetailResponse(current=current, comparison_mode=None, comparison=None)
 
-    current_filters = normalized_filters.model_copy(
-        update={"show_comparison": False, "comparison_date_from": None, "comparison_date_to": None}
-    )
     comparison_filters = current_filters.model_copy(
-        update={"date_from": comparison_meta.date_from, "date_to": comparison_meta.date_to, "year": None}
+        update={
+            "date_from": comparison_meta.date_from,
+            "date_to": comparison_meta.date_to,
+        }
     )
     current, comparison = await asyncio.gather(
         _get_asesor_detail_base(
@@ -630,15 +582,17 @@ async def getAllAsesorReportRows(
     country_rates: dict | None = None,
     base_currency: BaseCurrency = BaseCurrency.MXN,
 ) -> AsesorReportResponse:
-    normalized_filters = _normalized_asesor_filters(filters)
-    comparison_meta = resolve_comparison_range(normalized_filters)
+    comparison_meta = resolve_comparison_range(filters)
+    current_filters = filters.model_copy(
+        update={"show_comparison": False, "comparison_date_from": None, "comparison_date_to": None}
+    )
 
     # Collect all current rows; suppress per-page comparison (fetched in one batch below)
     all_rows: list[AsesorRow] = []
-    cursor = normalized_filters.cursor
+    cursor = current_filters.cursor
     while True:
         page = await getAsesorReport(
-            normalized_filters.model_copy(update={"cursor": cursor, "show_comparison": False}),
+            current_filters.model_copy(update={"cursor": cursor}),
             country_rates=country_rates,
             base_currency=base_currency,
         )
@@ -654,11 +608,12 @@ async def getAllAsesorReportRows(
 
     # One batch comparison fetch for ALL accumulated seller_ids
     seller_ids = [row.seller_id for row in all_rows]
-    current_filters = normalized_filters.model_copy(
-        update={"show_comparison": False, "comparison_date_from": None, "comparison_date_to": None}
-    )
     comparison_filters = current_filters.model_copy(
-        update={"date_from": comparison_meta.date_from, "date_to": comparison_meta.date_to, "year": None, "cursor": None}
+        update={
+            "date_from": comparison_meta.date_from,
+            "date_to": comparison_meta.date_to,
+            "cursor": None,
+        }
     )
     (
         comp_summary_rows,
@@ -666,9 +621,13 @@ async def getAllAsesorReportRows(
         comp_allocated_rows,
         comp_status_counts,
     ) = await asyncio.gather(
-        fetch_summary_rows_by_seller_ids(seller_ids, comparison_filters, base_currency=base_currency),
+        fetch_summary_rows_by_seller_ids(
+            seller_ids, comparison_filters, base_currency=base_currency
+        ),
         fetch_summary_exam_breakdown_rows_by_seller_ids(seller_ids, comparison_filters),
-        fetch_summary_allocated_revenue_rows_by_seller_ids(seller_ids, comparison_filters, base_currency=base_currency),
+        fetch_summary_allocated_revenue_rows_by_seller_ids(
+            seller_ids, comparison_filters, base_currency=base_currency
+        ),
         fetch_summary_status_counts(comparison_filters, current_filters, seller_ids),
     )
     comparison_base = build_asesor_report_base(
@@ -698,14 +657,12 @@ async def getAsesorDetailsForRows(
 ) -> list[AsesorDetailBase]:
     if not rows:
         return []
-    normalized_filters = _normalized_asesor_filters(filters)
-    comparison_filters = normalized_filters
     results = await asyncio.gather(
         *(
             _get_asesor_detail_base(
                 row.seller_id,
-                normalized_filters,
-                comparison_filters,
+                filters,
+                filters,
                 base_currency=base_currency,
             )
             for row in rows
@@ -715,8 +672,7 @@ async def getAsesorDetailsForRows(
 
 
 def build_asesor_export_filters_for_all(filters: AsesorFilters) -> AsesorFilters:
-    normalized_filters = _normalized_asesor_filters(filters)
-    return normalized_filters.model_copy(
+    return filters.model_copy(
         update={
             "countries": [],
             "zones": [],
@@ -805,23 +761,27 @@ def build_asesor_export_worksheets(
         ExcelColumn("total_revenue", "Total Revenue"),
     ]
     for _cat in EXAM_CATEGORY_ORDER:
-        detail_columns.extend([
-            ExcelColumn(f"{_cat}_exams", f"{_cat} Exams"),
-            ExcelColumn(f"{_cat}_schools", f"{_cat} Schools"),
-            ExcelColumn(f"{_cat}_revenue", f"{_cat} Revenue"),
-        ])
+        detail_columns.extend(
+            [
+                ExcelColumn(f"{_cat}_exams", f"{_cat} Exams"),
+                ExcelColumn(f"{_cat}_schools", f"{_cat} Schools"),
+                ExcelColumn(f"{_cat}_revenue", f"{_cat} Revenue"),
+            ]
+        )
     if report.comparison:
-        detail_columns.extend([
-            ExcelColumn("ganados_schools", "Ganados Schools"),
-            ExcelColumn("ganados_exams", "Ganados Exams"),
-            ExcelColumn("ganados_revenue", "Ganados Revenue"),
-            ExcelColumn("perdidos_schools", "Perdidos Schools"),
-            ExcelColumn("perdidos_exams", "Perdidos Exams"),
-            ExcelColumn("perdidos_revenue", "Perdidos Revenue"),
-            ExcelColumn("mantenidos_schools", "Mantenidos Schools"),
-            ExcelColumn("mantenidos_exams", "Mantenidos Exams"),
-            ExcelColumn("mantenidos_revenue", "Mantenidos Revenue"),
-        ])
+        detail_columns.extend(
+            [
+                ExcelColumn("ganados_schools", "Ganados Schools"),
+                ExcelColumn("ganados_exams", "Ganados Exams"),
+                ExcelColumn("ganados_revenue", "Ganados Revenue"),
+                ExcelColumn("perdidos_schools", "Perdidos Schools"),
+                ExcelColumn("perdidos_exams", "Perdidos Exams"),
+                ExcelColumn("perdidos_revenue", "Perdidos Revenue"),
+                ExcelColumn("mantenidos_schools", "Mantenidos Schools"),
+                ExcelColumn("mantenidos_exams", "Mantenidos Exams"),
+                ExcelColumn("mantenidos_revenue", "Mantenidos Revenue"),
+            ]
+        )
 
     specs = [
         ExcelWorksheetSpec(name="Por Asesor", columns=summary_columns, rows=summary_rows),
@@ -848,7 +808,9 @@ def build_asesor_export_worksheets(
                     "perdidos_pct": _pct(row.perdidos, comp.perdidos) if comp else None,
                     "uncategorized_act": row.uncategorized_revenue,
                     "uncategorized_ant": comp.uncategorized_revenue if comp else None,
-                    "uncategorized_pct": _pct(row.uncategorized_revenue, comp.uncategorized_revenue) if comp else None,
+                    "uncategorized_pct": _pct(row.uncategorized_revenue, comp.uncategorized_revenue)
+                    if comp
+                    else None,
                     "revenue_act": row.total_revenue,
                     "revenue_ant": comp.total_revenue if comp else None,
                     "revenue_pct": _pct(row.total_revenue, comp.total_revenue) if comp else None,
@@ -898,9 +860,7 @@ async def build_por_asesor_pdf_payload(
     total_mantenidos = sum(row.mantenidos for row in report.current.rows)
 
     comp_by_seller = (
-        {r.seller_name: r for r in report.comparison.data.rows}
-        if report.comparison
-        else {}
+        {r.seller_name: r for r in report.comparison.data.rows} if report.comparison else {}
     )
 
     has_comparison = report.comparison is not None
@@ -912,8 +872,12 @@ async def build_por_asesor_pdf_payload(
     # Comparison totals for KPI growth
     comp_rows = report.comparison.data.rows if has_comparison else []
     comp_total_revenue = sum(r.total_revenue for r in comp_rows) if has_comparison else None
-    comp_total_exams = sum(sum(r.exam_breakdown.values()) for r in comp_rows) if has_comparison else None
-    comp_total_uncategorized = sum(r.uncategorized_revenue for r in comp_rows) if has_comparison else None
+    comp_total_exams = (
+        sum(sum(r.exam_breakdown.values()) for r in comp_rows) if has_comparison else None
+    )
+    comp_total_uncategorized = (
+        sum(r.uncategorized_revenue for r in comp_rows) if has_comparison else None
+    )
     comp_asesores = len(comp_rows) if has_comparison else None
 
     def _kw(curr: float, prev: float | None) -> dict:
@@ -1001,7 +965,7 @@ async def build_por_asesor_pdf_payload(
         header=build_pdf_header(
             "Resultados por Asesor",
             "Resumen por asesor con familias de exámenes y valor total",
-            _normalized_asesor_filters(filters),
+            filters,
             comparison_meta=report.comparison.meta if report.comparison else None,
         ),
         kpis=[
@@ -1066,17 +1030,21 @@ async def build_asesor_detail_pdf_payload(
             None,
             format_delta(bd.exams, comp_bd.exams, format_integer) if comp_bd else None,
             format_delta(bd.schools, comp_bd.schools, format_integer) if comp_bd else None,
-            format_delta(bd.revenue, comp_bd.revenue, lambda v: format_currency(v, base_currency)) if comp_bd else None,
+            format_delta(bd.revenue, comp_bd.revenue, lambda v: format_currency(v, base_currency))
+            if comp_bd
+            else None,
         ]
-        category_rows.append(PDFTableRow(
-            cells=[
-                cat,
-                format_integer(bd.exams),
-                format_integer(bd.schools),
-                format_currency(bd.revenue, base_currency),
-            ],
-            deltas=deltas,
-        ))
+        category_rows.append(
+            PDFTableRow(
+                cells=[
+                    cat,
+                    format_integer(bd.exams),
+                    format_integer(bd.schools),
+                    format_currency(bd.revenue, base_currency),
+                ],
+                deltas=deltas,
+            )
+        )
 
     status_rows = []
     for label, curr_status in [
@@ -1084,20 +1052,22 @@ async def build_asesor_detail_pdf_payload(
         ("Perdidos", detail.perdidos),
         ("Mantenidos", detail.mantenidos),
     ]:
-        status_rows.append(PDFTableRow(
-            cells=[
-                label,
-                format_integer(curr_status.schools),
-                format_integer(curr_status.exams),
-                format_currency(curr_status.revenue, base_currency),
-            ],
-        ))
+        status_rows.append(
+            PDFTableRow(
+                cells=[
+                    label,
+                    format_integer(curr_status.schools),
+                    format_integer(curr_status.exams),
+                    format_currency(curr_status.revenue, base_currency),
+                ],
+            )
+        )
 
     return AsesorDetailPDFPayload(
         header=build_pdf_header(
             detail.seller_name,
             "Detalle del asesor por geografía, categorías y estado de colegios",
-            _normalized_asesor_filters(filters),
+            filters,
             comparison_meta=comp_meta,
         ),
         kpis=[
@@ -1114,7 +1084,10 @@ async def build_asesor_detail_pdf_payload(
             PDFKpiItem(
                 label="Sin Categorizar",
                 value=format_currency(detail.uncategorized_revenue, base_currency),
-                **_kw(detail.uncategorized_revenue, comp_detail.uncategorized_revenue if comp_detail else None),
+                **_kw(
+                    detail.uncategorized_revenue,
+                    comp_detail.uncategorized_revenue if comp_detail else None,
+                ),
             ),
             PDFKpiItem(
                 label="Valor Total",

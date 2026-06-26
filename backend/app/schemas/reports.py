@@ -107,7 +107,6 @@ class AsesorFilters(BaseGeoFilters, DateRangeFilterFields, ComparisonFilterField
     sellers: list[str] = []
     limit: int = 25
     cursor: Optional[str] = None
-    year: Optional[int] = None
 
 
 class AsesorRow(BaseModel):

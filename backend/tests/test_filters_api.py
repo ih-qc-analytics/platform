@@ -27,7 +27,9 @@ async def test_filter_options_endpoint_returns_200():
             "app.routers.filters.getFilters",
             new=AsyncMock(return_value=FILTER_OPTIONS_RESPONSE),
         ):
-            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:  # type: ignore[arg-type]
+            async with AsyncClient(
+                transport=ASGITransport(app=app), base_url="http://test"
+            ) as client:  # type: ignore[arg-type]
                 response = await client.get("/filters/options")
     finally:
         app.dependency_overrides.clear()
@@ -44,7 +46,9 @@ async def test_seller_options_endpoint_returns_200():
             "app.routers.filters.getSellerOptions",
             new=AsyncMock(return_value=SELLER_OPTIONS_RESPONSE),
         ):
-            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:  # type: ignore[arg-type]
+            async with AsyncClient(
+                transport=ASGITransport(app=app), base_url="http://test"
+            ) as client:  # type: ignore[arg-type]
                 response = await client.get("/filters/sellers")
     finally:
         app.dependency_overrides.clear()

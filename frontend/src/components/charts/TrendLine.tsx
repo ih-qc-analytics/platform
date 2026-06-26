@@ -1,5 +1,12 @@
 import { LineChart, Line, XAxis, YAxis, CartesianGrid } from "recharts"
-import { ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart"
+import {
+    ChartContainer,
+    ChartLegend,
+    ChartLegendContent,
+    ChartTooltip,
+    ChartTooltipContent,
+    type ChartConfig,
+} from "@/components/ui/chart"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import type { TrendPoint } from "@/types"
 import { formatRevenue } from "@/lib/utils"
@@ -59,9 +66,7 @@ export default function TrendLine({ data, comparisonData }: TrendLineProps) {
                             axisLine={false}
                             width={Y_AXIS_WIDTH}
                         />
-                        {comparisonData?.length ? (
-                            <ChartLegend content={<ChartLegendContent />} />
-                        ) : null}
+                        {comparisonData?.length ? <ChartLegend content={<ChartLegendContent />} /> : null}
                         <ChartTooltip
                             content={<ChartTooltipContent formatter={(val) => formatRevenue(val as number)} />}
                         />

@@ -40,7 +40,10 @@ async def test_total_sales_2025_gap_between_payment_total_and_allocated_breakdow
     result = await getTotalSalesData(ReportFilters(date_from="2025-01-01", date_to="2025-12-31"))
 
     allocated_breakdown_total = (
-        result.current.exam_revenue + result.current.book_revenue + result.current.course_revenue + result.current.otros_revenue
+        result.current.exam_revenue
+        + result.current.book_revenue
+        + result.current.course_revenue
+        + result.current.otros_revenue
     )
 
     assert result.current.total_revenue == 14200.0

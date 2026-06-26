@@ -428,7 +428,10 @@ async def test_total_revenue_sum_of_all_types(reporting_session_factory, clean_r
     result = await getTotalSalesData(ReportFilters())
     assert result.current.total_revenue == pytest.approx(2500.0)
     assert (
-        result.current.exam_revenue + result.current.book_revenue + result.current.course_revenue + result.current.otros_revenue
+        result.current.exam_revenue
+        + result.current.book_revenue
+        + result.current.course_revenue
+        + result.current.otros_revenue
         == pytest.approx(2500.0)
     )
 
@@ -541,7 +544,9 @@ async def test_growth_pct_positive(reporting_session_factory, clean_reporting_db
         ReportFilters(date_from="2025-01-01", date_to="2025-12-31", show_comparison=True)
     )
     assert result.comparison is not None
-    assert result.comparison.deltas["total_revenue"].pct_change == pytest.approx(100.0)  # (10000-5000)/5000 * 100
+    assert result.comparison.deltas["total_revenue"].pct_change == pytest.approx(
+        100.0
+    )  # (10000-5000)/5000 * 100
 
 
 @pytest.mark.asyncio

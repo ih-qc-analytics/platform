@@ -232,7 +232,9 @@ export default function VentasTotales() {
                                     value={data.current.unknown_site_expected_revenue}
                                     prefix="$"
                                     showComparison={Boolean(data.comparison)}
-                                    comparisonValue={data.comparison?.deltas.unknown_site_expected_revenue?.comparison_value}
+                                    comparisonValue={
+                                        data.comparison?.deltas.unknown_site_expected_revenue?.comparison_value
+                                    }
                                     comparisonPct={data.comparison?.deltas.unknown_site_expected_revenue?.pct_change}
                                 />
                                 <KpiCard

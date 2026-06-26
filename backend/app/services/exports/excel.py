@@ -102,8 +102,10 @@ def build_excel_workbook(worksheets: list[ExcelWorksheetSpec]) -> Workbook:
             note_cell.alignment = Alignment(vertical="center")
             if len(spec.columns) > 1:
                 worksheet.merge_cells(
-                    start_row=1, start_column=1,
-                    end_row=1, end_column=len(spec.columns),
+                    start_row=1,
+                    start_column=1,
+                    end_row=1,
+                    end_column=len(spec.columns),
                 )
             worksheet.row_dimensions[1].height = 16
             header_row = 2
@@ -173,7 +175,9 @@ def add_total_sales_charts(
     trend_chart.set_categories(trend_categories)
     if has_comparison:
         comp_trend_col = col_keys.index("comp_trend_revenue") + 1
-        comp_trend_data = Reference(worksheet, min_col=comp_trend_col, min_row=header_row, max_row=data_end)
+        comp_trend_data = Reference(
+            worksheet, min_col=comp_trend_col, min_row=header_row, max_row=data_end
+        )
         trend_chart.add_data(comp_trend_data, titles_from_data=True)
     worksheet.add_chart(trend_chart, "G2")
 
@@ -187,6 +191,8 @@ def add_total_sales_charts(
     geo_chart.set_categories(geo_categories)
     if has_comparison:
         comp_geo_col = col_keys.index("comp_geo_revenue") + 1
-        comp_geo_data = Reference(worksheet, min_col=comp_geo_col, min_row=header_row, max_row=data_end)
+        comp_geo_data = Reference(
+            worksheet, min_col=comp_geo_col, min_row=header_row, max_row=data_end
+        )
         geo_chart.add_data(comp_geo_data, titles_from_data=True)
     worksheet.add_chart(geo_chart, "G20")

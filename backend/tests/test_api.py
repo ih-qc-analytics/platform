@@ -197,7 +197,11 @@ async def test_trend_points_are_list():
 @pytest.mark.asyncio(loop_scope="session")
 async def test_product_mix_null_when_service_returns_none():
     empty_response = MOCK_RESPONSE.model_copy(
-        update={"current": MOCK_RESPONSE.current.model_copy(update={"product_mix": None, "total_revenue": 0.0})}
+        update={
+            "current": MOCK_RESPONSE.current.model_copy(
+                update={"product_mix": None, "total_revenue": 0.0}
+            )
+        }
     )
     with patch(
         "app.routers.total_sales.getTotalSalesData", new=AsyncMock(return_value=empty_response)

@@ -165,14 +165,18 @@ export default function PorPais() {
                                             <TableHeadCell className="sticky left-0 z-10 min-w-36 bg-card text-left">
                                                 País
                                             </TableHeadCell>
-                                            <TableHeadCell className="min-w-24 text-center">Colegios Ganados</TableHeadCell>
+                                            <TableHeadCell className="min-w-24 text-center">
+                                                Colegios Ganados
+                                            </TableHeadCell>
                                             <TableHeadCell className="min-w-24 text-center">
                                                 Colegios Perdidos
                                             </TableHeadCell>
                                             <TableHeadCell className="min-w-24 text-center">
                                                 Colegios Mantenidos
                                             </TableHeadCell>
-                                            <TableHeadCell className="min-w-24 text-center">Exámenes Ganados</TableHeadCell>
+                                            <TableHeadCell className="min-w-24 text-center">
+                                                Exámenes Ganados
+                                            </TableHeadCell>
                                             <TableHeadCell className="min-w-24 text-center">
                                                 Exámenes Perdidos
                                             </TableHeadCell>

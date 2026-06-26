@@ -76,7 +76,10 @@ async def test_por_asesor_post_returns_200():
     ):
         app.dependency_overrides[verify_token] = lambda: {"sub": "test-user"}
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:  # type: ignore[arg-type]
-            response = await client.post("/reports/por-asesor", json={"year": 2025})
+            response = await client.post(
+                "/reports/por-asesor",
+                json={"date_from": "2025-01-01", "date_to": "2025-12-31"},
+            )
         app.dependency_overrides.clear()
 
     assert response.status_code == 200
@@ -93,7 +96,8 @@ async def test_por_asesor_post_parses_filters():
             await client.post(
                 "/reports/por-asesor",
                 json={
-                    "year": 2025,
+                    "date_from": "2025-01-01",
+                    "date_to": "2025-12-31",
                     "countries": ["mexico"],
                     "sellers": ["Ana Garcia"],
                     "limit": 10,
@@ -103,7 +107,8 @@ async def test_por_asesor_post_parses_filters():
         app.dependency_overrides.clear()
 
     filters = mock.call_args[0][0]
-    assert filters.year == 2025
+    assert filters.date_from == "2025-01-01"
+    assert filters.date_to == "2025-12-31"
     assert filters.countries == ["mexico"]
     assert filters.sellers == ["Ana Garcia"]
     assert filters.limit == 10
@@ -118,7 +123,10 @@ async def test_por_asesor_detail_returns_200():
     ):
         app.dependency_overrides[verify_token] = lambda: {"sub": "test-user"}
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:  # type: ignore[arg-type]
-            response = await client.post("/reports/por-asesor/1", json={"year": 2025})
+            response = await client.post(
+                "/reports/por-asesor/1",
+                json={"date_from": "2025-01-01", "date_to": "2025-12-31"},
+            )
         app.dependency_overrides.clear()
 
     assert response.status_code == 200
@@ -134,7 +142,8 @@ async def test_por_asesor_detail_parses_body():
             await client.post(
                 "/reports/por-asesor/2",
                 json={
-                    "year": 2025,
+                    "date_from": "2025-01-01",
+                    "date_to": "2025-12-31",
                     "countries": ["colombia"],
                     "states": ["Antioquia"],
                     "cities": ["Medellin"],
@@ -145,7 +154,8 @@ async def test_por_asesor_detail_parses_body():
 
     seller_id, filters = mock.call_args[0]
     assert seller_id == 2
-    assert filters.year == 2025
+    assert filters.date_from == "2025-01-01"
+    assert filters.date_to == "2025-12-31"
     assert filters.countries == ["colombia"]
     assert filters.states == ["Antioquia"]
     assert filters.cities == ["Medellin"]

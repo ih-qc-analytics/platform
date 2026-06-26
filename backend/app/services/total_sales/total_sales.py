@@ -353,25 +353,72 @@ async def build_ventas_totales_pdf_payload(
             return {}
         delta = comp.deltas.get(delta_key)
         growth_str, positive = format_growth(delta.pct_change if delta else None)
-        return {"growth": growth_str if growth_str is not None else "N/A", "growth_positive": positive}
+        return {
+            "growth": growth_str if growth_str is not None else "N/A",
+            "growth_positive": positive,
+        }
 
     kpis = [
         PDFKpiItem(label="Total Clientes", value=str(base.total_clients), **_kw("total_clients")),
         PDFKpiItem(label="Total Exámenes", value=str(base.total_exams), **_kw("total_exams")),
-        PDFKpiItem(label="Ingreso por Exámenes", value=format_currency(base.exam_revenue, base_currency), **_kw("exam_revenue")),
+        PDFKpiItem(
+            label="Ingreso por Exámenes",
+            value=format_currency(base.exam_revenue, base_currency),
+            **_kw("exam_revenue"),
+        ),
         PDFKpiItem(label="Total Libros", value=str(base.total_books), **_kw("total_books")),
-        PDFKpiItem(label="Ingreso por Libros", value=format_currency(base.book_revenue, base_currency), **_kw("book_revenue")),
+        PDFKpiItem(
+            label="Ingreso por Libros",
+            value=format_currency(base.book_revenue, base_currency),
+            **_kw("book_revenue"),
+        ),
         PDFKpiItem(label="Total Cursos", value=str(base.total_courses), **_kw("total_courses")),
-        PDFKpiItem(label="Ingreso por Cursos", value=format_currency(base.course_revenue, base_currency), **_kw("course_revenue")),
+        PDFKpiItem(
+            label="Ingreso por Cursos",
+            value=format_currency(base.course_revenue, base_currency),
+            **_kw("course_revenue"),
+        ),
         PDFKpiItem(label="Otros", value=str(base.total_otros), **_kw("total_otros")),
-        PDFKpiItem(label="Ingreso por Otros", value=format_currency(base.otros_revenue, base_currency), **_kw("otros_revenue")),
-        PDFKpiItem(label="Ingreso Esperado", value=format_currency(base.expected_revenue, base_currency), **_kw("expected_revenue")),
-        PDFKpiItem(label="Costo Esperado", value=format_currency(base.expected_cost, base_currency), **_kw("expected_cost")),
-        PDFKpiItem(label="Sin Categorizar", value=format_currency(base.uncategorized_revenue, base_currency), **_kw("uncategorized_revenue")),
-        PDFKpiItem(label="Ingreso Sitio Desconocido", value=format_currency(base.unknown_site_revenue, base_currency), **_kw("unknown_site_revenue")),
-        PDFKpiItem(label="Esperado Sitio Desconocido", value=format_currency(base.unknown_site_expected_revenue, base_currency), **_kw("unknown_site_expected_revenue")),
-        PDFKpiItem(label="Ingreso Total", value=format_currency(base.total_revenue, base_currency), **_kw("total_revenue")),
-        PDFKpiItem(label="Margen de Utilidad", value=format_percent(base.profit_margin), **_kw("profit_margin")),
+        PDFKpiItem(
+            label="Ingreso por Otros",
+            value=format_currency(base.otros_revenue, base_currency),
+            **_kw("otros_revenue"),
+        ),
+        PDFKpiItem(
+            label="Ingreso Esperado",
+            value=format_currency(base.expected_revenue, base_currency),
+            **_kw("expected_revenue"),
+        ),
+        PDFKpiItem(
+            label="Costo Esperado",
+            value=format_currency(base.expected_cost, base_currency),
+            **_kw("expected_cost"),
+        ),
+        PDFKpiItem(
+            label="Sin Categorizar",
+            value=format_currency(base.uncategorized_revenue, base_currency),
+            **_kw("uncategorized_revenue"),
+        ),
+        PDFKpiItem(
+            label="Ingreso Sitio Desconocido",
+            value=format_currency(base.unknown_site_revenue, base_currency),
+            **_kw("unknown_site_revenue"),
+        ),
+        PDFKpiItem(
+            label="Esperado Sitio Desconocido",
+            value=format_currency(base.unknown_site_expected_revenue, base_currency),
+            **_kw("unknown_site_expected_revenue"),
+        ),
+        PDFKpiItem(
+            label="Ingreso Total",
+            value=format_currency(base.total_revenue, base_currency),
+            **_kw("total_revenue"),
+        ),
+        PDFKpiItem(
+            label="Margen de Utilidad",
+            value=format_percent(base.profit_margin),
+            **_kw("profit_margin"),
+        ),
     ]
 
     return VentasTotalesPDFPayload(
@@ -387,8 +434,12 @@ async def build_ventas_totales_pdf_payload(
                 label=format_month_label(point.month),
                 value=point.revenue,
                 scaled=scaled_trend[index],
-                comparison_value=comp_trend_pts[index].revenue if comp and index < len(comp_trend_pts) else None,
-                comparison_scaled=scaled_comp_trend[index] if comp and index < len(comp_trend_pts) else None,
+                comparison_value=comp_trend_pts[index].revenue
+                if comp and index < len(comp_trend_pts)
+                else None,
+                comparison_scaled=scaled_comp_trend[index]
+                if comp and index < len(comp_trend_pts)
+                else None,
             )
             for index, point in enumerate(base.trend_points)
         ],
@@ -478,8 +529,12 @@ def build_total_sales_export_worksheets(
             actual = getattr(base, key)
             anterior = getattr(comp_data, key)
             delta = comp.deltas.get(key)
-            delta_pct = round(delta.pct_change, 1) if delta and delta.pct_change is not None else None
-            comp_rows.append({"metric": label, "actual": actual, "anterior": anterior, "delta_pct": delta_pct})
+            delta_pct = (
+                round(delta.pct_change, 1) if delta and delta.pct_change is not None else None
+            )
+            comp_rows.append(
+                {"metric": label, "actual": actual, "anterior": anterior, "delta_pct": delta_pct}
+            )
         worksheets.append(
             ExcelWorksheetSpec(
                 name="Comparación",
@@ -504,8 +559,12 @@ def build_total_sales_export_worksheets(
                 "geo_revenue": geo_point.revenue if geo_point else 0,
             }
             if comp:
-                row["comp_trend_revenue"] = comp_trend_pts[index].revenue if index < len(comp_trend_pts) else 0
-                row["comp_geo_revenue"] = comp_geo_by_dim.get(geo_point.dimension, 0) if geo_point else 0
+                row["comp_trend_revenue"] = (
+                    comp_trend_pts[index].revenue if index < len(comp_trend_pts) else 0
+                )
+                row["comp_geo_revenue"] = (
+                    comp_geo_by_dim.get(geo_point.dimension, 0) if geo_point else 0
+                )
             chart_rows.append(row)
         chart_columns = list(TOTAL_SALES_CHART_COLUMNS)
         if comp:
@@ -523,7 +582,9 @@ def build_total_sales_export_worksheets(
                 columns=chart_columns,
                 rows=chart_rows,
                 post_process=add_total_sales_charts,
-                note=f"Período comparativo: {comp.meta.date_from} – {comp.meta.date_to}" if comp else None,
+                note=f"Período comparativo: {comp.meta.date_from} – {comp.meta.date_to}"
+                if comp
+                else None,
             )
         )
     return worksheets

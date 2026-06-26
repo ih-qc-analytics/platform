@@ -114,13 +114,22 @@ async def truncate_reporting_all(engine):
 
 
 async def seed_identity_exchange_rates(session_factory):
+    from datetime import timedelta
+
+    pairs = [
+        ("MXN", "USD"),
+        ("COP", "MXN"),
+        ("COP", "USD"),
+        ("PEN", "MXN"),
+        ("PEN", "USD"),
+    ]
+    start = date(2024, 1, 1)
     today = date.today()
+    all_dates = [start + timedelta(days=i) for i in range((today - start).days + 1)]
     rows = [
-        {"date": today, "from_currency": "MXN", "to_currency": "USD", "rate": 1.0},
-        {"date": today, "from_currency": "COP", "to_currency": "MXN", "rate": 1.0},
-        {"date": today, "from_currency": "COP", "to_currency": "USD", "rate": 1.0},
-        {"date": today, "from_currency": "PEN", "to_currency": "MXN", "rate": 1.0},
-        {"date": today, "from_currency": "PEN", "to_currency": "USD", "rate": 1.0},
+        {"date": d, "from_currency": fc, "to_currency": tc, "rate": 1.0}
+        for d in all_dates
+        for fc, tc in pairs
     ]
     async with session_factory() as session:
         async with session.begin():

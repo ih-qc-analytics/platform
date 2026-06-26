@@ -50,27 +50,42 @@ export default function PorPaisDetail({ country, open, onOpenChange, filters }: 
             {
                 title: "IELTS",
                 value: FAMILY_EXAM_TYPES.IELTS.reduce((sum, examType) => sum + (data?.exam_counts[examType] ?? 0), 0),
-                comparisonValue: FAMILY_EXAM_TYPES.IELTS.reduce((sum, examType) => sum + (data?.comparison_exam_counts?.[examType] ?? 0), 0),
+                comparisonValue: FAMILY_EXAM_TYPES.IELTS.reduce(
+                    (sum, examType) => sum + (data?.comparison_exam_counts?.[examType] ?? 0),
+                    0,
+                ),
             },
             {
                 title: "MET",
                 value: FAMILY_EXAM_TYPES.MET.reduce((sum, examType) => sum + (data?.exam_counts[examType] ?? 0), 0),
-                comparisonValue: FAMILY_EXAM_TYPES.MET.reduce((sum, examType) => sum + (data?.comparison_exam_counts?.[examType] ?? 0), 0),
+                comparisonValue: FAMILY_EXAM_TYPES.MET.reduce(
+                    (sum, examType) => sum + (data?.comparison_exam_counts?.[examType] ?? 0),
+                    0,
+                ),
             },
             {
                 title: "TEA",
                 value: FAMILY_EXAM_TYPES.TEA.reduce((sum, examType) => sum + (data?.exam_counts[examType] ?? 0), 0),
-                comparisonValue: FAMILY_EXAM_TYPES.TEA.reduce((sum, examType) => sum + (data?.comparison_exam_counts?.[examType] ?? 0), 0),
+                comparisonValue: FAMILY_EXAM_TYPES.TEA.reduce(
+                    (sum, examType) => sum + (data?.comparison_exam_counts?.[examType] ?? 0),
+                    0,
+                ),
             },
             {
                 title: "Otros",
                 value: FAMILY_EXAM_TYPES.Otros.reduce((sum, examType) => sum + (data?.exam_counts[examType] ?? 0), 0),
-                comparisonValue: FAMILY_EXAM_TYPES.Otros.reduce((sum, examType) => sum + (data?.comparison_exam_counts?.[examType] ?? 0), 0),
+                comparisonValue: FAMILY_EXAM_TYPES.Otros.reduce(
+                    (sum, examType) => sum + (data?.comparison_exam_counts?.[examType] ?? 0),
+                    0,
+                ),
             },
             {
                 title: "Total",
                 value: FAMILY_EXAM_TYPES.Total.reduce((sum, examType) => sum + (data?.exam_counts[examType] ?? 0), 0),
-                comparisonValue: FAMILY_EXAM_TYPES.Total.reduce((sum, examType) => sum + (data?.comparison_exam_counts?.[examType] ?? 0), 0),
+                comparisonValue: FAMILY_EXAM_TYPES.Total.reduce(
+                    (sum, examType) => sum + (data?.comparison_exam_counts?.[examType] ?? 0),
+                    0,
+                ),
             },
         ],
         [data?.exam_counts, data?.comparison_exam_counts],
@@ -128,11 +143,15 @@ export default function PorPaisDetail({ country, open, onOpenChange, filters }: 
                                 </h2>
                                 <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-6">
                                     {categoryTiles.map((tile) => {
-                                        const pct = showComparison ? getPercentChange(tile.value, tile.comparisonValue) : null
+                                        const pct = showComparison
+                                            ? getPercentChange(tile.value, tile.comparisonValue)
+                                            : null
                                         return (
                                             <Card key={tile.title} className="rounded-2xl shadow-none">
                                                 <CardContent className="flex min-h-28 flex-col justify-between gap-2 p-4">
-                                                    <span className="text-sm font-medium text-slate-600">{tile.title}</span>
+                                                    <span className="text-sm font-medium text-slate-600">
+                                                        {tile.title}
+                                                    </span>
                                                     <span className="text-2xl font-semibold tracking-tight text-slate-900 tabular-nums">
                                                         {formatInteger(tile.value)}
                                                     </span>
@@ -142,7 +161,12 @@ export default function PorPaisDetail({ country, open, onOpenChange, filters }: 
                                                                 {formatInteger(tile.comparisonValue)}
                                                             </span>
                                                             {pct !== null && (
-                                                                <span className={cn("text-xs font-medium", pct >= 0 ? "text-emerald-600" : "text-rose-600")}>
+                                                                <span
+                                                                    className={cn(
+                                                                        "text-xs font-medium",
+                                                                        pct >= 0 ? "text-emerald-600" : "text-rose-600",
+                                                                    )}
+                                                                >
                                                                     {formatPercentChange(pct)}
                                                                 </span>
                                                             )}
@@ -167,7 +191,9 @@ export default function PorPaisDetail({ country, open, onOpenChange, filters }: 
                                         return (
                                             <Card key={examType} className="rounded-2xl shadow-none">
                                                 <CardContent className="flex items-center justify-between gap-4 p-4">
-                                                    <span className="text-sm font-medium text-slate-700">{examType}</span>
+                                                    <span className="text-sm font-medium text-slate-700">
+                                                        {examType}
+                                                    </span>
                                                     <div className="flex flex-col items-end">
                                                         <span className="text-lg font-semibold text-slate-900 tabular-nums">
                                                             {formatInteger(current)}
@@ -178,7 +204,14 @@ export default function PorPaisDetail({ country, open, onOpenChange, filters }: 
                                                                     {formatInteger(comparison)}
                                                                 </span>
                                                                 {pct !== null && (
-                                                                    <span className={cn("text-xs font-medium", pct >= 0 ? "text-emerald-600" : "text-rose-600")}>
+                                                                    <span
+                                                                        className={cn(
+                                                                            "text-xs font-medium",
+                                                                            pct >= 0
+                                                                                ? "text-emerald-600"
+                                                                                : "text-rose-600",
+                                                                        )}
+                                                                    >
                                                                         {formatPercentChange(pct)}
                                                                     </span>
                                                                 )}

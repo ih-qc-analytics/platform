@@ -100,7 +100,9 @@ def build_pdf_header(
 ) -> PDFHeader:
     summary = filters_summary(filters)
     if comparison_meta:
-        summary["Vs."] = f"{format_date(comparison_meta.date_from)} – {format_date(comparison_meta.date_to)}"
+        summary["Vs."] = (
+            f"{format_date(comparison_meta.date_from)} – {format_date(comparison_meta.date_to)}"
+        )
     return PDFHeader(
         title=title,
         subtitle=subtitle,

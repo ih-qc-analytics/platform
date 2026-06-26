@@ -163,8 +163,8 @@ def _bind(session_factory):
     repo.ReportingSessionLocal = session_factory
 
 
-def _filters(date_from="2025-01-01", date_to="2025-12-31") -> PorPaisFilters:
-    return PorPaisFilters(date_from=date_from, date_to=date_to)
+def _filters(date_from="2025-01-01", date_to="2025-12-31", show_comparison=False) -> PorPaisFilters:
+    return PorPaisFilters(date_from=date_from, date_to=date_to, show_comparison=show_comparison)
 
 
 # ─────────────────────────────────────────────────────────────
@@ -326,11 +326,10 @@ async def test_multiple_countries(reporting_session_factory, clean_reporting_db)
 @pytest.mark.asyncio
 async def test_status_rows_ganado_perdido_mantenido(reporting_session_factory, clean_reporting_db):
     """
-    Status rows re-compute ganado/perdido/mantenido by comparing current vs prior year presence.
+    Status rows use the active comparison range (show_comparison=True, default previous year).
     - lead_id=1 in 2025 only → ganado
     - lead_id=2 in 2024 only → perdido
     - lead_id=3 in both → mantenido
-    The prior-year date range is derived by rewinding date_from/date_to by 1 year.
     """
     _bind(reporting_session_factory)
     await _insert(
@@ -342,7 +341,9 @@ async def test_status_rows_ganado_perdido_mantenido(reporting_session_factory, c
         make_row(cart_product_id=3, site="mexico", lead_id=2, created_at=datetime(2024, 6, 1)),
         make_row(cart_product_id=4, site="mexico", lead_id=3, created_at=datetime(2024, 7, 1)),
     )
-    result = await getPorPaisReport(_filters(date_from="2025-01-01", date_to="2025-12-31"))
+    result = await getPorPaisReport(
+        _filters(date_from="2025-01-01", date_to="2025-12-31", show_comparison=True)
+    )
     mexico_status = next((r for r in result.current.status_rows if r.country == "mexico"), None)
     assert mexico_status is not None
     assert mexico_status.schools_ganados == 1  # lead_id=1

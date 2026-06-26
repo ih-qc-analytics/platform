@@ -8,7 +8,9 @@ from app.services.por_pais.por_pais import getPorPaisDetail, getPorPaisReport
 async def test_por_pais_full_year_summary_and_status_rows_match_payment_based_model(
     ui_dev_reporting_db,
 ):
-    result = await getPorPaisReport(PorPaisFilters(date_from="2025-01-01", date_to="2025-12-31"))
+    result = await getPorPaisReport(
+        PorPaisFilters(date_from="2025-01-01", date_to="2025-12-31", show_comparison=True)
+    )
 
     assert [row.model_dump() for row in result.current.summary_rows] == [
         {
@@ -98,8 +100,10 @@ async def test_por_pais_detail_returns_canonical_exam_counts_per_country(ui_dev_
 
 
 @pytest.mark.asyncio(loop_scope="session")
-async def test_por_pais_midyear_range_rewinds_exact_prior_period_for_statuses(ui_dev_reporting_db):
-    result = await getPorPaisReport(PorPaisFilters(date_from="2025-05-01", date_to="2025-08-31"))
+async def test_por_pais_midyear_range_status_rows_use_comparison_period(ui_dev_reporting_db):
+    result = await getPorPaisReport(
+        PorPaisFilters(date_from="2025-05-01", date_to="2025-08-31", show_comparison=True)
+    )
 
     assert [row.model_dump() for row in result.current.summary_rows] == [
         {

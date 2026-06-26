@@ -129,7 +129,11 @@ export default function DetalleAsesor({ sellerId, sellerName, open, onOpenChange
                                     comparisonValue={
                                         comparisonDetail ? formatInteger(comparisonDetail.total_schools) : undefined
                                     }
-                                    comparisonPct={showComparison ? getPercentChange(detail.total_schools, comparisonDetail?.total_schools) : undefined}
+                                    comparisonPct={
+                                        showComparison
+                                            ? getPercentChange(detail.total_schools, comparisonDetail?.total_schools)
+                                            : undefined
+                                    }
                                     showComparison={showComparison}
                                 />
                                 <SummaryInfoCard
@@ -138,7 +142,11 @@ export default function DetalleAsesor({ sellerId, sellerName, open, onOpenChange
                                     comparisonValue={
                                         comparisonDetail ? formatInteger(comparisonDetail.total_exams) : undefined
                                     }
-                                    comparisonPct={showComparison ? getPercentChange(detail.total_exams, comparisonDetail?.total_exams) : undefined}
+                                    comparisonPct={
+                                        showComparison
+                                            ? getPercentChange(detail.total_exams, comparisonDetail?.total_exams)
+                                            : undefined
+                                    }
                                     showComparison={showComparison}
                                 />
                                 <SummaryInfoCard
@@ -149,7 +157,14 @@ export default function DetalleAsesor({ sellerId, sellerName, open, onOpenChange
                                             ? formatCurrency(comparisonDetail.uncategorized_revenue)
                                             : undefined
                                     }
-                                    comparisonPct={showComparison ? getPercentChange(detail.uncategorized_revenue, comparisonDetail?.uncategorized_revenue) : undefined}
+                                    comparisonPct={
+                                        showComparison
+                                            ? getPercentChange(
+                                                  detail.uncategorized_revenue,
+                                                  comparisonDetail?.uncategorized_revenue,
+                                              )
+                                            : undefined
+                                    }
                                     showComparison={showComparison}
                                 />
                                 <SummaryInfoCard
@@ -158,7 +173,11 @@ export default function DetalleAsesor({ sellerId, sellerName, open, onOpenChange
                                     comparisonValue={
                                         comparisonDetail ? formatCurrency(comparisonDetail.total_revenue) : undefined
                                     }
-                                    comparisonPct={showComparison ? getPercentChange(detail.total_revenue, comparisonDetail?.total_revenue) : undefined}
+                                    comparisonPct={
+                                        showComparison
+                                            ? getPercentChange(detail.total_revenue, comparisonDetail?.total_revenue)
+                                            : undefined
+                                    }
                                     showComparison={showComparison}
                                     wide
                                 />
@@ -245,7 +264,12 @@ function SummaryInfoCard({
                     <div className="flex items-center gap-2">
                         <span className="text-xs text-muted-foreground">{comparisonValue}</span>
                         {comparisonPct !== undefined && comparisonPct !== null && (
-                            <span className={cn("text-xs font-medium", comparisonPct >= 0 ? "text-emerald-600" : "text-rose-600")}>
+                            <span
+                                className={cn(
+                                    "text-xs font-medium",
+                                    comparisonPct >= 0 ? "text-emerald-600" : "text-rose-600",
+                                )}
+                            >
                                 {formatPercentChange(comparisonPct)}
                             </span>
                         )}
@@ -277,17 +301,23 @@ function BreakdownTile({
                 <div className="flex flex-col gap-2">
                     <MetricRow label={firstLabel} value={formatInteger(firstValue)} />
                     {showComparison && comparisonFirstValue !== undefined && (
-                        <span className="text-right text-xs text-muted-foreground">ant. {formatInteger(comparisonFirstValue)}</span>
+                        <span className="text-right text-xs text-muted-foreground">
+                            ant. {formatInteger(comparisonFirstValue)}
+                        </span>
                     )}
                     <MetricRow label={secondLabel} value={formatInteger(secondValue)} />
                     {showComparison && comparisonSecondValue !== undefined && (
-                        <span className="text-right text-xs text-muted-foreground">ant. {formatInteger(comparisonSecondValue)}</span>
+                        <span className="text-right text-xs text-muted-foreground">
+                            ant. {formatInteger(comparisonSecondValue)}
+                        </span>
                     )}
                 </div>
                 <div className="border-t border-current/15 pt-4">
                     <MetricRow label={totalLabel} value={formatCurrency(totalValue)} />
                     {showComparison && comparisonTotalValue !== undefined && (
-                        <span className="block text-right text-xs text-muted-foreground">ant. {formatCurrency(comparisonTotalValue)}</span>
+                        <span className="block text-right text-xs text-muted-foreground">
+                            ant. {formatCurrency(comparisonTotalValue)}
+                        </span>
                     )}
                 </div>
             </CardContent>

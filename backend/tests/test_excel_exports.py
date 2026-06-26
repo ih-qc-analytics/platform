@@ -125,7 +125,7 @@ async def test_total_sales_export_builds_summary_and_chart_sheets(ui_dev_reporti
     ]
     assert summary_sheet.max_row == 2
     assert summary_sheet["A2"].value == 6
-    assert summary_sheet["J2"].value == pytest.approx(14464.59, rel=1e-2)
+    assert summary_sheet["J2"].value == pytest.approx(14200, rel=1e-2)
     assert row_values(chart_sheet, 1, len(TOTAL_SALES_CHART_COLUMNS)) == [
         column.header for column in TOTAL_SALES_CHART_COLUMNS
     ]
@@ -140,7 +140,8 @@ async def test_por_asesor_export_all_ignores_optional_filters_and_adds_detail_sh
     ui_dev_reporting_db,
 ):
     filters = AsesorFilters(
-        year=2025,
+        date_from="2025-01-01",
+        date_to="2025-12-31",
         sellers=["Carlos Rodriguez"],
         countries=["colombia"],
         zones=["IH Colombia"],
@@ -164,7 +165,6 @@ async def test_por_asesor_export_all_ignores_optional_filters_and_adds_detail_sh
         "zones": [],
         "states": [],
         "cities": [],
-        "year": 2025,
         "sellers": [],
         "limit": 100,
         "cursor": None,
@@ -183,13 +183,18 @@ async def test_por_asesor_export_all_ignores_optional_filters_and_adds_detail_sh
     }
     assert len(report.current.rows) == 4
     # Summary columns are dynamic; without comparison, Ganados/Perdidos/Mantenidos are excluded
-    expected_summary_headers = [c.header for c in ASESOR_SUMMARY_COLUMNS if c.header not in ("Ganados", "Perdidos", "Mantenidos")]
+    expected_summary_headers = [
+        c.header
+        for c in ASESOR_SUMMARY_COLUMNS
+        if c.header not in ("Ganados", "Perdidos", "Mantenidos")
+    ]
     assert row_values(summary_sheet, 1, len(expected_summary_headers)) == expected_summary_headers
     assert summary_sheet.max_row == 5
     assert detail_sheet.max_row == 5
     # Find Carlos Rodriguez row (order may vary by revenue ranking)
     carlos_row = next(
-        r for r in range(2, detail_sheet.max_row + 1)
+        r
+        for r in range(2, detail_sheet.max_row + 1)
         if detail_sheet.cell(row=r, column=1).value == "Carlos Rodriguez"
     )
     assert detail_sheet.cell(row=carlos_row, column=2).value == "colombia"

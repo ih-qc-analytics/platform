@@ -161,7 +161,7 @@ def _bind(session_factory):
 
 
 def _filters(**overrides) -> AsesorFilters:
-    defaults = {"year": 2025, "limit": 25}
+    defaults = {"date_from": "2025-01-01", "date_to": "2025-12-31", "limit": 25}
     return AsesorFilters(**{**defaults, **overrides})
 
 
@@ -202,7 +202,7 @@ async def test_returns_one_row_per_seller(reporting_session_factory, clean_repor
             lead_id=3,
         ),
     )
-    result = await getAsesorReport(_filters(year=2025))
+    result = await getAsesorReport(_filters())
     assert len(result.current.rows) == 2
     seller_ids = {row.seller_id for row in result.current.rows}
     assert seller_ids == {1, 2}
@@ -231,7 +231,7 @@ async def test_total_revenue_per_seller(reporting_session_factory, clean_reporti
             lead_id=2,
         ),
     )
-    result = await getAsesorReport(_filters(year=2025))
+    result = await getAsesorReport(_filters())
     assert len(result.current.rows) == 1
     assert result.current.rows[0].total_revenue == pytest.approx(1500.0)
 
@@ -258,7 +258,7 @@ async def test_exam_breakdown_keyed_by_canonical_name(
             cost_mxn=400.0,
         ),
     )
-    result = await getAsesorReport(_filters(year=2025))
+    result = await getAsesorReport(_filters())
     assert len(result.current.rows) == 1
     breakdown = result.current.rows[0].exam_breakdown
     assert "Cambridge English (Main Suite)" in breakdown
@@ -291,7 +291,7 @@ async def test_exam_breakdown_sums_correctly(reporting_session_factory, clean_re
             lead_id=2,
         ),
     )
-    result = await getAsesorReport(_filters(year=2025))
+    result = await getAsesorReport(_filters())
     assert len(result.current.rows) == 1
     cambridge_count = result.current.rows[0].exam_breakdown.get("Cambridge English (Main Suite)", 0)
     assert cambridge_count == 10  # 3 + 7
@@ -312,7 +312,7 @@ async def test_ganado_count_correct(reporting_session_factory, clean_reporting_d
             cart_product_id=1, seller_id=1, lead_id=10, year=2025, total_mxn=1000.0, cost_mxn=400.0
         ),
     )
-    result = await getAsesorReport(_filters(year=2025))
+    result = await getAsesorReport(_filters(show_comparison=True))
     assert len(result.current.rows) == 1
     assert result.current.rows[0].ganados == 1
     assert result.current.rows[0].perdidos == 0
@@ -340,7 +340,7 @@ async def test_perdido_count_correct(reporting_session_factory, clean_reporting_
             cost_mxn=320.0,
         ),
     )
-    result = await getAsesorReport(_filters(year=2025))
+    result = await getAsesorReport(_filters(show_comparison=True))
     assert len(result.current.rows) == 1
     assert result.current.rows[0].perdidos == 1  # lead_id=20 was in 2024 not in 2025
     assert result.current.rows[0].ganados == 1  # lead_id=10 is new in 2025
@@ -365,7 +365,7 @@ async def test_mantenido_count_correct(reporting_session_factory, clean_reportin
             cost_mxn=320.0,
         ),
     )
-    result = await getAsesorReport(_filters(year=2025))
+    result = await getAsesorReport(_filters(show_comparison=True))
     assert len(result.current.rows) == 1
     assert result.current.rows[0].mantenidos == 1
     assert result.current.rows[0].ganados == 0
@@ -376,7 +376,7 @@ async def test_mantenido_count_correct(reporting_session_factory, clean_reportin
 async def test_uncategorized_business_status_row_still_classified_by_year(
     reporting_session_factory, clean_reporting_db
 ):
-    """A row with business_status=UNCATEGORIZED is still classified by year data."""
+    """A row with business_status=UNCATEGORIZED is still classified by date range presence."""
     _bind(reporting_session_factory)
     await _insert(
         reporting_session_factory,
@@ -390,8 +390,8 @@ async def test_uncategorized_business_status_row_still_classified_by_year(
             cost_mxn=400.0,
         ),
     )
-    # Service ignores business_status column; recomputes from year presence
-    result = await getAsesorReport(_filters(year=2025))
+    # Service ignores business_status column; recomputes from date range presence
+    result = await getAsesorReport(_filters(show_comparison=True))
     assert len(result.current.rows) == 1
     # lead_id=10 only in 2025 → ganado
     assert result.current.rows[0].ganados == 1
@@ -403,7 +403,7 @@ async def test_uncategorized_business_status_row_still_classified_by_year(
 
 
 @pytest.mark.asyncio
-async def test_year_filter(reporting_session_factory, clean_reporting_db):
+async def test_date_range_filter(reporting_session_factory, clean_reporting_db):
     _bind(reporting_session_factory)
     await _insert(
         reporting_session_factory,
@@ -417,11 +417,11 @@ async def test_year_filter(reporting_session_factory, clean_reporting_db):
             cost_mxn=200.0,
         ),
     )
-    result_2025 = await getAsesorReport(_filters(year=2025))
+    result_2025 = await getAsesorReport(_filters())
     assert len(result_2025.current.rows) == 1
     assert result_2025.current.rows[0].total_revenue == pytest.approx(1000.0)
 
-    result_2024 = await getAsesorReport(_filters(year=2024))
+    result_2024 = await getAsesorReport(_filters(date_from="2024-01-01", date_to="2024-12-31"))
     assert len(result_2024.current.rows) == 1
     assert result_2024.current.rows[0].total_revenue == pytest.approx(500.0)
 
@@ -449,7 +449,7 @@ async def test_country_filter(reporting_session_factory, clean_reporting_db):
             lead_id=2,
         ),
     )
-    result = await getAsesorReport(_filters(year=2025, countries=["mexico"]))
+    result = await getAsesorReport(_filters(countries=["mexico"]))
     assert len(result.current.rows) == 1
     assert result.current.rows[0].seller_id == 1
 
@@ -477,7 +477,7 @@ async def test_seller_filter(reporting_session_factory, clean_reporting_db):
             lead_id=2,
         ),
     )
-    result = await getAsesorReport(_filters(year=2025, sellers=["Ana"]))
+    result = await getAsesorReport(_filters(sellers=["Ana"]))
     assert len(result.current.rows) == 1
     assert result.current.rows[0].seller_name == "Ana"
 
@@ -506,7 +506,7 @@ async def test_multiple_sellers_independent(reporting_session_factory, clean_rep
             cost_mxn=1200.0,
         ),
     )
-    result = await getAsesorReport(_filters(year=2025))
+    result = await getAsesorReport(_filters())
     revenues = {row.seller_id: row.total_revenue for row in result.current.rows}
     assert revenues[1] == pytest.approx(1000.0)
     assert revenues[2] == pytest.approx(3000.0)

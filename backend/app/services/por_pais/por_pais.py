@@ -28,7 +28,10 @@ from app.services.exports.pdf_helpers import (
 )
 from app.services.exports.excel import ExcelColumn, ExcelWorksheetSpec
 from app.services.por_asesor.product_grouping import EXAM_NAME_ORDER, canonical_exam_name
-from app.services.utils.date_utils import percent_change, resolve_comparison_range, rewind_date_range_one_year
+from app.services.utils.date_utils import (
+    percent_change,
+    resolve_comparison_range,
+)
 from app.services.por_pais.repository import (
     fetch_country_allocated_revenue_rows,
     fetch_country_exam_rows,
@@ -168,35 +171,24 @@ async def _get_por_pais_base(
     filters: PorPaisFilters,
     base_currency: BaseCurrency = BaseCurrency.MXN,
 ) -> PorPaisReportBase:
-    prior_filters = filters.model_copy(
-        update=dict(zip(
-            ("date_from", "date_to"),
-            rewind_date_range_one_year(filters.date_from, filters.date_to),
-        ))
-    ) if filters.date_from and filters.date_to else filters
-
     (
         payment_rows,
         allocated_rows,
         exam_rows,
         current_presence,
-        comparison_presence,
         current_metrics,
-        comparison_metrics,
     ) = await asyncio.gather(
         fetch_country_payment_rows(filters, base_currency=base_currency),
         fetch_country_allocated_revenue_rows(filters, base_currency=base_currency),
         fetch_country_exam_rows(filters),
         fetch_country_presence_rows(filters),
-        fetch_country_presence_rows(prior_filters),
         fetch_country_metric_rows(filters),
-        fetch_country_metric_rows(prior_filters),
     )
 
     return PorPaisReportBase(
         summary_rows=build_summary_rows(payment_rows, allocated_rows, exam_rows),
         status_rows=build_status_rows(
-            current_presence, comparison_presence, current_metrics, comparison_metrics
+            current_presence, current_presence, current_metrics, current_metrics
         ),
     )
 
@@ -372,7 +364,9 @@ def build_por_pais_export_worksheets(
                     "revenue_pct": _pct(r.total_revenue, comp.total_revenue) if comp else None,
                     "uncategorized_act": r.uncategorized_revenue,
                     "uncategorized_ant": comp.uncategorized_revenue if comp else None,
-                    "uncategorized_pct": _pct(r.uncategorized_revenue, comp.uncategorized_revenue) if comp else None,
+                    "uncategorized_pct": _pct(r.uncategorized_revenue, comp.uncategorized_revenue)
+                    if comp
+                    else None,
                     "cambridge_act": r.cambridge,
                     "cambridge_ant": comp.cambridge if comp else None,
                     "cambridge_pct": _pct(r.cambridge, comp.cambridge) if comp else None,
@@ -448,7 +442,9 @@ async def build_por_pais_pdf_payload(
     comp_by_country = {r.country: r for r in comp_rows}
     comp_total_schools = sum(r.total_schools for r in comp_rows) if has_comparison else None
     comp_total_revenue = sum(r.total_revenue for r in comp_rows) if has_comparison else None
-    comp_total_uncategorized = sum(r.uncategorized_revenue for r in comp_rows) if has_comparison else None
+    comp_total_uncategorized = (
+        sum(r.uncategorized_revenue for r in comp_rows) if has_comparison else None
+    )
     comp_total_cambridge = sum(r.cambridge for r in comp_rows) if has_comparison else None
     comp_total_ielts = sum(r.ielts for r in comp_rows) if has_comparison else None
     comp_total_met = sum(r.michigan for r in comp_rows) if has_comparison else None
@@ -464,7 +460,10 @@ async def build_por_pais_pdf_payload(
         comp = comp_by_country.get(r.country)
         if not comp:
             return []
-        fmt_cur = lambda v: format_currency(v, base_currency)
+
+        def fmt_cur(v):
+            return format_currency(v, base_currency)
+
         deltas: list = [None] * 9
         deltas[1] = format_delta(r.total_schools, comp.total_schools, format_integer)
         deltas[2] = format_delta(r.total_revenue, comp.total_revenue, fmt_cur)
@@ -614,11 +613,20 @@ async def build_por_pais_detail_pdf_payload(
 
     comp_total_exams = sum(comp_counts.values()) if comp_counts else None
     comp_cambridge = (
-        sum(v for n, v in comp_counts.items() if n not in {"IELTS", "MET", "MET Go!", "TEA", "Other"})
-        if comp_counts else None
+        sum(
+            v
+            for n, v in comp_counts.items()
+            if n not in {"IELTS", "MET", "MET Go!", "TEA", "Other"}
+        )
+        if comp_counts
+        else None
     )
     comp_ielts = comp_counts.get("IELTS", 0) if comp_counts else None
-    comp_other = sum(comp_counts.get(n, 0) for n in ("MET", "MET Go!", "TEA", "Other")) if comp_counts else None
+    comp_other = (
+        sum(comp_counts.get(n, 0) for n in ("MET", "MET Go!", "TEA", "Other"))
+        if comp_counts
+        else None
+    )
 
     comparison_meta = resolve_comparison_range(filters)
 
