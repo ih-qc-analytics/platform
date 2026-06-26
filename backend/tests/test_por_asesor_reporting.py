@@ -203,8 +203,8 @@ async def test_returns_one_row_per_seller(reporting_session_factory, clean_repor
         ),
     )
     result = await getAsesorReport(_filters(year=2025))
-    assert len(result.rows) == 2
-    seller_ids = {row.seller_id for row in result.rows}
+    assert len(result.current.rows) == 2
+    seller_ids = {row.seller_id for row in result.current.rows}
     assert seller_ids == {1, 2}
 
 
@@ -232,8 +232,8 @@ async def test_total_revenue_per_seller(reporting_session_factory, clean_reporti
         ),
     )
     result = await getAsesorReport(_filters(year=2025))
-    assert len(result.rows) == 1
-    assert result.rows[0].total_revenue == pytest.approx(1500.0)
+    assert len(result.current.rows) == 1
+    assert result.current.rows[0].total_revenue == pytest.approx(1500.0)
 
 
 # ─────────────────────────────────────────────────────────────
@@ -259,8 +259,8 @@ async def test_exam_breakdown_keyed_by_canonical_name(
         ),
     )
     result = await getAsesorReport(_filters(year=2025))
-    assert len(result.rows) == 1
-    breakdown = result.rows[0].exam_breakdown
+    assert len(result.current.rows) == 1
+    breakdown = result.current.rows[0].exam_breakdown
     assert "Cambridge English (Main Suite)" in breakdown
 
 
@@ -292,8 +292,8 @@ async def test_exam_breakdown_sums_correctly(reporting_session_factory, clean_re
         ),
     )
     result = await getAsesorReport(_filters(year=2025))
-    assert len(result.rows) == 1
-    cambridge_count = result.rows[0].exam_breakdown.get("Cambridge English (Main Suite)", 0)
+    assert len(result.current.rows) == 1
+    cambridge_count = result.current.rows[0].exam_breakdown.get("Cambridge English (Main Suite)", 0)
     assert cambridge_count == 10  # 3 + 7
 
 
@@ -313,10 +313,10 @@ async def test_ganado_count_correct(reporting_session_factory, clean_reporting_d
         ),
     )
     result = await getAsesorReport(_filters(year=2025))
-    assert len(result.rows) == 1
-    assert result.rows[0].ganados == 1
-    assert result.rows[0].perdidos == 0
-    assert result.rows[0].mantenidos == 0
+    assert len(result.current.rows) == 1
+    assert result.current.rows[0].ganados == 1
+    assert result.current.rows[0].perdidos == 0
+    assert result.current.rows[0].mantenidos == 0
 
 
 @pytest.mark.asyncio
@@ -341,9 +341,9 @@ async def test_perdido_count_correct(reporting_session_factory, clean_reporting_
         ),
     )
     result = await getAsesorReport(_filters(year=2025))
-    assert len(result.rows) == 1
-    assert result.rows[0].perdidos == 1  # lead_id=20 was in 2024 not in 2025
-    assert result.rows[0].ganados == 1  # lead_id=10 is new in 2025
+    assert len(result.current.rows) == 1
+    assert result.current.rows[0].perdidos == 1  # lead_id=20 was in 2024 not in 2025
+    assert result.current.rows[0].ganados == 1  # lead_id=10 is new in 2025
 
 
 @pytest.mark.asyncio
@@ -366,10 +366,10 @@ async def test_mantenido_count_correct(reporting_session_factory, clean_reportin
         ),
     )
     result = await getAsesorReport(_filters(year=2025))
-    assert len(result.rows) == 1
-    assert result.rows[0].mantenidos == 1
-    assert result.rows[0].ganados == 0
-    assert result.rows[0].perdidos == 0
+    assert len(result.current.rows) == 1
+    assert result.current.rows[0].mantenidos == 1
+    assert result.current.rows[0].ganados == 0
+    assert result.current.rows[0].perdidos == 0
 
 
 @pytest.mark.asyncio
@@ -392,9 +392,9 @@ async def test_uncategorized_business_status_row_still_classified_by_year(
     )
     # Service ignores business_status column; recomputes from year presence
     result = await getAsesorReport(_filters(year=2025))
-    assert len(result.rows) == 1
+    assert len(result.current.rows) == 1
     # lead_id=10 only in 2025 → ganado
-    assert result.rows[0].ganados == 1
+    assert result.current.rows[0].ganados == 1
 
 
 # ─────────────────────────────────────────────────────────────
@@ -418,12 +418,12 @@ async def test_year_filter(reporting_session_factory, clean_reporting_db):
         ),
     )
     result_2025 = await getAsesorReport(_filters(year=2025))
-    assert len(result_2025.rows) == 1
-    assert result_2025.rows[0].total_revenue == pytest.approx(1000.0)
+    assert len(result_2025.current.rows) == 1
+    assert result_2025.current.rows[0].total_revenue == pytest.approx(1000.0)
 
     result_2024 = await getAsesorReport(_filters(year=2024))
-    assert len(result_2024.rows) == 1
-    assert result_2024.rows[0].total_revenue == pytest.approx(500.0)
+    assert len(result_2024.current.rows) == 1
+    assert result_2024.current.rows[0].total_revenue == pytest.approx(500.0)
 
 
 @pytest.mark.asyncio
@@ -450,8 +450,8 @@ async def test_country_filter(reporting_session_factory, clean_reporting_db):
         ),
     )
     result = await getAsesorReport(_filters(year=2025, countries=["mexico"]))
-    assert len(result.rows) == 1
-    assert result.rows[0].seller_id == 1
+    assert len(result.current.rows) == 1
+    assert result.current.rows[0].seller_id == 1
 
 
 @pytest.mark.asyncio
@@ -478,8 +478,8 @@ async def test_seller_filter(reporting_session_factory, clean_reporting_db):
         ),
     )
     result = await getAsesorReport(_filters(year=2025, sellers=["Ana"]))
-    assert len(result.rows) == 1
-    assert result.rows[0].seller_name == "Ana"
+    assert len(result.current.rows) == 1
+    assert result.current.rows[0].seller_name == "Ana"
 
 
 @pytest.mark.asyncio
@@ -507,6 +507,6 @@ async def test_multiple_sellers_independent(reporting_session_factory, clean_rep
         ),
     )
     result = await getAsesorReport(_filters(year=2025))
-    revenues = {row.seller_id: row.total_revenue for row in result.rows}
+    revenues = {row.seller_id: row.total_revenue for row in result.current.rows}
     assert revenues[1] == pytest.approx(1000.0)
     assert revenues[2] == pytest.approx(3000.0)

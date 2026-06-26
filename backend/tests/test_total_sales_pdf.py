@@ -2,6 +2,7 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 from unittest.mock import AsyncMock, patch
 
+from app.auth import verify_token
 from app.main import app
 from app.schemas.pdf import VentasTotalesPDFPayload
 from app.schemas.reports import (
@@ -93,17 +94,19 @@ async def test_build_ventas_totales_pdf_payload_formats_kpis_and_scales_series()
         "Hasta": "31/03/2025",
         "País": "México",
         "Sede": "IH Mexico",
+        "Vs.": "01/01/2024 – 31/03/2024",
     }
+    # With comparison active, KPIs without explicit deltas show "N/A"
     assert [item.model_dump() for item in payload.kpis[:4]] == [
-        {"label": "Total Clientes", "value": "3", "growth": None, "growth_positive": None},
-        {"label": "Total Exámenes", "value": "6", "growth": None, "growth_positive": None},
+        {"label": "Total Clientes", "value": "3", "growth": "N/A", "growth_positive": None},
+        {"label": "Total Exámenes", "value": "6", "growth": "N/A", "growth_positive": None},
         {
             "label": "Ingreso por Exámenes",
             "value": "$6,000",
-            "growth": None,
+            "growth": "N/A",
             "growth_positive": None,
         },
-        {"label": "Total Libros", "value": "3", "growth": None, "growth_positive": None},
+        {"label": "Total Libros", "value": "3", "growth": "N/A", "growth_positive": None},
     ]
     assert any(item.label == "Otros" and item.value == "2" for item in payload.kpis)
     assert any(item.label == "Ingreso por Otros" and item.value == "$400" for item in payload.kpis)
@@ -117,6 +120,8 @@ async def test_build_ventas_totales_pdf_payload_formats_kpis_and_scales_series()
         "label": "Ene 2025",
         "value": 2300.0,
         "scaled": 0.5,
+        "comparison_value": 2300.0,
+        "comparison_scaled": 0.5,
     }
     assert payload.trend_points[1].scaled == 1.0
     assert payload.geo_points[0].label == "México"
@@ -222,12 +227,10 @@ async def test_pdf_export_endpoint_returns_payload_shape():
             )
         ),
     ):
+        app.dependency_overrides[verify_token] = lambda: {"sub": "test-user"}
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:  # type: ignore[arg-type]
             response = await client.post("/reports/ventas-totales/export/pdf", json={})
+        app.dependency_overrides.clear()
 
     assert response.status_code == 200
-    body = response.json()
-    assert body["header"]["title"] == "Ventas Totales"
-    assert body["kpis"][0]["label"] == "Total Clientes"
-    assert body["trend_points"][0]["scaled"] == 1.0
-    assert body["geo_points"][0]["label"] == "México"
+    assert response.headers["content-type"] == "application/pdf"

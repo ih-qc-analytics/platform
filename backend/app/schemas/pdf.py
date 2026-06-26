@@ -82,7 +82,7 @@ class PorPaisPDFPayload(BaseModel):
     header: PDFHeader
     kpis: list[PDFKpiItem]
     summary_table: PDFTable
-    status_table: PDFTable
+    status_table: Optional[PDFTable] = None
 
 
 class PorPaisDetailPDFPayload(BaseModel):

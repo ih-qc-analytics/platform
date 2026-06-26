@@ -252,3 +252,4 @@ class PorPaisReportResponse(BaseModel):
 class PorPaisDetailResponse(BaseModel):
     country: str
     exam_counts: dict[str, int]
+    comparison_exam_counts: dict[str, int] | None = None

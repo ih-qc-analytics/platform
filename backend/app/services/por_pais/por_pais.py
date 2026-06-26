@@ -28,7 +28,7 @@ from app.services.exports.pdf_helpers import (
 )
 from app.services.exports.excel import ExcelColumn, ExcelWorksheetSpec
 from app.services.por_asesor.product_grouping import EXAM_NAME_ORDER, canonical_exam_name
-from app.services.utils.date_utils import resolve_comparison_range
+from app.services.utils.date_utils import percent_change, resolve_comparison_range, rewind_date_range_one_year
 from app.services.por_pais.repository import (
     fetch_country_allocated_revenue_rows,
     fetch_country_exam_rows,
@@ -168,6 +168,13 @@ async def _get_por_pais_base(
     filters: PorPaisFilters,
     base_currency: BaseCurrency = BaseCurrency.MXN,
 ) -> PorPaisReportBase:
+    prior_filters = filters.model_copy(
+        update=dict(zip(
+            ("date_from", "date_to"),
+            rewind_date_range_one_year(filters.date_from, filters.date_to),
+        ))
+    ) if filters.date_from and filters.date_to else filters
+
     (
         payment_rows,
         allocated_rows,
@@ -181,9 +188,9 @@ async def _get_por_pais_base(
         fetch_country_allocated_revenue_rows(filters, base_currency=base_currency),
         fetch_country_exam_rows(filters),
         fetch_country_presence_rows(filters),
-        fetch_country_presence_rows(filters),
+        fetch_country_presence_rows(prior_filters),
         fetch_country_metric_rows(filters),
-        fetch_country_metric_rows(filters),
+        fetch_country_metric_rows(prior_filters),
     )
 
     return PorPaisReportBase(
@@ -272,9 +279,29 @@ async def getPorPaisReport(
 
 
 async def getPorPaisDetail(country: str, filters: PorPaisFilters) -> PorPaisDetailResponse:
-    exam_rows = await fetch_country_exam_rows(filters)
+    comparison_meta = resolve_comparison_range(filters)
+    current_filters = filters.model_copy(
+        update={"show_comparison": False, "comparison_date_from": None, "comparison_date_to": None}
+    )
+
+    if comparison_meta is None:
+        exam_rows = await fetch_country_exam_rows(current_filters)
+        return PorPaisDetailResponse(
+            country=country,
+            exam_counts=build_detail_counts(exam_rows, country),
+        )
+
+    comparison_filters = current_filters.model_copy(
+        update={"date_from": comparison_meta.date_from, "date_to": comparison_meta.date_to}
+    )
+    current_exam_rows, comparison_exam_rows = await asyncio.gather(
+        fetch_country_exam_rows(current_filters),
+        fetch_country_exam_rows(comparison_filters),
+    )
     return PorPaisDetailResponse(
-        country=country, exam_counts=build_detail_counts(exam_rows, country)
+        country=country,
+        exam_counts=build_detail_counts(current_exam_rows, country),
+        comparison_exam_counts=build_detail_counts(comparison_exam_rows, country),
     )
 
 
@@ -313,27 +340,33 @@ def build_por_pais_export_worksheets(
             rows=[r.model_dump() for r in report.current.summary_rows],
         ),
         ExcelWorksheetSpec(
-            name="Por Pais Status",
-            columns=POR_PAIS_STATUS_COLUMNS,
-            rows=[r.model_dump() for r in report.current.status_rows],
-        ),
-        ExcelWorksheetSpec(
             name="Por Pais Detail", columns=POR_PAIS_DETAIL_COLUMNS, rows=detail_rows
         ),
     ]
 
     if report.comparison:
+        specs.append(
+            ExcelWorksheetSpec(
+                name="Por Pais Status",
+                columns=POR_PAIS_STATUS_COLUMNS,
+                rows=[r.model_dump() for r in report.current.status_rows],
+            )
+        )
+
         comp_by_country = {r.country: r for r in report.comparison.data.summary_rows}
+
+        def _pct(act: float, ant: float) -> float | None:
+            return round((act - ant) / ant * 100, 1) if ant else None
+
         comparison_rows = []
         for r in report.current.summary_rows:
             comp = comp_by_country.get(r.country)
-
-            def _pct(act: float, ant: float) -> float | None:
-                return round((act - ant) / ant * 100, 1) if ant else None
-
             comparison_rows.append(
                 {
                     "country": r.country,
+                    "schools_act": r.total_schools,
+                    "schools_ant": comp.total_schools if comp else None,
+                    "schools_pct": _pct(r.total_schools, comp.total_schools) if comp else None,
                     "revenue_act": r.total_revenue,
                     "revenue_ant": comp.total_revenue if comp else None,
                     "revenue_pct": _pct(r.total_revenue, comp.total_revenue) if comp else None,
@@ -346,6 +379,15 @@ def build_por_pais_export_worksheets(
                     "ielts_act": r.ielts,
                     "ielts_ant": comp.ielts if comp else None,
                     "ielts_pct": _pct(r.ielts, comp.ielts) if comp else None,
+                    "met_act": r.michigan,
+                    "met_ant": comp.michigan if comp else None,
+                    "met_pct": _pct(r.michigan, comp.michigan) if comp else None,
+                    "tea_act": r.tea,
+                    "tea_ant": comp.tea if comp else None,
+                    "tea_pct": _pct(r.tea, comp.tea) if comp else None,
+                    "otros_act": r.other,
+                    "otros_ant": comp.other if comp else None,
+                    "otros_pct": _pct(r.other, comp.other) if comp else None,
                 }
             )
         specs.append(
@@ -353,6 +395,9 @@ def build_por_pais_export_worksheets(
                 name="Comparación",
                 columns=[
                     ExcelColumn("country", "País"),
+                    ExcelColumn("schools_act", "Colegios (Act.)"),
+                    ExcelColumn("schools_ant", "Colegios (Ant.)"),
+                    ExcelColumn("schools_pct", "Colegios Δ%"),
                     ExcelColumn("revenue_act", "Ingreso (Act.)"),
                     ExcelColumn("revenue_ant", "Ingreso (Ant.)"),
                     ExcelColumn("revenue_pct", "Ingreso Δ%"),
@@ -365,6 +410,15 @@ def build_por_pais_export_worksheets(
                     ExcelColumn("ielts_act", "IELTS (Act.)"),
                     ExcelColumn("ielts_ant", "IELTS (Ant.)"),
                     ExcelColumn("ielts_pct", "IELTS Δ%"),
+                    ExcelColumn("met_act", "MET (Act.)"),
+                    ExcelColumn("met_ant", "MET (Ant.)"),
+                    ExcelColumn("met_pct", "MET Δ%"),
+                    ExcelColumn("tea_act", "TEA (Act.)"),
+                    ExcelColumn("tea_ant", "TEA (Ant.)"),
+                    ExcelColumn("tea_pct", "TEA Δ%"),
+                    ExcelColumn("otros_act", "Otros (Act.)"),
+                    ExcelColumn("otros_ant", "Otros (Ant.)"),
+                    ExcelColumn("otros_pct", "Otros Δ%"),
                 ],
                 rows=comparison_rows,
                 note=f"Período comparativo: {report.comparison.meta.date_from} – {report.comparison.meta.date_to}",
@@ -380,6 +434,7 @@ async def build_por_pais_pdf_payload(
 ) -> PorPaisPDFPayload:
     report = await getPorPaisReport(filters, base_currency=base_currency)
     current = report.current
+    has_comparison = report.comparison is not None
 
     total_schools = sum(r.total_schools for r in current.summary_rows)
     total_revenue = sum(r.total_revenue for r in current.summary_rows)
@@ -389,30 +444,68 @@ async def build_por_pais_pdf_payload(
     total_met = sum(r.michigan for r in current.summary_rows)
     total_otros = sum(r.tea + r.other for r in current.summary_rows)
 
-    comp_by_country = (
-        {r.country: r for r in report.comparison.data.summary_rows}
-        if report.comparison
-        else {}
-    )
-    comp_total_revenue = (
-        sum(r.total_revenue for r in report.comparison.data.summary_rows)
-        if report.comparison
-        else None
-    )
-    revenue_growth, revenue_growth_positive = format_growth(
-        ((total_revenue - comp_total_revenue) / comp_total_revenue * 100)
-        if comp_total_revenue
-        else None
-    )
+    comp_rows = report.comparison.data.summary_rows if has_comparison else []
+    comp_by_country = {r.country: r for r in comp_rows}
+    comp_total_schools = sum(r.total_schools for r in comp_rows) if has_comparison else None
+    comp_total_revenue = sum(r.total_revenue for r in comp_rows) if has_comparison else None
+    comp_total_uncategorized = sum(r.uncategorized_revenue for r in comp_rows) if has_comparison else None
+    comp_total_cambridge = sum(r.cambridge for r in comp_rows) if has_comparison else None
+    comp_total_ielts = sum(r.ielts for r in comp_rows) if has_comparison else None
+    comp_total_met = sum(r.michigan for r in comp_rows) if has_comparison else None
+    comp_total_otros = sum(r.tea + r.other for r in comp_rows) if has_comparison else None
+
+    def _kw(curr: float, prev: float | None) -> dict:
+        if prev is None:
+            return {}
+        g, gp = format_growth(percent_change(curr, prev))
+        return {"growth": g or "N/A", "growth_positive": gp}
 
     def _summary_row_deltas(r: PorPaisSummaryRow) -> list:
         comp = comp_by_country.get(r.country)
         if not comp:
             return []
+        fmt_cur = lambda v: format_currency(v, base_currency)
         deltas: list = [None] * 9
-        deltas[2] = format_delta(r.total_revenue, comp.total_revenue, lambda v: format_currency(v, base_currency))
-        deltas[3] = format_delta(r.uncategorized_revenue, comp.uncategorized_revenue, lambda v: format_currency(v, base_currency))
+        deltas[1] = format_delta(r.total_schools, comp.total_schools, format_integer)
+        deltas[2] = format_delta(r.total_revenue, comp.total_revenue, fmt_cur)
+        deltas[3] = format_delta(r.uncategorized_revenue, comp.uncategorized_revenue, fmt_cur)
+        deltas[4] = format_delta(r.cambridge, comp.cambridge, format_integer)
+        deltas[5] = format_delta(r.ielts, comp.ielts, format_integer)
+        deltas[6] = format_delta(r.michigan, comp.michigan, format_integer)
+        deltas[7] = format_delta(r.tea, comp.tea, format_integer)
+        deltas[8] = format_delta(r.other, comp.other, format_integer)
         return deltas
+
+    status_table = (
+        PDFTable(
+            headers=[
+                "País",
+                "Col. Ganados",
+                "Col. Perdidos",
+                "Col. Mantenidos",
+                "Ex. Ganados",
+                "Ex. Perdidos",
+                "Ex. Mantenidos",
+            ],
+            rows=[
+                PDFTableRow(
+                    cells=[
+                        r.country,
+                        format_integer(r.schools_ganados),
+                        format_integer(r.schools_perdidos),
+                        format_integer(r.schools_mantenidos),
+                        format_integer(r.exams_ganados),
+                        format_integer(r.exams_perdidos),
+                        format_integer(r.exams_mantenidos),
+                    ]
+                )
+                for r in current.status_rows
+            ],
+            column_widths=[3, 2, 2, 2, 2, 2, 2],
+        )
+        if has_comparison
+        else None
+    )
 
     return PorPaisPDFPayload(
         header=build_pdf_header(
@@ -422,21 +515,46 @@ async def build_por_pais_pdf_payload(
             comparison_meta=report.comparison.meta if report.comparison else None,
         ),
         kpis=[
-            PDFKpiItem(label="Países", value=format_integer(len(current.summary_rows))),
-            PDFKpiItem(label="Colegios", value=format_integer(total_schools)),
+            PDFKpiItem(
+                label="Países",
+                value=format_integer(len(current.summary_rows)),
+                **_kw(len(current.summary_rows), len(comp_rows) if has_comparison else None),
+            ),
+            PDFKpiItem(
+                label="Colegios",
+                value=format_integer(total_schools),
+                **_kw(total_schools, comp_total_schools),
+            ),
             PDFKpiItem(
                 label="Ingreso Total",
                 value=format_currency(total_revenue, base_currency),
-                growth=revenue_growth,
-                growth_positive=revenue_growth_positive,
+                **_kw(total_revenue, comp_total_revenue),
             ),
             PDFKpiItem(
-                label="Sin Categorizar", value=format_currency(total_uncategorized, base_currency)
+                label="Sin Categorizar",
+                value=format_currency(total_uncategorized, base_currency),
+                **_kw(total_uncategorized, comp_total_uncategorized),
             ),
-            PDFKpiItem(label="Cambridge", value=format_integer(total_cambridge)),
-            PDFKpiItem(label="IELTS", value=format_integer(total_ielts)),
-            PDFKpiItem(label="MET", value=format_integer(total_met)),
-            PDFKpiItem(label="Otros", value=format_integer(total_otros)),
+            PDFKpiItem(
+                label="Cambridge",
+                value=format_integer(total_cambridge),
+                **_kw(total_cambridge, comp_total_cambridge),
+            ),
+            PDFKpiItem(
+                label="IELTS",
+                value=format_integer(total_ielts),
+                **_kw(total_ielts, comp_total_ielts),
+            ),
+            PDFKpiItem(
+                label="MET",
+                value=format_integer(total_met),
+                **_kw(total_met, comp_total_met),
+            ),
+            PDFKpiItem(
+                label="Otros",
+                value=format_integer(total_otros),
+                **_kw(total_otros, comp_total_otros),
+            ),
         ],
         summary_table=PDFTable(
             headers=[
@@ -469,32 +587,7 @@ async def build_por_pais_pdf_payload(
             ],
             column_widths=[3, 2, 2, 2, 2, 2, 2, 2, 2],
         ),
-        status_table=PDFTable(
-            headers=[
-                "País",
-                "Col. Ganados",
-                "Col. Perdidos",
-                "Col. Mantenidos",
-                "Ex. Ganados",
-                "Ex. Perdidos",
-                "Ex. Mantenidos",
-            ],
-            rows=[
-                PDFTableRow(
-                    cells=[
-                        r.country,
-                        format_integer(r.schools_ganados),
-                        format_integer(r.schools_perdidos),
-                        format_integer(r.schools_mantenidos),
-                        format_integer(r.exams_ganados),
-                        format_integer(r.exams_perdidos),
-                        format_integer(r.exams_mantenidos),
-                    ]
-                )
-                for r in current.status_rows
-            ],
-            column_widths=[3, 2, 2, 2, 2, 2, 2],
-        ),
+        status_table=status_table,
     )
 
 
@@ -502,9 +595,16 @@ async def build_por_pais_detail_pdf_payload(
     country: str, filters: PorPaisFilters
 ) -> PorPaisDetailPDFPayload:
     detail = await getPorPaisDetail(country, filters)
+    comp_counts = detail.comparison_exam_counts
+    has_comparison = comp_counts is not None
+
+    def _kw(curr: float, prev: float | None) -> dict:
+        if prev is None:
+            return {}
+        g, gp = format_growth(percent_change(curr, prev))
+        return {"growth": g or "N/A", "growth_positive": gp}
 
     total_exams = sum(detail.exam_counts.values())
-    active_exam_types = sum(1 for c in detail.exam_counts.values() if c > 0)
     cambridge_total = sum(
         count
         for name, count in detail.exam_counts.items()
@@ -512,27 +612,58 @@ async def build_por_pais_detail_pdf_payload(
     )
     other_total = sum(detail.exam_counts.get(n, 0) for n in ("MET", "MET Go!", "TEA", "Other"))
 
+    comp_total_exams = sum(comp_counts.values()) if comp_counts else None
+    comp_cambridge = (
+        sum(v for n, v in comp_counts.items() if n not in {"IELTS", "MET", "MET Go!", "TEA", "Other"})
+        if comp_counts else None
+    )
+    comp_ielts = comp_counts.get("IELTS", 0) if comp_counts else None
+    comp_other = sum(comp_counts.get(n, 0) for n in ("MET", "MET Go!", "TEA", "Other")) if comp_counts else None
+
+    comparison_meta = resolve_comparison_range(filters)
+
+    detail_rows = []
+    for name in DETALLE_EXAM_NAME_ORDER:
+        count = int(detail.exam_counts.get(name, 0) or 0)
+        if count == 0 and (not has_comparison or not comp_counts.get(name)):
+            continue
+        comp_count = int(comp_counts.get(name, 0) or 0) if comp_counts else None
+        delta = format_delta(count, comp_count, format_integer) if comp_count is not None else None
+        detail_rows.append(PDFTableRow(cells=[name, format_integer(count)], deltas=[None, delta]))
+
     return PorPaisDetailPDFPayload(
         header=build_pdf_header(
             f"Detalle por País - {detail.country}",
             "Desglose por examen para el país seleccionado",
             filters,
+            comparison_meta=comparison_meta,
         ),
         kpis=[
             PDFKpiItem(label="País", value=detail.country),
-            PDFKpiItem(label="Exámenes", value=format_integer(total_exams)),
-            PDFKpiItem(label="Tipos Activos", value=format_integer(active_exam_types)),
-            PDFKpiItem(label="Cambridge", value=format_integer(cambridge_total)),
-            PDFKpiItem(label="IELTS", value=format_integer(detail.exam_counts.get("IELTS", 0))),
-            PDFKpiItem(label="Otros", value=format_integer(other_total)),
+            PDFKpiItem(
+                label="Exámenes",
+                value=format_integer(total_exams),
+                **_kw(total_exams, comp_total_exams),
+            ),
+            PDFKpiItem(
+                label="Cambridge",
+                value=format_integer(cambridge_total),
+                **_kw(cambridge_total, comp_cambridge),
+            ),
+            PDFKpiItem(
+                label="IELTS",
+                value=format_integer(detail.exam_counts.get("IELTS", 0)),
+                **_kw(detail.exam_counts.get("IELTS", 0), comp_ielts),
+            ),
+            PDFKpiItem(
+                label="Otros",
+                value=format_integer(other_total),
+                **_kw(other_total, comp_other),
+            ),
         ],
         detail_table=PDFTable(
             headers=["Examen", "Cantidad"],
-            rows=[
-                PDFTableRow(cells=[name, format_integer(count)])
-                for name in DETALLE_EXAM_NAME_ORDER
-                if (count := int(detail.exam_counts.get(name, 0) or 0)) > 0
-            ],
+            rows=detail_rows,
             column_widths=[4, 2],
         ),
     )

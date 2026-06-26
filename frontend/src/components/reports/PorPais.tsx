@@ -10,7 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { usePorPaisReport } from "@/hooks/useReports"
 import { getDefaultPorPaisFilters } from "@/lib/reportFilters"
-import { cn, formatCurrency, formatInteger } from "@/lib/utils"
+import { cn, formatCurrency, formatInteger, formatPercentChange, getPercentChange } from "@/lib/utils"
 import type { PorPaisFilters, PorPaisStatusRow, PorPaisSummaryRow } from "@/types"
 
 export default function PorPais() {
@@ -143,53 +143,55 @@ export default function PorPais() {
                 </CardContent>
             </Card>
 
-            <Card className="rounded-[2rem] shadow-sm">
-                <CardHeader className="pb-2">
-                    <CardTitle className="text-2xl font-semibold tracking-tight text-slate-900">
-                        Ganados, Perdidos y Mantenidos
-                    </CardTitle>
-                </CardHeader>
-                <CardContent className="px-0 pb-4">
-                    {isLoading ? (
-                        <PorPaisTableSkeleton columns={7} />
-                    ) : statusRows.length === 0 ? (
-                        <div className="px-6 py-10 text-sm text-muted-foreground">
-                            No hay resultados de estado para el período seleccionado.
-                        </div>
-                    ) : (
-                        <div className="overflow-x-auto">
-                            <Table className="min-w-max">
-                                <TableHeader>
-                                    <TableRow className="hover:bg-transparent">
-                                        <TableHeadCell className="sticky left-0 z-10 min-w-36 bg-card text-left">
-                                            País
-                                        </TableHeadCell>
-                                        <TableHeadCell className="min-w-24 text-center">Colegios Ganados</TableHeadCell>
-                                        <TableHeadCell className="min-w-24 text-center">
-                                            Colegios Perdidos
-                                        </TableHeadCell>
-                                        <TableHeadCell className="min-w-24 text-center">
-                                            Colegios Mantenidos
-                                        </TableHeadCell>
-                                        <TableHeadCell className="min-w-24 text-center">Exámenes Ganados</TableHeadCell>
-                                        <TableHeadCell className="min-w-24 text-center">
-                                            Exámenes Perdidos
-                                        </TableHeadCell>
-                                        <TableHeadCell className="min-w-24 text-center">
-                                            Exámenes Mantenidos
-                                        </TableHeadCell>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {statusRows.map((row) => (
-                                        <StatusRowView key={row.country} row={row} />
-                                    ))}
-                                </TableBody>
-                            </Table>
-                        </div>
-                    )}
-                </CardContent>
-            </Card>
+            {Boolean(filters.show_comparison && data?.comparison) && (
+                <Card className="rounded-[2rem] shadow-sm">
+                    <CardHeader className="pb-2">
+                        <CardTitle className="text-2xl font-semibold tracking-tight text-slate-900">
+                            Ganados, Perdidos y Mantenidos
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent className="px-0 pb-4">
+                        {isLoading ? (
+                            <PorPaisTableSkeleton columns={7} />
+                        ) : statusRows.length === 0 ? (
+                            <div className="px-6 py-10 text-sm text-muted-foreground">
+                                No hay resultados de estado para el período seleccionado.
+                            </div>
+                        ) : (
+                            <div className="overflow-x-auto">
+                                <Table className="min-w-max">
+                                    <TableHeader>
+                                        <TableRow className="hover:bg-transparent">
+                                            <TableHeadCell className="sticky left-0 z-10 min-w-36 bg-card text-left">
+                                                País
+                                            </TableHeadCell>
+                                            <TableHeadCell className="min-w-24 text-center">Colegios Ganados</TableHeadCell>
+                                            <TableHeadCell className="min-w-24 text-center">
+                                                Colegios Perdidos
+                                            </TableHeadCell>
+                                            <TableHeadCell className="min-w-24 text-center">
+                                                Colegios Mantenidos
+                                            </TableHeadCell>
+                                            <TableHeadCell className="min-w-24 text-center">Exámenes Ganados</TableHeadCell>
+                                            <TableHeadCell className="min-w-24 text-center">
+                                                Exámenes Perdidos
+                                            </TableHeadCell>
+                                            <TableHeadCell className="min-w-24 text-center">
+                                                Exámenes Mantenidos
+                                            </TableHeadCell>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {statusRows.map((row) => (
+                                            <StatusRowView key={row.country} row={row} />
+                                        ))}
+                                    </TableBody>
+                                </Table>
+                            </div>
+                        )}
+                    </CardContent>
+                </Card>
+            )}
 
             <PorPaisDetail
                 country={selectedCountry}
@@ -345,12 +347,19 @@ function MetricCell({
     emphasize?: boolean
     format?: (value: number) => string
 }) {
+    const pct = showComparison && comparisonValue !== undefined ? getPercentChange(value, comparisonValue) : null
+
     return (
         <TableBodyCell className={align === "right" ? "text-right" : "text-center"}>
-            <div className="flex flex-col">
+            <div className={cn("flex flex-col", align === "right" ? "items-end" : "items-center")}>
                 <span className={cn("tabular-nums text-slate-700", emphasize && "font-semibold")}>{format(value)}</span>
                 {showComparison && comparisonValue !== undefined ? (
                     <span className="text-[10px] text-muted-foreground">{format(comparisonValue)}</span>
+                ) : null}
+                {pct !== null ? (
+                    <span className={cn("text-[10px] font-medium", pct >= 0 ? "text-emerald-600" : "text-rose-600")}>
+                        {formatPercentChange(pct)}
+                    </span>
                 ) : null}
             </div>
         </TableBodyCell>

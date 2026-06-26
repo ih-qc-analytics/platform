@@ -452,6 +452,7 @@ async def getAsesorReport(
                 update={
                     "date_from": previous_year_from,
                     "date_to": previous_year_to,
+                    "year": None,
                     "show_comparison": False,
                 }
             ),
@@ -468,6 +469,7 @@ async def getAsesorReport(
         update={
             "date_from": comparison_meta.date_from,
             "date_to": comparison_meta.date_to,
+            "year": None,
             "cursor": None,
         }
     )
@@ -604,7 +606,7 @@ async def getAsesorDetail(
         update={"show_comparison": False, "comparison_date_from": None, "comparison_date_to": None}
     )
     comparison_filters = current_filters.model_copy(
-        update={"date_from": comparison_meta.date_from, "date_to": comparison_meta.date_to}
+        update={"date_from": comparison_meta.date_from, "date_to": comparison_meta.date_to, "year": None}
     )
     current, comparison = await asyncio.gather(
         _get_asesor_detail_base(
@@ -656,7 +658,7 @@ async def getAllAsesorReportRows(
         update={"show_comparison": False, "comparison_date_from": None, "comparison_date_to": None}
     )
     comparison_filters = current_filters.model_copy(
-        update={"date_from": comparison_meta.date_from, "date_to": comparison_meta.date_to, "cursor": None}
+        update={"date_from": comparison_meta.date_from, "date_to": comparison_meta.date_to, "year": None, "cursor": None}
     )
     (
         comp_summary_rows,
