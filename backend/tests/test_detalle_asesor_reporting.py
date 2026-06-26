@@ -110,8 +110,8 @@ async def test_returns_one_row_per_cart_product(reporting_session_factory, clean
         make_row(cart_product_id=3, exam_canonical_name="C1 Advanced", quantity=2, lead_id=3),
     )
     result = await getDetalleData(_filters())
-    assert len(result.rows) == 3
-    ids = {row.id for row in result.rows}
+    assert len(result.current.rows) == 3
+    ids = {row.id for row in result.current.rows}
     assert ids == {1, 2, 3}
 
 
@@ -123,8 +123,8 @@ async def test_exam_counts_keyed_by_canonical_name(reporting_session_factory, cl
         make_row(cart_product_id=1, exam_canonical_name="A2 Key", quantity=5),
     )
     result = await getDetalleData(_filters())
-    assert len(result.rows) == 1
-    row = result.rows[0]
+    assert len(result.current.rows) == 1
+    row = result.current.rows[0]
     assert row.exam_counts.get("A2 Key") == 5
 
 
@@ -136,8 +136,8 @@ async def test_total_equals_sum_of_exam_counts(reporting_session_factory, clean_
         make_row(cart_product_id=1, exam_canonical_name="B2 First", quantity=8),
     )
     result = await getDetalleData(_filters())
-    assert len(result.rows) == 1
-    row = result.rows[0]
+    assert len(result.current.rows) == 1
+    row = result.current.rows[0]
     assert row.total == sum(row.exam_counts.values())
 
 
@@ -155,8 +155,8 @@ async def test_search_by_seller_name(reporting_session_factory, clean_reporting_
         make_row(cart_product_id=2, seller_name="Luis Rodriguez", quantity=5, lead_id=2),
     )
     result = await getDetalleData(_filters(search="Ana"))
-    assert len(result.rows) == 1
-    assert result.rows[0].seller_name == "Ana Garcia"
+    assert len(result.current.rows) == 1
+    assert result.current.rows[0].seller_name == "Ana Garcia"
 
 
 @pytest.mark.asyncio
@@ -168,8 +168,8 @@ async def test_search_by_school_name(reporting_session_factory, clean_reporting_
         make_row(cart_product_id=2, school_name="Instituto Moderno", quantity=5, lead_id=2),
     )
     result = await getDetalleData(_filters(search="Instituto"))
-    assert len(result.rows) == 1
-    assert result.rows[0].school_name == "Instituto Moderno"
+    assert len(result.current.rows) == 1
+    assert result.current.rows[0].school_name == "Instituto Moderno"
 
 
 @pytest.mark.asyncio
@@ -180,10 +180,10 @@ async def test_search_case_insensitive(reporting_session_factory, clean_reportin
         make_row(cart_product_id=1, seller_name="Ana Garcia", quantity=3),
     )
     result = await getDetalleData(_filters(search="ana garcia"))
-    assert len(result.rows) == 1
+    assert len(result.current.rows) == 1
 
     result2 = await getDetalleData(_filters(search="ANA GARCIA"))
-    assert len(result2.rows) == 1
+    assert len(result2.current.rows) == 1
 
 
 @pytest.mark.asyncio
@@ -195,8 +195,8 @@ async def test_search_partial_match(reporting_session_factory, clean_reporting_d
         make_row(cart_product_id=2, seller_name="Luis Rodriguez", quantity=5, lead_id=2),
     )
     result = await getDetalleData(_filters(search="Garc"))
-    assert len(result.rows) == 1
-    assert result.rows[0].seller_name == "Ana Garcia"
+    assert len(result.current.rows) == 1
+    assert result.current.rows[0].seller_name == "Ana Garcia"
 
 
 # ─────────────────────────────────────────────────────────────
@@ -213,9 +213,9 @@ async def test_cursor_pagination_first_page(reporting_session_factory, clean_rep
             make_row(cart_product_id=i, lead_id=i, quantity=i),
         )
     result = await getDetalleData(_filters(page_size=3))
-    assert len(result.rows) == 3
-    assert result.rows[0].id == 1
-    assert result.rows[2].id == 3
+    assert len(result.current.rows) == 3
+    assert result.current.rows[0].id == 1
+    assert result.current.rows[2].id == 3
 
 
 @pytest.mark.asyncio
@@ -227,11 +227,11 @@ async def test_cursor_pagination_second_page(reporting_session_factory, clean_re
             make_row(cart_product_id=i, lead_id=i, quantity=i),
         )
     first_page = await getDetalleData(_filters(page_size=3))
-    assert first_page.next_cursor == 3
+    assert first_page.current.next_cursor == 3
 
-    second_page = await getDetalleData(_filters(page_size=3, cursor=first_page.next_cursor))
-    assert len(second_page.rows) == 2
-    assert second_page.rows[0].id == 4
+    second_page = await getDetalleData(_filters(page_size=3, cursor=first_page.current.next_cursor))
+    assert len(second_page.current.rows) == 2
+    assert second_page.current.rows[0].id == 4
 
 
 @pytest.mark.asyncio
@@ -243,8 +243,8 @@ async def test_cursor_pagination_has_more_true(reporting_session_factory, clean_
             make_row(cart_product_id=i, lead_id=i, quantity=i),
         )
     result = await getDetalleData(_filters(page_size=3))
-    assert result.has_more is True
-    assert result.next_cursor == 3
+    assert result.current.has_more is True
+    assert result.current.next_cursor == 3
 
 
 @pytest.mark.asyncio
@@ -258,8 +258,8 @@ async def test_cursor_pagination_has_more_false_on_last_page(
             make_row(cart_product_id=i, lead_id=i, quantity=i),
         )
     result = await getDetalleData(_filters(page_size=5))
-    assert result.has_more is False
-    assert result.next_cursor is None
+    assert result.current.has_more is False
+    assert result.current.next_cursor is None
 
 
 @pytest.mark.asyncio
@@ -273,10 +273,10 @@ async def test_cursor_pagination_no_duplicates_across_pages(
             make_row(cart_product_id=i, lead_id=i, quantity=i),
         )
     page1 = await getDetalleData(_filters(page_size=4))
-    page2 = await getDetalleData(_filters(page_size=4, cursor=page1.next_cursor))
+    page2 = await getDetalleData(_filters(page_size=4, cursor=page1.current.next_cursor))
 
-    ids_p1 = {r.id for r in page1.rows}
-    ids_p2 = {r.id for r in page2.rows}
+    ids_p1 = {r.id for r in page1.current.rows}
+    ids_p2 = {r.id for r in page2.current.rows}
     assert ids_p1.isdisjoint(ids_p2)
     assert ids_p1 | ids_p2 == set(range(1, 8))
 
@@ -295,8 +295,8 @@ async def test_date_filter(reporting_session_factory, clean_reporting_db):
         make_row(cart_product_id=2, created_at=datetime(2025, 3, 10), quantity=5, lead_id=2),
     )
     result = await getDetalleData(_filters(date_from="2025-02-01", date_to="2025-12-31"))
-    assert len(result.rows) == 1
-    assert result.rows[0].id == 2
+    assert len(result.current.rows) == 1
+    assert result.current.rows[0].id == 2
 
 
 @pytest.mark.asyncio
@@ -308,5 +308,5 @@ async def test_country_filter(reporting_session_factory, clean_reporting_db):
         make_row(cart_product_id=2, site="colombia", quantity=5, lead_id=2),
     )
     result = await getDetalleData(_filters(countries=["colombia"]))
-    assert len(result.rows) == 1
-    assert result.rows[0].id == 2
+    assert len(result.current.rows) == 1
+    assert result.current.rows[0].id == 2

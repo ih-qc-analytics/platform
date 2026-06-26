@@ -286,4 +286,5 @@ export type PorPaisReportResponse = ComparedResponse<PorPaisReportBase>
 export type PorPaisDetailResponse = {
     country: string
     exam_counts: Record<string, number>
+    comparison_exam_counts?: Record<string, number> | null
 }

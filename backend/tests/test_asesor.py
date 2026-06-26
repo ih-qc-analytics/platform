@@ -38,13 +38,16 @@ def test_canonical_exam_category_and_name_collapse_known_exam_families():
 
 def test_por_pais_summary_and_detail_helpers_treat_missing_exam_labels_as_other():
     summary_rows = build_summary_rows(
-        [SimpleNamespace(country="mexico", total_schools=1)],
+        [SimpleNamespace(country="mexico", total_schools=1, total_revenue=0.0)],
+        [],
         [SimpleNamespace(country="mexico", exam_name=None, exam_count=3)],
     )
     assert [row.model_dump() for row in summary_rows] == [
         {
             "country": "mexico",
             "total_schools": 1,
+            "total_revenue": 0.0,
+            "uncategorized_revenue": 0.0,
             "cambridge": 0,
             "ielts": 0,
             "michigan": 0,

@@ -21,16 +21,27 @@ class PDFTrendPoint(BaseModel):
     label: str
     value: float
     scaled: float
+    comparison_value: Optional[float] = None
+    comparison_scaled: Optional[float] = None
 
 
 class PDFGeoPoint(BaseModel):
     label: str
     value: float
     scaled: float
+    comparison_value: Optional[float] = None
+    comparison_scaled: Optional[float] = None
+
+
+class PDFTableCellDelta(BaseModel):
+    comparison_value: Optional[str] = None
+    pct_change: Optional[str] = None
+    positive: Optional[bool] = None
 
 
 class PDFTableRow(BaseModel):
     cells: list[str]
+    deltas: list[Optional[PDFTableCellDelta]] = []
 
 
 class PDFTable(BaseModel):
@@ -71,7 +82,7 @@ class PorPaisPDFPayload(BaseModel):
     header: PDFHeader
     kpis: list[PDFKpiItem]
     summary_table: PDFTable
-    status_table: PDFTable
+    status_table: Optional[PDFTable] = None
 
 
 class PorPaisDetailPDFPayload(BaseModel):

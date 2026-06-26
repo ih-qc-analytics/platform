@@ -6,23 +6,25 @@ from app.services.por_asesor.por_asesor import getAsesorDetail, getAsesorReport
 
 @pytest.mark.asyncio(loop_scope="session")
 async def test_por_asesor_2025_summary_orders_sellers_by_payment_revenue(ui_dev_reporting_db):
-    result = await getAsesorReport(AsesorFilters(year=2025))
+    result = await getAsesorReport(AsesorFilters(date_from="2025-01-01", date_to="2025-12-31"))
 
-    assert [row.seller_name for row in result.rows] == [
+    assert [row.seller_name for row in result.current.rows] == [
         "Carlos Rodriguez",
         "Ana Garcia",
         "Lucia Rios",
         "Miguel Torres",
     ]
-    assert [row.total_revenue for row in result.rows] == [7100.0, 4400.0, 1700.0, 1000.0]
+    assert [row.total_revenue for row in result.current.rows] == [7100.0, 4400.0, 1700.0, 1000.0]
 
 
 @pytest.mark.asyncio(loop_scope="session")
 async def test_por_asesor_2025_summary_uses_allocated_exam_breakdowns_and_payment_status_sets(
     ui_dev_reporting_db,
 ):
-    result = await getAsesorReport(AsesorFilters(year=2025))
-    by_name = {row.seller_name: row for row in result.rows}
+    result = await getAsesorReport(
+        AsesorFilters(date_from="2025-01-01", date_to="2025-12-31", show_comparison=True)
+    )
+    by_name = {row.seller_name: row for row in result.current.rows}
 
     assert by_name["Carlos Rodriguez"].model_dump() == {
         "seller_id": 2,
@@ -62,61 +64,71 @@ async def test_por_asesor_2025_summary_uses_allocated_exam_breakdowns_and_paymen
 
 @pytest.mark.asyncio(loop_scope="session")
 async def test_por_asesor_2024_summary_uses_prior_year_payment_presence(ui_dev_reporting_db):
-    result = await getAsesorReport(AsesorFilters(year=2024))
+    result = await getAsesorReport(AsesorFilters(date_from="2024-01-01", date_to="2024-12-31"))
 
-    assert [row.seller_name for row in result.rows] == [
+    assert [row.seller_name for row in result.current.rows] == [
         "Lucia Rios",
         "Carlos Rodriguez",
         "Ana Garcia",
     ]
-    assert [row.total_revenue for row in result.rows] == [1700.0, 1300.0, 1000.0]
+    assert [row.total_revenue for row in result.current.rows] == [1700.0, 1300.0, 1000.0]
 
 
 @pytest.mark.asyncio(loop_scope="session")
 async def test_por_asesor_summary_supports_pagination(ui_dev_reporting_db):
-    first_page = await getAsesorReport(AsesorFilters(year=2025, limit=2))
+    first_page = await getAsesorReport(
+        AsesorFilters(date_from="2025-01-01", date_to="2025-12-31", limit=2)
+    )
     second_page = await getAsesorReport(
-        AsesorFilters(year=2025, limit=2, cursor=first_page.next_cursor)
+        AsesorFilters(
+            date_from="2025-01-01",
+            date_to="2025-12-31",
+            limit=2,
+            cursor=first_page.current.next_cursor,
+        )
     )
 
-    assert [row.seller_name for row in first_page.rows] == [
+    assert [row.seller_name for row in first_page.current.rows] == [
         "Carlos Rodriguez",
         "Ana Garcia",
     ]
-    assert first_page.has_more is True
-    assert first_page.next_cursor is not None
+    assert first_page.current.has_more is True
+    assert first_page.current.next_cursor is not None
 
-    assert [row.seller_name for row in second_page.rows] == [
+    assert [row.seller_name for row in second_page.current.rows] == [
         "Lucia Rios",
         "Miguel Torres",
     ]
-    assert second_page.has_more is False
-    assert second_page.next_cursor is None
+    assert second_page.current.has_more is False
+    assert second_page.current.next_cursor is None
 
 
 @pytest.mark.asyncio(loop_scope="session")
 async def test_por_asesor_summary_supports_seller_country_and_zone_filters(ui_dev_reporting_db):
     result = await getAsesorReport(
         AsesorFilters(
-            year=2025,
+            date_from="2025-01-01",
+            date_to="2025-12-31",
             sellers=["Carlos Rodriguez"],
             countries=["colombia"],
             zones=["IH Colombia"],
         )
     )
 
-    assert len(result.rows) == 1
-    assert result.rows[0].seller_name == "Carlos Rodriguez"
-    assert result.rows[0].total_revenue == 7100.0
+    assert len(result.current.rows) == 1
+    assert result.current.rows[0].seller_name == "Carlos Rodriguez"
+    assert result.current.rows[0].total_revenue == 7100.0
 
 
 @pytest.mark.asyncio(loop_scope="session")
 async def test_por_asesor_detail_for_ana_matches_expected_paid_geo_breakdown_and_statuses(
     ui_dev_reporting_db,
 ):
-    result = await getAsesorDetail(1, AsesorFilters(year=2025))
+    result = await getAsesorDetail(
+        1, AsesorFilters(date_from="2025-01-01", date_to="2025-12-31", show_comparison=True)
+    )
 
-    assert result.model_dump() == {
+    assert result.current.model_dump() == {
         "seller_name": "Ana Garcia",
         "countries": ["mexico"],
         "zones": ["IH Mexico"],
@@ -144,9 +156,11 @@ async def test_por_asesor_detail_for_ana_matches_expected_paid_geo_breakdown_and
 async def test_por_asesor_detail_for_carlos_matches_expected_paid_geo_breakdown_and_statuses(
     ui_dev_reporting_db,
 ):
-    result = await getAsesorDetail(2, AsesorFilters(year=2025))
+    result = await getAsesorDetail(
+        2, AsesorFilters(date_from="2025-01-01", date_to="2025-12-31", show_comparison=True)
+    )
 
-    assert result.model_dump() == {
+    assert result.current.model_dump() == {
         "seller_name": "Carlos Rodriguez",
         "countries": ["colombia"],
         "zones": ["IH Colombia"],
@@ -175,21 +189,29 @@ async def test_por_asesor_detail_for_fully_allocated_sellers_reconciles_total_to
     ui_dev_reporting_db,
 ):
     for seller_id in (1, 2, 3):
-        result = await getAsesorDetail(seller_id, AsesorFilters(year=2025))
-        assert result.total_revenue == result.ganados.revenue + result.mantenidos.revenue
+        result = await getAsesorDetail(
+            seller_id,
+            AsesorFilters(date_from="2025-01-01", date_to="2025-12-31", show_comparison=True),
+        )
+        assert (
+            result.current.total_revenue
+            == result.current.ganados.revenue + result.current.mantenidos.revenue
+        )
 
 
 @pytest.mark.asyncio(loop_scope="session")
 async def test_por_asesor_detail_for_miguel_keeps_unallocated_payment_gap_visible(
     ui_dev_reporting_db,
 ):
-    result = await getAsesorDetail(4, AsesorFilters(year=2025))
+    result = await getAsesorDetail(
+        4, AsesorFilters(date_from="2025-01-01", date_to="2025-12-31", show_comparison=True)
+    )
 
-    assert result.total_revenue == 1000.0
-    assert result.uncategorized_revenue == 500.0
-    assert result.ganados.revenue == 500.0
-    assert result.total_revenue - result.ganados.revenue == 500.0
-    assert result.exam_breakdown["Placement & Otros"].model_dump() == {
+    assert result.current.total_revenue == 1000.0
+    assert result.current.uncategorized_revenue == 500.0
+    assert result.current.ganados.revenue == 500.0
+    assert result.current.total_revenue - result.current.ganados.revenue == 500.0
+    assert result.current.exam_breakdown["Placement & Otros"].model_dump() == {
         "exams": 1,
         "schools": 1,
         "revenue": 500.0,
@@ -198,17 +220,17 @@ async def test_por_asesor_detail_for_miguel_keeps_unallocated_payment_gap_visibl
 
 @pytest.mark.asyncio(loop_scope="session")
 async def test_por_asesor_detail_for_year_with_no_rows_returns_zero_breakdowns(ui_dev_reporting_db):
-    result = await getAsesorDetail(4, AsesorFilters(year=2024))
+    result = await getAsesorDetail(4, AsesorFilters(date_from="2024-01-01", date_to="2024-12-31"))
 
-    assert result.seller_name == "Miguel Torres"
-    assert result.countries == []
-    assert result.zones == []
-    assert result.states == []
-    assert result.cities == []
-    assert result.total_schools == 0
-    assert result.total_exams == 0
-    assert result.uncategorized_revenue == 0.0
-    assert result.total_revenue == 0.0
-    assert result.ganados.model_dump() == {"schools": 0, "exams": 0, "revenue": 0.0}
-    assert result.perdidos.model_dump() == {"schools": 0, "exams": 0, "revenue": 0.0}
-    assert result.mantenidos.model_dump() == {"schools": 0, "exams": 0, "revenue": 0.0}
+    assert result.current.seller_name == "Miguel Torres"
+    assert result.current.countries == []
+    assert result.current.zones == []
+    assert result.current.states == []
+    assert result.current.cities == []
+    assert result.current.total_schools == 0
+    assert result.current.total_exams == 0
+    assert result.current.uncategorized_revenue == 0.0
+    assert result.current.total_revenue == 0.0
+    assert result.current.ganados.model_dump() == {"schools": 0, "exams": 0, "revenue": 0.0}
+    assert result.current.perdidos.model_dump() == {"schools": 0, "exams": 0, "revenue": 0.0}
+    assert result.current.mantenidos.model_dump() == {"schools": 0, "exams": 0, "revenue": 0.0}

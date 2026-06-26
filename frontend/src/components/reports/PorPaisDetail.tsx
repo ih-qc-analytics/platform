@@ -8,7 +8,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { Skeleton } from "@/components/ui/skeleton"
 import { usePorPaisDetail } from "@/hooks/useReports"
-import { formatInteger } from "@/lib/utils"
+import { cn, formatInteger, formatPercentChange, getPercentChange } from "@/lib/utils"
 import type { PorPaisFilters } from "@/types"
 
 type PorPaisDetailProps = {
@@ -32,6 +32,8 @@ export default function PorPaisDetail({ country, open, onOpenChange, filters }: 
     const [exportError, setExportError] = useState<string | null>(null)
     const { data, isLoading, isError } = usePorPaisDetail(country, filters, open)
 
+    const showComparison = Boolean(filters.show_comparison && data?.comparison_exam_counts)
+
     const categoryTiles = useMemo(
         () => [
             {
@@ -40,29 +42,53 @@ export default function PorPaisDetail({ country, open, onOpenChange, filters }: 
                     (sum, examType) => sum + (data?.exam_counts[examType] ?? 0),
                     0,
                 ),
+                comparisonValue: FAMILY_EXAM_TYPES.Cambridge.reduce(
+                    (sum, examType) => sum + (data?.comparison_exam_counts?.[examType] ?? 0),
+                    0,
+                ),
             },
             {
                 title: "IELTS",
                 value: FAMILY_EXAM_TYPES.IELTS.reduce((sum, examType) => sum + (data?.exam_counts[examType] ?? 0), 0),
+                comparisonValue: FAMILY_EXAM_TYPES.IELTS.reduce(
+                    (sum, examType) => sum + (data?.comparison_exam_counts?.[examType] ?? 0),
+                    0,
+                ),
             },
             {
                 title: "MET",
                 value: FAMILY_EXAM_TYPES.MET.reduce((sum, examType) => sum + (data?.exam_counts[examType] ?? 0), 0),
+                comparisonValue: FAMILY_EXAM_TYPES.MET.reduce(
+                    (sum, examType) => sum + (data?.comparison_exam_counts?.[examType] ?? 0),
+                    0,
+                ),
             },
             {
                 title: "TEA",
                 value: FAMILY_EXAM_TYPES.TEA.reduce((sum, examType) => sum + (data?.exam_counts[examType] ?? 0), 0),
+                comparisonValue: FAMILY_EXAM_TYPES.TEA.reduce(
+                    (sum, examType) => sum + (data?.comparison_exam_counts?.[examType] ?? 0),
+                    0,
+                ),
             },
             {
                 title: "Otros",
                 value: FAMILY_EXAM_TYPES.Otros.reduce((sum, examType) => sum + (data?.exam_counts[examType] ?? 0), 0),
+                comparisonValue: FAMILY_EXAM_TYPES.Otros.reduce(
+                    (sum, examType) => sum + (data?.comparison_exam_counts?.[examType] ?? 0),
+                    0,
+                ),
             },
             {
                 title: "Total",
                 value: FAMILY_EXAM_TYPES.Total.reduce((sum, examType) => sum + (data?.exam_counts[examType] ?? 0), 0),
+                comparisonValue: FAMILY_EXAM_TYPES.Total.reduce(
+                    (sum, examType) => sum + (data?.comparison_exam_counts?.[examType] ?? 0),
+                    0,
+                ),
             },
         ],
-        [data?.exam_counts],
+        [data?.exam_counts, data?.comparison_exam_counts],
     )
 
     const handleExportPdf = async () => {
@@ -116,16 +142,40 @@ export default function PorPaisDetail({ country, open, onOpenChange, filters }: 
                                     Familias de exámenes
                                 </h2>
                                 <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-6">
-                                    {categoryTiles.map((tile) => (
-                                        <Card key={tile.title} className="rounded-2xl shadow-none">
-                                            <CardContent className="flex min-h-28 flex-col justify-between gap-4 p-4">
-                                                <span className="text-sm font-medium text-slate-600">{tile.title}</span>
-                                                <span className="text-2xl font-semibold tracking-tight text-slate-900 tabular-nums">
-                                                    {formatInteger(tile.value)}
-                                                </span>
-                                            </CardContent>
-                                        </Card>
-                                    ))}
+                                    {categoryTiles.map((tile) => {
+                                        const pct = showComparison
+                                            ? getPercentChange(tile.value, tile.comparisonValue)
+                                            : null
+                                        return (
+                                            <Card key={tile.title} className="rounded-2xl shadow-none">
+                                                <CardContent className="flex min-h-28 flex-col justify-between gap-2 p-4">
+                                                    <span className="text-sm font-medium text-slate-600">
+                                                        {tile.title}
+                                                    </span>
+                                                    <span className="text-2xl font-semibold tracking-tight text-slate-900 tabular-nums">
+                                                        {formatInteger(tile.value)}
+                                                    </span>
+                                                    {showComparison && (
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="text-xs text-muted-foreground">
+                                                                {formatInteger(tile.comparisonValue)}
+                                                            </span>
+                                                            {pct !== null && (
+                                                                <span
+                                                                    className={cn(
+                                                                        "text-xs font-medium",
+                                                                        pct >= 0 ? "text-emerald-600" : "text-rose-600",
+                                                                    )}
+                                                                >
+                                                                    {formatPercentChange(pct)}
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    )}
+                                                </CardContent>
+                                            </Card>
+                                        )
+                                    })}
                                 </div>
                             </section>
 
@@ -134,16 +184,44 @@ export default function PorPaisDetail({ country, open, onOpenChange, filters }: 
                                     Desglose por examen
                                 </h2>
                                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                                    {DETALLE_ASESOR_EXAM_TYPES.map((examType) => (
-                                        <Card key={examType} className="rounded-2xl shadow-none">
-                                            <CardContent className="flex items-center justify-between gap-4 p-4">
-                                                <span className="text-sm font-medium text-slate-700">{examType}</span>
-                                                <span className="text-lg font-semibold text-slate-900 tabular-nums">
-                                                    {formatInteger(data.exam_counts[examType] ?? 0)}
-                                                </span>
-                                            </CardContent>
-                                        </Card>
-                                    ))}
+                                    {DETALLE_ASESOR_EXAM_TYPES.map((examType) => {
+                                        const current = data.exam_counts[examType] ?? 0
+                                        const comparison = data.comparison_exam_counts?.[examType] ?? 0
+                                        const pct = showComparison ? getPercentChange(current, comparison) : null
+                                        return (
+                                            <Card key={examType} className="rounded-2xl shadow-none">
+                                                <CardContent className="flex items-center justify-between gap-4 p-4">
+                                                    <span className="text-sm font-medium text-slate-700">
+                                                        {examType}
+                                                    </span>
+                                                    <div className="flex flex-col items-end">
+                                                        <span className="text-lg font-semibold text-slate-900 tabular-nums">
+                                                            {formatInteger(current)}
+                                                        </span>
+                                                        {showComparison && (
+                                                            <div className="flex items-center gap-2">
+                                                                <span className="text-xs text-muted-foreground">
+                                                                    {formatInteger(comparison)}
+                                                                </span>
+                                                                {pct !== null && (
+                                                                    <span
+                                                                        className={cn(
+                                                                            "text-xs font-medium",
+                                                                            pct >= 0
+                                                                                ? "text-emerald-600"
+                                                                                : "text-rose-600",
+                                                                        )}
+                                                                    >
+                                                                        {formatPercentChange(pct)}
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </CardContent>
+                                            </Card>
+                                        )
+                                    })}
                                 </div>
                             </section>
                         </>

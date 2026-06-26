@@ -10,9 +10,9 @@ async def test_detalle_asesor_2025_returns_only_paid_exam_cart_products(ui_dev_r
         DetalleFilters(date_from="2025-01-01", date_to="2025-12-31", page_size=20)
     )
 
-    assert [row.id for row in result.rows] == [4, 5, 7, 8, 10, 11, 12, 13]
-    assert result.has_more is False
-    assert result.next_cursor is None
+    assert [row.id for row in result.current.rows] == [4, 5, 7, 8, 10, 11, 12, 13]
+    assert result.current.has_more is False
+    assert result.current.next_cursor is None
 
 
 @pytest.mark.asyncio(loop_scope="session")
@@ -22,7 +22,7 @@ async def test_detalle_asesor_dedupes_multi_student_allocations_to_single_cart_p
     result = await getDetalleData(
         DetalleFilters(date_from="2025-01-01", date_to="2025-12-31", page_size=20)
     )
-    rows = {row.id: row for row in result.rows}
+    rows = {row.id: row for row in result.current.rows}
 
     assert rows[4].exam_counts["A2 Key"] == 2
     assert rows[4].total == 2
@@ -36,7 +36,7 @@ async def test_detalle_asesor_excludes_non_exam_pending_and_deleted_rows(ui_dev_
         DetalleFilters(date_from="2025-01-01", date_to="2025-12-31", page_size=20)
     )
 
-    ids = [row.id for row in result.rows]
+    ids = [row.id for row in result.current.rows]
     assert 6 not in ids  # book
     assert 9 not in ids  # course
     assert 14 not in ids  # other fee with no allocation
@@ -56,8 +56,8 @@ async def test_detalle_asesor_supports_search_by_seller_name(ui_dev_reporting_db
         )
     )
 
-    assert [row.id for row in result.rows] == [4, 5, 7]
-    assert {row.seller_name for row in result.rows} == {"Ana Garcia"}
+    assert [row.id for row in result.current.rows] == [4, 5, 7]
+    assert {row.seller_name for row in result.current.rows} == {"Ana Garcia"}
 
 
 @pytest.mark.asyncio(loop_scope="session")
@@ -71,8 +71,8 @@ async def test_detalle_asesor_supports_search_by_school_name(ui_dev_reporting_db
         )
     )
 
-    assert [row.id for row in result.rows] == [10, 11]
-    assert {row.school_name for row in result.rows} == {"Colegio Colombia Dos"}
+    assert [row.id for row in result.current.rows] == [10, 11]
+    assert {row.school_name for row in result.current.rows} == {"Colegio Colombia Dos"}
 
 
 @pytest.mark.asyncio(loop_scope="session")
@@ -85,17 +85,17 @@ async def test_detalle_asesor_cursor_pagination_uses_cart_product_id(ui_dev_repo
             date_from="2025-01-01",
             date_to="2025-12-31",
             page_size=3,
-            cursor=first_page.next_cursor,
+            cursor=first_page.current.next_cursor,
         )
     )
 
-    assert [row.id for row in first_page.rows] == [4, 5, 7]
-    assert first_page.has_more is True
-    assert first_page.next_cursor == 7
+    assert [row.id for row in first_page.current.rows] == [4, 5, 7]
+    assert first_page.current.has_more is True
+    assert first_page.current.next_cursor == 7
 
-    assert [row.id for row in second_page.rows] == [8, 10, 11]
-    assert second_page.has_more is True
-    assert second_page.next_cursor == 11
+    assert [row.id for row in second_page.current.rows] == [8, 10, 11]
+    assert second_page.current.has_more is True
+    assert second_page.current.next_cursor == 11
 
 
 @pytest.mark.asyncio(loop_scope="session")
@@ -104,6 +104,6 @@ async def test_detalle_asesor_empty_range_returns_no_rows(ui_dev_reporting_db):
         DetalleFilters(date_from="2030-01-01", date_to="2030-12-31", page_size=20)
     )
 
-    assert result.rows == []
-    assert result.has_more is False
-    assert result.next_cursor is None
+    assert result.current.rows == []
+    assert result.current.has_more is False
+    assert result.current.next_cursor is None

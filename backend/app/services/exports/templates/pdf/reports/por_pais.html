@@ -7,5 +7,5 @@
 {{ render_header(payload.header, logo_b64) }}
 {{ render_kpi_grid(payload.kpis) }}
 {{ render_table("Resumen por país", payload.summary_table) }}
-{{ render_table("Ganados, perdidos y mantenidos", payload.status_table) }}
+{% if payload.status_table %}{{ render_table("Ganados, perdidos y mantenidos", payload.status_table) }}{% endif %}
 {% endblock %}

@@ -18,8 +18,10 @@ def get_async_url() -> str:
     return f"mysql+aiomysql://{user}:{safe_password}@{host}:{port}/{dbname}"
 
 
-engine = create_async_engine(
-    get_async_url(),
-)
-
-SessionLocal = async_sessionmaker(bind=engine, class_=AsyncSession)
+try:
+    engine = create_async_engine(get_async_url())
+    SessionLocal = async_sessionmaker(bind=engine, class_=AsyncSession)
+except ValueError:
+    # No source DB config — tests override these via conftest; production always has config.
+    engine = None  # type: ignore[assignment]
+    SessionLocal = None  # type: ignore[assignment]

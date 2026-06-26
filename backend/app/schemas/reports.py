@@ -107,7 +107,6 @@ class AsesorFilters(BaseGeoFilters, DateRangeFilterFields, ComparisonFilterField
     sellers: list[str] = []
     limit: int = 25
     cursor: Optional[str] = None
-    year: Optional[int] = None
 
 
 class AsesorRow(BaseModel):
@@ -252,3 +251,4 @@ class PorPaisReportResponse(BaseModel):
 class PorPaisDetailResponse(BaseModel):
     country: str
     exam_counts: dict[str, int]
+    comparison_exam_counts: dict[str, int] | None = None

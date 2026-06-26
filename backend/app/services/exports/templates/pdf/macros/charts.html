@@ -1,59 +1,167 @@
 {% macro render_charts(trend_points, geo_points) %}
+{% set has_comparison = trend_points | length > 0 and trend_points[0].comparison_value is not none %}
+
+{# ── compute max trend value for Y-axis labels ────────────── #}
+{% set ns = namespace(max_trend=0) %}
+{% for pt in trend_points %}
+  {% if pt.value > ns.max_trend %}{% set ns.max_trend = pt.value %}{% endif %}
+  {% if has_comparison and pt.comparison_value and pt.comparison_value > ns.max_trend %}
+    {% set ns.max_trend = pt.comparison_value %}
+  {% endif %}
+{% endfor %}
+
 <div class="chart-section">
   <div class="chart-section-title">Tendencia y distribución geográfica</div>
 
   {# ── Trend bar chart ──────────────────────────────────── #}
   <div class="chart-panel">
-    <div class="chart-panel-title">Tendencia</div>
+    <div class="chart-panel-title">Ingresos por Mes</div>
     {% if trend_points | length == 0 %}
     <div class="table-empty">Sin datos para el período seleccionado.</div>
     {% else %}
-    {% set bar_h = 120 %}
-    {% set bar_w = 22 %}
-    {% set col_w = 44 %}
-    {% set svg_w = trend_points | length * col_w %}
-    {% set svg_h = bar_h + 30 %}
-    <svg xmlns="http://www.w3.org/2000/svg" width="{{ svg_w }}" height="{{ svg_h }}" viewBox="0 0 {{ svg_w }} {{ svg_h }}">
+
+    {# layout constants #}
+    {% set y_w    = 46 %}
+    {% set top    = 8  %}
+    {% set bar_h  = 100 %}
+    {% set x_h    = 18 %}
+    {% set col_w  = 50 %}
+    {% set n      = trend_points | length %}
+    {% set chart_w = [n * col_w, 300] | max %}
+    {% set vb_w   = y_w + chart_w %}
+    {% set vb_h   = top + bar_h + x_h %}
+
+    <svg xmlns="http://www.w3.org/2000/svg" width="100%" height="{{ vb_h }}"
+         viewBox="0 0 {{ vb_w }} {{ vb_h }}" preserveAspectRatio="xMinYMid meet">
+
+      {# ── grid lines + Y-axis labels ── #}
+      {% for pct in [0, 25, 50, 75, 100] %}
+      {% set gy = top + bar_h * (1 - pct / 100) %}
+      {% set y_val = (ns.max_trend * pct / 100) | int %}
+      <line x1="{{ y_w }}" y1="{{ gy }}" x2="{{ vb_w }}" y2="{{ gy }}"
+            stroke="#E5E7EB" stroke-width="{{ '0.8' if pct == 0 else '0.4' }}" />
+      <text x="{{ y_w - 3 }}" y="{{ gy + 2 }}" text-anchor="end" font-size="4.5" fill="#9CA3AF">
+        {{ y_val | compact_currency }}
+      </text>
+      {% endfor %}
+
+      {# ── Y-axis spine ── #}
+      <line x1="{{ y_w }}" y1="{{ top }}" x2="{{ y_w }}" y2="{{ top + bar_h }}"
+            stroke="#D1D5DB" stroke-width="0.5" />
+
+      {# ── bars ── #}
+      {% set eff_col = chart_w / n %}
       {% for pt in trend_points %}
-      {% set x = loop.index0 * col_w %}
-      {% set bh = [pt.scaled * bar_h, 2] | max %}
-      {% set by = bar_h - bh %}
-      {% set cx = x + col_w / 2 %}
-      {# value label above bar #}
-      <text x="{{ cx }}" y="{{ by - 2 }}" text-anchor="middle" font-size="5" fill="#6B7280">{{ pt.value | compact_currency }}</text>
-      {# bar #}
-      <rect x="{{ cx - bar_w / 2 }}" y="{{ by }}" width="{{ bar_w }}" height="{{ bh }}"
-            rx="3" fill="#3D5FC4" />
-      {# month label below #}
-      <text x="{{ cx }}" y="{{ bar_h + 14 }}" text-anchor="middle" font-size="5" fill="#1A1A2E">{{ pt.label }}</text>
+      {% set cx = y_w + (loop.index0 + 0.5) * eff_col %}
+
+      {% if has_comparison %}
+        {% set bar_w  = [eff_col * 0.28, 14] | min %}
+        {% set gap    = 2 %}
+        {% set bh     = [pt.scaled * bar_h, 2] | max %}
+        {% set by     = top + bar_h - bh %}
+        {% set cbh    = [(pt.comparison_scaled or 0) * bar_h, 2] | max %}
+        {% set cby    = top + bar_h - cbh %}
+        {# actual bar #}
+        <rect x="{{ cx - gap / 2 - bar_w }}" y="{{ by }}"
+              width="{{ bar_w }}" height="{{ bh }}" rx="2" fill="#3D5FC4" />
+        {# comparison bar #}
+        <rect x="{{ cx + gap / 2 }}" y="{{ cby }}"
+              width="{{ bar_w }}" height="{{ cbh }}" rx="2" fill="#93A8D4" />
+        {# value label above actual bar #}
+        <text x="{{ cx - gap / 2 - bar_w / 2 }}" y="{{ by - 2 }}"
+              text-anchor="middle" font-size="4" fill="#374151">{{ pt.value | compact_currency }}</text>
+      {% else %}
+        {% set bar_w = [eff_col * 0.6, 28] | min %}
+        {% set bh    = [pt.scaled * bar_h, 2] | max %}
+        {% set by    = top + bar_h - bh %}
+        <rect x="{{ cx - bar_w / 2 }}" y="{{ by }}"
+              width="{{ bar_w }}" height="{{ bh }}" rx="3" fill="#3D5FC4" />
+        {# value label above bar #}
+        <text x="{{ cx }}" y="{{ by - 3 }}"
+              text-anchor="middle" font-size="4.5" fill="#374151">{{ pt.value | compact_currency }}</text>
+      {% endif %}
+
+      {# month label #}
+      <text x="{{ cx }}" y="{{ top + bar_h + 12 }}"
+            text-anchor="middle" font-size="5" fill="#374151">{{ pt.label }}</text>
       {% endfor %}
     </svg>
+
+    {# ── legend ── #}
+    {% if has_comparison %}
+    <div style="display:flex;gap:10pt;margin-top:3pt;font-size:5pt;color:#6B7280;align-items:center;">
+      <span style="display:flex;align-items:center;gap:3pt;">
+        <svg width="9" height="7"><rect width="9" height="7" rx="1" fill="#3D5FC4"/></svg> Actual
+      </span>
+      <span style="display:flex;align-items:center;gap:3pt;">
+        <svg width="9" height="7"><rect width="9" height="7" rx="1" fill="#93A8D4"/></svg> Comparativo
+      </span>
+    </div>
+    {% endif %}
     {% endif %}
   </div>
 
   {# ── Geo horizontal bar chart ─────────────────────────── #}
   <div class="chart-panel">
-    <div class="chart-panel-title">Distribución geográfica</div>
+    <div class="chart-panel-title">Ingresos por País</div>
     {% if geo_points | length == 0 %}
     <div class="table-empty">Sin datos para el período seleccionado.</div>
     {% else %}
-    {% set track_w = 380 %}
-    {% set row_h = 26 %}
-    {% set svg_h = geo_points | length * row_h %}
-    <svg xmlns="http://www.w3.org/2000/svg" width="100%" height="{{ svg_h }}" viewBox="0 0 500 {{ svg_h }}">
+
+    {# layout constants #}
+    {% set lbl_w  = 90  %}
+    {% set val_w  = 52  %}
+    {% set bar_w  = 330 %}
+    {% set vb_w   = lbl_w + bar_w + val_w %}
+    {% if has_comparison %}
+      {% set row_h = 34 %}
+    {% else %}
+      {% set row_h = 22 %}
+    {% endif %}
+    {% set vb_h = geo_points | length * row_h + 2 %}
+
+    <svg xmlns="http://www.w3.org/2000/svg" width="100%" height="{{ vb_h }}"
+         viewBox="0 0 {{ vb_w }} {{ vb_h }}" preserveAspectRatio="xMinYMid meet">
+
       {% for pt in geo_points %}
       {% set y = loop.index0 * row_h %}
-      {% set bar_fill = [pt.scaled * track_w, 4] | max %}
-      {# label #}
-      <text x="0" y="{{ y + 9 }}" font-size="6" fill="#1A1A2E">{{ pt.label }}</text>
+      {% set fill_w = [pt.scaled * bar_w, 4] | max %}
+
+      {# country label #}
+      <text x="0" y="{{ y + 10 }}" font-size="6" font-weight="600" fill="#1A1A2E">{{ pt.label }}</text>
+
+      {# bar track #}
+      <rect x="{{ lbl_w }}" y="{{ y + 2 }}" width="{{ bar_w }}" height="9" rx="4" fill="#EEF2FF" />
+      {# bar fill #}
+      <rect x="{{ lbl_w }}" y="{{ y + 2 }}" width="{{ fill_w }}" height="9" rx="4" fill="#1A3FAD" />
       {# value #}
-      <text x="500" y="{{ y + 9 }}" text-anchor="end" font-size="6" fill="#6B7280">{{ pt.value | compact_currency }}</text>
-      {# track #}
-      <rect x="0" y="{{ y + 12 }}" width="{{ track_w }}" height="10" rx="5" fill="#F3F6FF" />
-      {# fill #}
-      <rect x="0" y="{{ y + 12 }}" width="{{ bar_fill }}" height="10" rx="5" fill="#1A3FAD" />
+      <text x="{{ lbl_w + bar_w + 4 }}" y="{{ y + 10 }}" font-size="6" fill="#1A1A2E">{{ pt.value | compact_currency }}</text>
+
+      {% if has_comparison and pt.comparison_scaled is not none %}
+      {% set cfill_w = [pt.comparison_scaled * bar_w, 4] | max %}
+      {# comparison label #}
+      <text x="0" y="{{ y + 22 }}" font-size="5" fill="#9CA3AF">Ant.</text>
+      {# comparison track #}
+      <rect x="{{ lbl_w }}" y="{{ y + 14 }}" width="{{ bar_w }}" height="7" rx="3" fill="#EEF2FF" />
+      {# comparison fill #}
+      <rect x="{{ lbl_w }}" y="{{ y + 14 }}" width="{{ cfill_w }}" height="7" rx="3" fill="#93A8D4" />
+      {# comparison value #}
+      <text x="{{ lbl_w + bar_w + 4 }}" y="{{ y + 21 }}" font-size="5.5" fill="#9CA3AF">{{ pt.comparison_value | compact_currency }}</text>
+      {% endif %}
       {% endfor %}
     </svg>
+
+    {# ── legend ── #}
+    {% if has_comparison %}
+    <div style="display:flex;gap:10pt;margin-top:3pt;font-size:5pt;color:#6B7280;align-items:center;">
+      <span style="display:flex;align-items:center;gap:3pt;">
+        <svg width="9" height="7"><rect width="9" height="7" rx="1" fill="#1A3FAD"/></svg> Actual
+      </span>
+      <span style="display:flex;align-items:center;gap:3pt;">
+        <svg width="9" height="7"><rect width="9" height="7" rx="1" fill="#93A8D4"/></svg> Comparativo
+      </span>
+    </div>
+    {% endif %}
     {% endif %}
   </div>
 </div>

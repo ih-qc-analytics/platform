@@ -9,6 +9,51 @@ jobs:
   test:
     runs-on: ubuntu-latest
 
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: reporting_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      mysql:
+        image: mysql:8
+        env:
+          MYSQL_ROOT_PASSWORD: test
+          MYSQL_DATABASE: jones_test
+          MYSQL_USER: test
+          MYSQL_PASSWORD: test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd "mysqladmin ping -h 127.0.0.1 -u root -ptest"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      # Source DB (MySQL — used by conftest.py integration tests)
+      DEV_DB_USER: test
+      DEV_DB_PASS: test
+      DEV_DB_HOST: 127.0.0.1
+      DEV_DB_PORT: 3306
+      DEV_DB_NAME: jones_test
+      SOURCE_DB_URL: mysql://test:test@127.0.0.1:3306/jones_test
+      # Reporting DB (PostgreSQL — used by conftest_reporting.py)
+      DEV_REPORTING_DB_USER: test
+      DEV_REPORTING_DB_PASS: test
+      DEV_REPORTING_DB_HOST: 127.0.0.1
+      DEV_REPORTING_DB_PORT: 5432
+      DEV_REPORTING_DB_NAME: reporting_test
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -17,6 +62,12 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.13"
+
+      - name: Cache pip dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: pip-${{ hashFiles('backend/requirements.txt') }}
 
       - name: Install dependencies
         run: pip install -r backend/requirements.txt

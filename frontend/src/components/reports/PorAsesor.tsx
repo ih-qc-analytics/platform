@@ -140,15 +140,19 @@ export default function PorAsesor() {
                                                     {group.label}
                                                 </TableHeadCell>
                                             ))}
-                                            <TableHeadCell className="min-w-24 whitespace-nowrap text-center">
-                                                Ganados
-                                            </TableHeadCell>
-                                            <TableHeadCell className="min-w-24 whitespace-nowrap text-center">
-                                                Perdidos
-                                            </TableHeadCell>
-                                            <TableHeadCell className="min-w-28 whitespace-nowrap text-center">
-                                                Mantenidos
-                                            </TableHeadCell>
+                                            {showComparisonValues && (
+                                                <>
+                                                    <TableHeadCell className="min-w-24 whitespace-nowrap text-center">
+                                                        Ganados
+                                                    </TableHeadCell>
+                                                    <TableHeadCell className="min-w-24 whitespace-nowrap text-center">
+                                                        Perdidos
+                                                    </TableHeadCell>
+                                                    <TableHeadCell className="min-w-28 whitespace-nowrap text-center">
+                                                        Mantenidos
+                                                    </TableHeadCell>
+                                                </>
+                                            )}
                                             <TableHeadCell className="min-w-36 whitespace-nowrap text-right">
                                                 Sin Categorizar
                                             </TableHeadCell>
@@ -201,24 +205,25 @@ export default function PorAsesor() {
                                                             />
                                                         )
                                                     })}
-                                                    <TableBadgeCell
-                                                        value={row.ganados}
-                                                        previousValue={previousRow?.ganados}
-                                                        tone="success"
-                                                        showComparison={showComparisonValues}
-                                                    />
-                                                    <TableBadgeCell
-                                                        value={row.perdidos}
-                                                        previousValue={previousRow?.perdidos}
-                                                        tone="danger"
-                                                        showComparison={showComparisonValues}
-                                                    />
-                                                    <TableBadgeCell
-                                                        value={row.mantenidos}
-                                                        previousValue={previousRow?.mantenidos}
-                                                        tone="info"
-                                                        showComparison={showComparisonValues}
-                                                    />
+                                                    {showComparisonValues && (
+                                                        <>
+                                                            <TableBadgeCell
+                                                                value={row.ganados}
+                                                                tone="success"
+                                                                showComparison={false}
+                                                            />
+                                                            <TableBadgeCell
+                                                                value={row.perdidos}
+                                                                tone="danger"
+                                                                showComparison={false}
+                                                            />
+                                                            <TableBadgeCell
+                                                                value={row.mantenidos}
+                                                                tone="info"
+                                                                showComparison={false}
+                                                            />
+                                                        </>
+                                                    )}
                                                     <TableMetricCell
                                                         value={row.uncategorized_revenue}
                                                         previousValue={previousRow?.uncategorized_revenue}

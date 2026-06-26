@@ -7,7 +7,7 @@
       <div class="kpi-label">{{ kpi.label }}</div>
       <div class="kpi-value">{{ kpi.value }}</div>
       {% if kpi.growth is not none %}
-      <div class="kpi-growth {% if kpi.growth_positive %}kpi-growth-pos{% else %}kpi-growth-neg{% endif %}">
+      <div class="kpi-growth {% if kpi.growth_positive == true %}kpi-growth-pos{% elif kpi.growth_positive == false %}kpi-growth-neg{% endif %}">
         Variación: {{ kpi.growth }}
       </div>
       {% endif %}
