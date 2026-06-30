@@ -33,7 +33,7 @@ def event_loop():
 
 @pytest_asyncio.fixture(scope="session")
 async def test_engine():
-    engine = create_async_engine(TEST_DB_URL, echo=False, pool_pre_ping=True)
+    engine = create_async_engine(TEST_DB_URL, echo=False)
     await apply_schema(engine)
     yield engine
     await engine.dispose()
