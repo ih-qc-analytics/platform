@@ -29,7 +29,9 @@ _BACKEND_DIR = Path(__file__).parent.parent
 
 def _run_alembic_upgrade():
     """Run all pending migrations against the test reporting DB."""
-    cleanup_engine = create_engine(TEST_REPORTING_SYNC_URL)
+    cleanup_engine = create_engine(
+        TEST_REPORTING_SYNC_URL, connect_args={"connect_timeout": 10}
+    )
     with cleanup_engine.begin() as conn:
         conn.execute(text("DROP TABLE IF EXISTS report_payment_allocations"))
         conn.execute(text("DROP TABLE IF EXISTS report_payments"))
