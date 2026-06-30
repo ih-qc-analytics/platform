@@ -68,14 +68,15 @@ async def reporting_session_factory(reporting_engine):
 
 @pytest_asyncio.fixture(loop_scope="session")
 async def clean_reporting_db(reporting_engine):
-    """Truncate reporting tables between tests."""
-    yield
+    """Truncate reporting tables before each test for a clean slate."""
     async with reporting_engine.begin() as conn:
+        await conn.execute(text("SET LOCAL lock_timeout = '5s'"))
         await conn.execute(
             text(
                 "TRUNCATE report_payment_allocations, report_payments, report_line_items, exchange_rates, etl_meta RESTART IDENTITY"
             )
         )
+    yield
 
 
 def bind_test_reporting_database(session_factory):
