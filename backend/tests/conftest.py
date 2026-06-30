@@ -1,4 +1,3 @@
-import pytest
 import pytest_asyncio
 import asyncio
 from datetime import date
@@ -21,14 +20,6 @@ load_dotenv(_BACKEND_DIR / ".env.test")
 TEST_DB_URL = os.getenv("SOURCE_DB_URL", "").replace("mysql://", "mysql+aiomysql://")
 SEEDS_DIR = _BACKEND_DIR / "tests" / "seeds"
 SCHEMA_FILE = _BACKEND_DIR / "tests" / "schema.sql"
-
-
-@pytest.fixture(scope="session")
-def event_loop():
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    yield loop
-    loop.close()
 
 
 @pytest_asyncio.fixture(scope="session")
