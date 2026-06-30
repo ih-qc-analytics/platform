@@ -51,7 +51,7 @@ async def reporting_engine():
     # Create the asyncpg engine first so its internal Futures are bound to this
     # session's event loop. Then run the sync Alembic migrations off-thread to
     # avoid psycopg2/asyncio signal-handler conflicts that cause hangs on Linux CI.
-    engine = create_async_engine(TEST_REPORTING_DB_URL, echo=False, pool_pre_ping=True)
+    engine = create_async_engine(TEST_REPORTING_DB_URL, echo=False)
     loop = asyncio.get_event_loop()
     await loop.run_in_executor(None, _run_alembic_upgrade)
     yield engine
