@@ -1,3 +1,4 @@
+import asyncio
 import pytest
 import pytest_asyncio
 import importlib
@@ -47,7 +48,10 @@ def _run_alembic_upgrade():
 
 @pytest_asyncio.fixture(scope="session", loop_scope="session")
 async def reporting_engine():
-    _run_alembic_upgrade()  # applies all migrations including cost_mxn
+    # Run sync blocking Alembic migrations off the event loop thread to avoid
+    # psycopg2/asyncio signal-handler conflicts that cause hangs on Linux CI.
+    loop = asyncio.get_event_loop()
+    await loop.run_in_executor(None, _run_alembic_upgrade)
     engine = create_async_engine(TEST_REPORTING_DB_URL, echo=False, pool_pre_ping=True)
     yield engine
     await engine.dispose()
