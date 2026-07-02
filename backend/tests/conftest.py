@@ -1,4 +1,3 @@
-import pytest
 import pytest_asyncio
 import asyncio
 from datetime import date
@@ -6,6 +5,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 import os
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
+from sqlalchemy.pool import NullPool
 from sqlalchemy import text
 import importlib
 from app.config import settings
@@ -23,17 +23,9 @@ SEEDS_DIR = _BACKEND_DIR / "tests" / "seeds"
 SCHEMA_FILE = _BACKEND_DIR / "tests" / "schema.sql"
 
 
-@pytest.fixture(scope="session")
-def event_loop():
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    yield loop
-    loop.close()
-
-
 @pytest_asyncio.fixture(scope="session")
 async def test_engine():
-    engine = create_async_engine(TEST_DB_URL, echo=False, pool_pre_ping=True)
+    engine = create_async_engine(TEST_DB_URL, echo=False, poolclass=NullPool)
     await apply_schema(engine)
     yield engine
     await engine.dispose()
@@ -133,16 +125,25 @@ async def seed_identity_exchange_rates(session_factory):
     ]
     async with session_factory() as session:
         async with session.begin():
-            for row in rows:
-                await session.execute(
-                    text("""
+            await session.execute(
+                text("""
                     INSERT INTO exchange_rates (date, from_currency, to_currency, rate)
-                    VALUES (:date, :from_currency, :to_currency, :rate)
+                    SELECT * FROM unnest(
+                        :dates ::date[],
+                        :from_currencies ::text[],
+                        :to_currencies ::text[],
+                        :rates ::numeric[]
+                    ) AS t(date, from_currency, to_currency, rate)
                     ON CONFLICT (date, from_currency, to_currency) DO UPDATE
                     SET rate = EXCLUDED.rate
                 """),
-                    row,
-                )
+                {
+                    "dates": [r["date"] for r in rows],
+                    "from_currencies": [r["from_currency"] for r in rows],
+                    "to_currencies": [r["to_currency"] for r in rows],
+                    "rates": [r["rate"] for r in rows],
+                },
+            )
 
 
 def bind_test_database(session_factory, engine):

@@ -334,6 +334,7 @@ async def test_pdf_endpoints_return_payload_shapes():
                 )
             ),
         ),
+        patch("app.services.exports.pdf_renderer._html_to_pdf", return_value=b"%PDF-stub"),
     ):
         app.dependency_overrides[verify_token] = lambda: {"sub": "test-user"}
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:  # type: ignore[arg-type]

@@ -7,6 +7,7 @@ import os
 from urllib.parse import quote_plus
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 from sqlalchemy import create_engine, text
+from sqlalchemy.pool import NullPool
 from alembic.config import Config
 from alembic import command
 
@@ -29,7 +30,7 @@ _BACKEND_DIR = Path(__file__).parent.parent
 
 def _run_alembic_upgrade():
     """Run all pending migrations against the test reporting DB."""
-    cleanup_engine = create_engine(TEST_REPORTING_SYNC_URL)
+    cleanup_engine = create_engine(TEST_REPORTING_SYNC_URL, connect_args={"connect_timeout": 10})
     with cleanup_engine.begin() as conn:
         conn.execute(text("DROP TABLE IF EXISTS report_payment_allocations"))
         conn.execute(text("DROP TABLE IF EXISTS report_payments"))
@@ -43,10 +44,17 @@ def _run_alembic_upgrade():
     command.upgrade(cfg, "head")
 
 
+@pytest.fixture(scope="session", autouse=True)
+def run_migrations():
+    """Run Alembic migrations synchronously before any async fixtures start.
+    A plain sync pytest fixture has no event loop, so psycopg2 blocking I/O
+    is safe and there is no cross-loop contamination on Linux CI."""
+    _run_alembic_upgrade()
+
+
 @pytest_asyncio.fixture(scope="session", loop_scope="session")
-async def reporting_engine():
-    _run_alembic_upgrade()  # applies all migrations including cost_mxn
-    engine = create_async_engine(TEST_REPORTING_DB_URL, echo=False, pool_pre_ping=True)
+async def reporting_engine(run_migrations):
+    engine = create_async_engine(TEST_REPORTING_DB_URL, echo=False, poolclass=NullPool)
     yield engine
     await engine.dispose()
 
@@ -62,14 +70,15 @@ async def reporting_session_factory(reporting_engine):
 
 @pytest_asyncio.fixture(loop_scope="session")
 async def clean_reporting_db(reporting_engine):
-    """Truncate reporting tables between tests."""
-    yield
+    """Truncate reporting tables before each test for a clean slate."""
     async with reporting_engine.begin() as conn:
+        await conn.execute(text("SET LOCAL lock_timeout = '5s'"))
         await conn.execute(
             text(
                 "TRUNCATE report_payment_allocations, report_payments, report_line_items, exchange_rates, etl_meta RESTART IDENTITY"
             )
         )
+    yield
 
 
 def bind_test_reporting_database(session_factory):
