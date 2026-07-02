@@ -35,8 +35,10 @@ _LOGO_PATH = Path(__file__).parent / "assets" / "logo.png"
 # ── Jinja2 custom filter ──────────────────────────────────────────────────────
 
 
-def _compact_currency(value: float) -> str:
+def _compact_currency(value: float | None) -> str:
     """Format a number as compact currency: $1.5k for ≥1000, $500 otherwise."""
+    if value is None:
+        return ""
     abs_val = abs(value)
     if abs_val >= 1_000_000:
         return f"${value / 1_000_000:.1f}M"
