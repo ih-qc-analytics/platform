@@ -1,4 +1,3 @@
-import asyncio
 import pytest
 import pytest_asyncio
 import importlib
@@ -46,14 +45,17 @@ def _run_alembic_upgrade():
     command.upgrade(cfg, "head")
 
 
+@pytest.fixture(scope="session", autouse=True)
+def run_migrations():
+    """Run Alembic migrations synchronously before any async fixtures start.
+    A plain sync pytest fixture has no event loop, so psycopg2 blocking I/O
+    is safe and there is no cross-loop contamination on Linux CI."""
+    _run_alembic_upgrade()
+
+
 @pytest_asyncio.fixture(scope="session", loop_scope="session")
-async def reporting_engine():
-    # Create the asyncpg engine first so its internal Futures are bound to this
-    # session's event loop. Then run the sync Alembic migrations off-thread to
-    # avoid psycopg2/asyncio signal-handler conflicts that cause hangs on Linux CI.
+async def reporting_engine(run_migrations):
     engine = create_async_engine(TEST_REPORTING_DB_URL, echo=False)
-    loop = asyncio.get_event_loop()
-    await loop.run_in_executor(None, _run_alembic_upgrade)
     yield engine
     await engine.dispose()
 
