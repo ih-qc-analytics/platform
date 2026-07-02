@@ -5,6 +5,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 import os
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
+from sqlalchemy.pool import NullPool
 from sqlalchemy import text
 import importlib
 from app.config import settings
@@ -24,7 +25,7 @@ SCHEMA_FILE = _BACKEND_DIR / "tests" / "schema.sql"
 
 @pytest_asyncio.fixture(scope="session")
 async def test_engine():
-    engine = create_async_engine(TEST_DB_URL, echo=False)
+    engine = create_async_engine(TEST_DB_URL, echo=False, poolclass=NullPool)
     await apply_schema(engine)
     yield engine
     await engine.dispose()
