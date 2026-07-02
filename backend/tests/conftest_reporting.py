@@ -7,6 +7,7 @@ import os
 from urllib.parse import quote_plus
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 from sqlalchemy import create_engine, text
+from sqlalchemy.pool import NullPool
 from alembic.config import Config
 from alembic import command
 
@@ -55,7 +56,7 @@ def run_migrations():
 
 @pytest_asyncio.fixture(scope="session", loop_scope="session")
 async def reporting_engine(run_migrations):
-    engine = create_async_engine(TEST_REPORTING_DB_URL, echo=False)
+    engine = create_async_engine(TEST_REPORTING_DB_URL, echo=False, poolclass=NullPool)
     yield engine
     await engine.dispose()
 
