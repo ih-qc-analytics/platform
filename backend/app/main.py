@@ -91,20 +91,20 @@ async def health():
 
 @app.post("/admin/etl/payment-upsert", dependencies=[Depends(verify_admin_key)])
 async def trigger_payment_upsert():
-    await run_upsert()
-    return {"status": "ok"}
+    result = await run_upsert()
+    return {"status": "ok", **result}
 
 
 @app.post("/admin/etl/dimensional-refresh", dependencies=[Depends(verify_admin_key)])
 async def trigger_dimensional_refresh():
-    await run_dimensional_refresh()
-    return {"status": "ok"}
+    result = await run_dimensional_refresh()
+    return {"status": "ok", **result}
 
 
 @app.post("/admin/etl/fetch-rates", dependencies=[Depends(verify_admin_key)])
 async def trigger_fetch_rates():
-    await fetch_and_store_rates()
-    return {"status": "ok"}
+    result = await fetch_and_store_rates()
+    return {"status": "ok", **result}
 
 
 _auth = [Depends(verify_token)]
