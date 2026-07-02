@@ -45,7 +45,7 @@ DIMENSION_UPDATE = """
 """
 
 
-async def run_dimensional_refresh() -> None:
+async def run_dimensional_refresh() -> dict:
     start = datetime.now()
     try:
         async with SessionLocal() as source:
@@ -64,6 +64,7 @@ async def run_dimensional_refresh() -> None:
                         await reporting.execute(text(DIMENSION_UPDATE.format(table=table)), row)
 
         await log_etl_run(ETLJobName.DIMENSIONAL_REFRESH, len(rows), "success", start)
+        return {"leads_refreshed": len(rows)}
     except Exception as error:
         await log_etl_run(ETLJobName.DIMENSIONAL_REFRESH, 0, "failed", start, error=str(error))
         raise

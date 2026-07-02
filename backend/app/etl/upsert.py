@@ -555,7 +555,7 @@ async def _delete_line_items(session, cart_product_ids: list[int], cart_ids: lis
 
 async def run_upsert(
     *, since: datetime | None = None, job_name: ETLJobName = ETLJobName.UPSERT
-) -> None:
+) -> dict:
     start = datetime.now()
     since = since or (datetime.now() - timedelta(hours=3))
     try:
@@ -573,7 +573,7 @@ async def run_upsert(
             and not deleted_cart_ids
         ):
             await log_etl_run(job_name, 0, "success", start)
-            return
+            return {"payments": 0, "line_items": 0, "allocations": 0, "deleted": 0}
 
         all_lead_ids = {int(row["lead_id"]) for row in [*payment_rows_raw, *line_item_rows_raw]}
         all_rows = [*payment_rows_raw, *line_item_rows_raw, *allocation_rows_raw]
@@ -629,6 +629,13 @@ async def run_upsert(
 
         total_rows = len(payment_rows) + len(line_item_rows) + len(allocation_rows)
         await log_etl_run(job_name, total_rows, "success", start)
+        deleted = len(deleted_cart_product_ids) + len(deleted_cart_ids)
+        return {
+            "payments": len(payment_rows),
+            "line_items": len(line_item_rows),
+            "allocations": len(allocation_rows),
+            "deleted": deleted,
+        }
     except Exception as error:
         await log_etl_run(job_name, 0, "failed", start, error=str(error))
         raise
