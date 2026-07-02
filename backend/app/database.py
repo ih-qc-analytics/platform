@@ -21,7 +21,6 @@ def get_async_url() -> str:
 try:
     engine = create_async_engine(
         get_async_url(),
-        pool_pre_ping=True,
         pool_recycle=3600,
     )
     SessionLocal = async_sessionmaker(bind=engine, class_=AsyncSession)
