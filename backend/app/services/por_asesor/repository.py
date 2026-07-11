@@ -6,7 +6,7 @@ from sqlalchemy import text
 from app.enums import BaseCurrency
 from app.reporting.database import ReportingSessionLocal
 from app.schemas.reports import AsesorFilters
-from app.services.utils.report_currency import line_paid_total_column, payment_amount_column
+from app.services.utils.report_currency import line_expected_cost_column, line_expected_total_column, line_paid_total_column, payment_amount_column
 from app.services.shared import build_line_item_where_clause, build_payment_where_clause
 
 
@@ -119,6 +119,8 @@ async def fetch_summary_allocated_revenue_rows_by_seller_ids(
     where, params = _line_where(filters, require_product_breakdown=True)
     params["seller_ids"] = seller_ids
     paid_total = line_paid_total_column(base_currency)
+    expected_cost = line_expected_cost_column(base_currency)
+    expected_total = line_expected_total_column(base_currency)
     query = f"""
         SELECT
             seller_id,
@@ -127,7 +129,9 @@ async def fetch_summary_allocated_revenue_rows_by_seller_ids(
             COALESCE(SUM(CASE WHEN product_type = 'book'   THEN {paid_total} ELSE 0 END), 0)  AS book_revenue,
             COALESCE(SUM(CASE WHEN product_type = 'course' THEN {paid_total} ELSE 0 END), 0)  AS course_revenue,
             COALESCE(SUM(CASE WHEN product_type = 'book'   THEN quantity     ELSE 0 END), 0)  AS total_books,
-            COALESCE(SUM(CASE WHEN product_type = 'course' THEN quantity     ELSE 0 END), 0)  AS total_courses
+            COALESCE(SUM(CASE WHEN product_type = 'course' THEN quantity     ELSE 0 END), 0)  AS total_courses,
+            COALESCE(SUM({expected_cost}), 0)                                                 AS expected_cost,
+            COALESCE(SUM({expected_total}), 0)                                                AS expected_revenue
         FROM report_line_items
         WHERE {where}
           AND seller_id = ANY(:seller_ids)

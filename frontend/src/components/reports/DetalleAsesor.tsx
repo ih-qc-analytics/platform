@@ -270,6 +270,60 @@ export default function DetalleAsesor({ sellerId, sellerName, open, onOpenChange
                                     showComparison={showComparison}
                                     wide
                                 />
+                                <SummaryInfoCard
+                                    label="Ing. Asignado"
+                                    value={formatCurrency(detail.allocated_revenue)}
+                                    comparisonValue={
+                                        comparisonDetail
+                                            ? formatCurrency(comparisonDetail.allocated_revenue)
+                                            : undefined
+                                    }
+                                    comparisonPct={
+                                        showComparison
+                                            ? getPercentChange(
+                                                  detail.allocated_revenue,
+                                                  comparisonDetail?.allocated_revenue,
+                                              )
+                                            : undefined
+                                    }
+                                    showComparison={showComparison}
+                                />
+                                <SummaryInfoCard
+                                    label="Ing. Esperado"
+                                    value={formatCurrency(detail.expected_revenue)}
+                                    comparisonValue={
+                                        comparisonDetail
+                                            ? formatCurrency(comparisonDetail.expected_revenue)
+                                            : undefined
+                                    }
+                                    comparisonPct={
+                                        showComparison
+                                            ? getPercentChange(
+                                                  detail.expected_revenue,
+                                                  comparisonDetail?.expected_revenue,
+                                              )
+                                            : undefined
+                                    }
+                                    showComparison={showComparison}
+                                />
+                                <SummaryInfoCard
+                                    label="Costo Esperado"
+                                    value={formatCurrency(detail.expected_cost)}
+                                    comparisonValue={
+                                        comparisonDetail ? formatCurrency(comparisonDetail.expected_cost) : undefined
+                                    }
+                                    comparisonPct={
+                                        showComparison
+                                            ? getPercentChange(detail.expected_cost, comparisonDetail?.expected_cost)
+                                            : undefined
+                                    }
+                                    showComparison={showComparison}
+                                />
+                                <SummaryInfoCard
+                                    label="Margen de Utilidad"
+                                    value={`${detail.profit_margin.toFixed(1)}%`}
+                                    showComparison={false}
+                                />
                             </div>
 
                             <section className="flex flex-col gap-3">

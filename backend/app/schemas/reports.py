@@ -126,6 +126,10 @@ class AsesorRow(BaseModel):
     books_courses_ganados: int = 0
     books_courses_perdidos: int = 0
     books_courses_mantenidos: int = 0
+    allocated_revenue: float = 0.0
+    expected_revenue: float = 0.0
+    expected_cost: float = 0.0
+    profit_margin: float = 0.0
 
 
 class AsesorReportBase(BaseModel):
@@ -178,6 +182,10 @@ class AsesorDetailBase(BaseModel):
     total_courses: int = 0
     book_revenue: float = 0.0
     course_revenue: float = 0.0
+    allocated_revenue: float = 0.0
+    expected_revenue: float = 0.0
+    expected_cost: float = 0.0
+    profit_margin: float = 0.0
 
 
 class AsesorDetailComparison(BaseModel):
