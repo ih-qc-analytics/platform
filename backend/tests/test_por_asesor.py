@@ -1,12 +1,12 @@
 import pytest
 
 from app.schemas.reports import AsesorFilters
-from app.services.por_asesor.por_asesor import getAsesorDetail, getAsesorReport
+from app.services.por_asesor.por_asesor import get_asesor_detail, get_asesor_report
 
 
 @pytest.mark.asyncio(loop_scope="session")
 async def test_por_asesor_2025_summary_orders_sellers_by_payment_revenue(ui_dev_reporting_db):
-    result = await getAsesorReport(AsesorFilters(date_from="2025-01-01", date_to="2025-12-31"))
+    result = await get_asesor_report(AsesorFilters(date_from="2025-01-01", date_to="2025-12-31"))
 
     assert [row.seller_name for row in result.current.rows] == [
         "Carlos Rodriguez",
@@ -21,7 +21,7 @@ async def test_por_asesor_2025_summary_orders_sellers_by_payment_revenue(ui_dev_
 async def test_por_asesor_2025_summary_uses_allocated_exam_breakdowns_and_payment_status_sets(
     ui_dev_reporting_db,
 ):
-    result = await getAsesorReport(
+    result = await get_asesor_report(
         AsesorFilters(date_from="2025-01-01", date_to="2025-12-31", show_comparison=True)
     )
     by_name = {row.seller_name: row for row in result.current.rows}
@@ -88,7 +88,7 @@ async def test_por_asesor_2025_summary_uses_allocated_exam_breakdowns_and_paymen
 
 @pytest.mark.asyncio(loop_scope="session")
 async def test_por_asesor_2024_summary_uses_prior_year_payment_presence(ui_dev_reporting_db):
-    result = await getAsesorReport(AsesorFilters(date_from="2024-01-01", date_to="2024-12-31"))
+    result = await get_asesor_report(AsesorFilters(date_from="2024-01-01", date_to="2024-12-31"))
 
     assert [row.seller_name for row in result.current.rows] == [
         "Lucia Rios",
@@ -100,10 +100,10 @@ async def test_por_asesor_2024_summary_uses_prior_year_payment_presence(ui_dev_r
 
 @pytest.mark.asyncio(loop_scope="session")
 async def test_por_asesor_summary_supports_pagination(ui_dev_reporting_db):
-    first_page = await getAsesorReport(
+    first_page = await get_asesor_report(
         AsesorFilters(date_from="2025-01-01", date_to="2025-12-31", limit=2)
     )
-    second_page = await getAsesorReport(
+    second_page = await get_asesor_report(
         AsesorFilters(
             date_from="2025-01-01",
             date_to="2025-12-31",
@@ -129,7 +129,7 @@ async def test_por_asesor_summary_supports_pagination(ui_dev_reporting_db):
 
 @pytest.mark.asyncio(loop_scope="session")
 async def test_por_asesor_summary_supports_seller_country_and_zone_filters(ui_dev_reporting_db):
-    result = await getAsesorReport(
+    result = await get_asesor_report(
         AsesorFilters(
             date_from="2025-01-01",
             date_to="2025-12-31",
@@ -148,7 +148,7 @@ async def test_por_asesor_summary_supports_seller_country_and_zone_filters(ui_de
 async def test_por_asesor_detail_for_ana_matches_expected_paid_geo_breakdown_and_statuses(
     ui_dev_reporting_db,
 ):
-    result = await getAsesorDetail(
+    result = await get_asesor_detail(
         1, AsesorFilters(date_from="2025-01-01", date_to="2025-12-31", show_comparison=True)
     )
 
@@ -188,7 +188,7 @@ async def test_por_asesor_detail_for_ana_matches_expected_paid_geo_breakdown_and
 async def test_por_asesor_detail_for_carlos_matches_expected_paid_geo_breakdown_and_statuses(
     ui_dev_reporting_db,
 ):
-    result = await getAsesorDetail(
+    result = await get_asesor_detail(
         2, AsesorFilters(date_from="2025-01-01", date_to="2025-12-31", show_comparison=True)
     )
 
@@ -229,7 +229,7 @@ async def test_por_asesor_detail_for_fully_allocated_sellers_reconciles_total_to
     ui_dev_reporting_db,
 ):
     for seller_id in (1, 2, 3):
-        result = await getAsesorDetail(
+        result = await get_asesor_detail(
             seller_id,
             AsesorFilters(date_from="2025-01-01", date_to="2025-12-31", show_comparison=True),
         )
@@ -243,7 +243,7 @@ async def test_por_asesor_detail_for_fully_allocated_sellers_reconciles_total_to
 async def test_por_asesor_detail_for_miguel_keeps_unallocated_payment_gap_visible(
     ui_dev_reporting_db,
 ):
-    result = await getAsesorDetail(
+    result = await get_asesor_detail(
         4, AsesorFilters(date_from="2025-01-01", date_to="2025-12-31", show_comparison=True)
     )
 
@@ -260,7 +260,7 @@ async def test_por_asesor_detail_for_miguel_keeps_unallocated_payment_gap_visibl
 
 @pytest.mark.asyncio(loop_scope="session")
 async def test_por_asesor_detail_for_year_with_no_rows_returns_zero_breakdowns(ui_dev_reporting_db):
-    result = await getAsesorDetail(4, AsesorFilters(date_from="2024-01-01", date_to="2024-12-31"))
+    result = await get_asesor_detail(4, AsesorFilters(date_from="2024-01-01", date_to="2024-12-31"))
 
     assert result.current.seller_name == "Miguel Torres"
     assert result.current.countries == []
@@ -297,7 +297,7 @@ async def test_por_asesor_detail_for_year_with_no_rows_returns_zero_breakdowns(u
 @pytest.mark.asyncio(loop_scope="session")
 async def test_por_asesor_summary_books_courses_gpm_counts(ui_dev_reporting_db):
     # Full year 2025 vs previous year 2024 (no books/courses in 2024 seed data)
-    result = await getAsesorReport(
+    result = await get_asesor_report(
         AsesorFilters(date_from="2025-01-01", date_to="2025-12-31", show_comparison=True)
     )
     by_name = {row.seller_name: row for row in result.current.rows}
@@ -316,7 +316,7 @@ async def test_por_asesor_summary_books_courses_gpm_counts(ui_dev_reporting_db):
 @pytest.mark.asyncio(loop_scope="session")
 async def test_por_asesor_detail_status_tiles_include_books_and_courses_counts(ui_dev_reporting_db):
     # Carlos (seller_id=2) has 1 course in mantenidos schools
-    carlos = await getAsesorDetail(
+    carlos = await get_asesor_detail(
         2, AsesorFilters(date_from="2025-01-01", date_to="2025-12-31", show_comparison=True)
     )
     # Sum of books/courses across all statuses must match totals
@@ -334,7 +334,7 @@ async def test_por_asesor_detail_status_tiles_include_books_and_courses_counts(u
     assert total_courses == carlos.current.total_courses  # 1
 
     # Ana (seller_id=1) has 1 book in ganados schools
-    ana = await getAsesorDetail(
+    ana = await get_asesor_detail(
         1, AsesorFilters(date_from="2025-01-01", date_to="2025-12-31", show_comparison=True)
     )
     total_books_ana = (
@@ -349,7 +349,7 @@ async def test_por_asesor_detail_status_tiles_include_books_and_courses_counts(u
 
 @pytest.mark.asyncio(loop_scope="session")
 async def test_por_asesor_summary_profit_margin_matches_formula(ui_dev_reporting_db):
-    result = await getAsesorReport(AsesorFilters(date_from="2025-01-01", date_to="2025-12-31"))
+    result = await get_asesor_report(AsesorFilters(date_from="2025-01-01", date_to="2025-12-31"))
     by_name = {row.seller_name: row for row in result.current.rows}
 
     # Margin = (allocated_revenue - cost) / allocated_revenue * 100
@@ -373,7 +373,7 @@ async def test_por_asesor_summary_profit_margin_matches_formula(ui_dev_reporting
 
 @pytest.mark.asyncio(loop_scope="session")
 async def test_por_asesor_detail_profit_margin_matches_formula(ui_dev_reporting_db):
-    result = await getAsesorDetail(1, AsesorFilters(date_from="2025-01-01", date_to="2025-12-31"))
+    result = await get_asesor_detail(1, AsesorFilters(date_from="2025-01-01", date_to="2025-12-31"))
     detail = result.current
 
     assert detail.expected_cost == 2150.0
@@ -386,7 +386,7 @@ async def test_por_asesor_detail_profit_margin_matches_formula(ui_dev_reporting_
 @pytest.mark.asyncio(loop_scope="session")
 async def test_por_asesor_detail_zero_revenue_yields_zero_margin(ui_dev_reporting_db):
     # Miguel Torres has no activity in 2024 — total_revenue is 0
-    result = await getAsesorDetail(4, AsesorFilters(date_from="2024-01-01", date_to="2024-12-31"))
+    result = await get_asesor_detail(4, AsesorFilters(date_from="2024-01-01", date_to="2024-12-31"))
 
     assert result.current.total_revenue == 0.0
     assert result.current.expected_cost == 0.0
@@ -395,7 +395,7 @@ async def test_por_asesor_detail_zero_revenue_yields_zero_margin(ui_dev_reportin
 
 @pytest.mark.asyncio(loop_scope="session")
 async def test_por_asesor_summary_default_sort_is_total_revenue_desc(ui_dev_reporting_db):
-    result = await getAsesorReport(AsesorFilters(date_from="2025-01-01", date_to="2025-12-31"))
+    result = await get_asesor_report(AsesorFilters(date_from="2025-01-01", date_to="2025-12-31"))
 
     revenues = [row.total_revenue for row in result.current.rows]
     assert revenues == sorted(revenues, reverse=True)
@@ -403,7 +403,7 @@ async def test_por_asesor_summary_default_sort_is_total_revenue_desc(ui_dev_repo
 
 @pytest.mark.asyncio(loop_scope="session")
 async def test_por_asesor_summary_sort_by_seller_name_asc(ui_dev_reporting_db):
-    result = await getAsesorReport(
+    result = await get_asesor_report(
         AsesorFilters(
             date_from="2025-01-01", date_to="2025-12-31", sort_by="seller_name", sort_dir="asc"
         )
@@ -415,7 +415,7 @@ async def test_por_asesor_summary_sort_by_seller_name_asc(ui_dev_reporting_db):
 
 @pytest.mark.asyncio(loop_scope="session")
 async def test_por_asesor_summary_sort_by_profit_margin_desc(ui_dev_reporting_db):
-    result = await getAsesorReport(
+    result = await get_asesor_report(
         AsesorFilters(
             date_from="2025-01-01", date_to="2025-12-31", sort_by="profit_margin", sort_dir="desc"
         )
@@ -431,7 +431,7 @@ async def test_por_asesor_summary_sort_pagination_stable(ui_dev_reporting_db):
     all_seller_ids: list[int] = []
     cursor = None
     while True:
-        page = await getAsesorReport(
+        page = await get_asesor_report(
             AsesorFilters(
                 date_from="2025-01-01",
                 date_to="2025-12-31",

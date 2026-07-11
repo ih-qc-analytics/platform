@@ -682,7 +682,7 @@ async def get_all_asesor_report_rows(
     all_rows: list[AsesorRow] = []
     cursor = current_filters.cursor
     while True:
-        page = await getAsesorReport(
+        page = await get_asesor_report(
             current_filters.model_copy(update={"cursor": cursor}),
             country_rates=country_rates,
             base_currency=base_currency,
@@ -960,7 +960,7 @@ async def build_por_asesor_pdf_payload(
     country_rates: dict | None = None,
     base_currency: BaseCurrency = BaseCurrency.MXN,
 ) -> PorAsesorPDFPayload:
-    report = await getAllAsesorReportRows(
+    report = await get_all_asesor_report_rows(
         build_asesor_export_filters_for_all(filters),
         country_rates=country_rates,
         base_currency=base_currency,
@@ -1181,7 +1181,7 @@ async def build_asesor_detail_pdf_payload(
     country_rates: dict | None = None,
     base_currency: BaseCurrency = BaseCurrency.MXN,
 ) -> AsesorDetailPDFPayload:
-    response = await getAsesorDetail(
+    response = await get_asesor_detail(
         seller_id,
         filters,
         country_rates=country_rates,

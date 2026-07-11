@@ -4,8 +4,6 @@ from datetime import date, datetime, timedelta
 
 from sqlalchemy import bindparam, text
 
-logger = logging.getLogger(__name__)
-
 from app.database import SessionLocal
 from app.enums import ETLJobName, ExamCategory, PaymentStatus, ProductType
 from app.reporting.database import ReportingSessionLocal
@@ -20,6 +18,8 @@ from app.etl.shared import (
     prefetch_rates,
     resolve_business_status,
 )
+
+logger = logging.getLogger(__name__)
 
 
 PAYMENT_EXTRACT_QUERY = """
@@ -636,7 +636,11 @@ async def run_upsert(
         duration = (datetime.now() - start).total_seconds()
         logger.info(
             "ETL upsert — payments: %d  line_items: %d  allocations: %d  deleted: %d  (%.1fs)",
-            len(payment_rows), len(line_item_rows), len(allocation_rows), deleted, duration,
+            len(payment_rows),
+            len(line_item_rows),
+            len(allocation_rows),
+            deleted,
+            duration,
         )
         return {
             "payments": len(payment_rows),

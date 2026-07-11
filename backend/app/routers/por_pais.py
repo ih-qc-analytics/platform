@@ -23,7 +23,7 @@ async def get_por_pais_data(filters: PorPaisFilters, request: Request):
 
 
 @router.post("/por-pais/{country}", response_model=PorPaisDetailResponse)
-async def get_por_pais_detail(country: str, filters: PorPaisFilters):
+async def get_por_pais_detail_endpoint(country: str, filters: PorPaisFilters):
     return await get_por_pais_detail(country, filters)
 
 

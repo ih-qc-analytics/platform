@@ -11,5 +11,5 @@ async def get_filter_options():
 
 
 @router.get("/sellers", response_model=SellerOptionsResponse)
-async def get_seller_options():
+async def get_seller_options_endpoint():
     return await get_seller_options()

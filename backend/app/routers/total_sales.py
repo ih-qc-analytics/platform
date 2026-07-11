@@ -19,7 +19,7 @@ def resolve_total_sales_country_rates(request: Request) -> dict[str, float]:
 
 
 @router.post("/ventas-totales", response_model=TotalSalesResponse)
-async def get_total_sales_data(filters: ReportFilters, request: Request):
+async def get_total_sales_data_endpoint(filters: ReportFilters, request: Request):
     return await get_total_sales_data(
         filters,
         country_rates=resolve_total_sales_country_rates(request),

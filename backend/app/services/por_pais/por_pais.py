@@ -400,7 +400,7 @@ async def get_por_pais_details_for_report(
         return []
     return list(
         await asyncio.gather(
-            *(getPorPaisDetail(row.country, filters) for row in report.current.summary_rows)
+            *(get_por_pais_detail(row.country, filters) for row in report.current.summary_rows)
         )
     )
 
@@ -525,7 +525,7 @@ async def build_por_pais_pdf_payload(
     filters: PorPaisFilters,
     base_currency: BaseCurrency = BaseCurrency.MXN,
 ) -> PorPaisPDFPayload:
-    report = await getPorPaisReport(filters, base_currency=base_currency)
+    report = await get_por_pais_report(filters, base_currency=base_currency)
     current = report.current
     has_comparison = report.comparison is not None
 
@@ -713,7 +713,7 @@ async def build_por_pais_pdf_payload(
 async def build_por_pais_detail_pdf_payload(
     country: str, filters: PorPaisFilters
 ) -> PorPaisDetailPDFPayload:
-    detail = await getPorPaisDetail(country, filters)
+    detail = await get_por_pais_detail(country, filters)
     comp_counts = detail.comparison_exam_counts
     has_comparison = comp_counts is not None
 

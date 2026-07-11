@@ -323,7 +323,7 @@ async def build_ventas_totales_pdf_payload(
     country_rates: dict | None = None,
     base_currency: BaseCurrency = BaseCurrency.MXN,
 ) -> VentasTotalesPDFPayload:
-    response = await getTotalSalesData(
+    response = await get_total_sales_data(
         filters, country_rates=country_rates, base_currency=base_currency
     )
     base = response.current

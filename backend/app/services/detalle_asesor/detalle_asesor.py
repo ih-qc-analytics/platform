@@ -199,7 +199,7 @@ async def get_all_detalle_rows(filters: DetalleFilters) -> DetalleReportResponse
     all_rows: list[DetalleRow] = []
     cursor = filters.cursor
     while True:
-        page = await getDetalleData(
+        page = await get_detalle_data(
             filters.model_copy(update={"cursor": cursor, "show_comparison": False})
         )
         all_rows.extend(page.current.rows)
@@ -229,7 +229,7 @@ def build_detalle_export_worksheets(report: DetalleReportResponse) -> list[Excel
 
 
 async def build_detalle_asesor_pdf_payload(filters: DetalleFilters) -> DetalleAsesorPDFPayload:
-    report = await getAllDetalleRows(build_detalle_export_filters_for_all(filters))
+    report = await get_all_detalle_rows(build_detalle_export_filters_for_all(filters))
     identity_rows = [
         PDFTableRow(
             cells=[

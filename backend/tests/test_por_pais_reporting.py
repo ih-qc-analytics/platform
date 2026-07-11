@@ -14,7 +14,7 @@ from datetime import datetime, date
 from sqlalchemy import text
 
 from app.schemas.reports import PorPaisFilters
-from app.services.por_pais.por_pais import getPorPaisReport
+from app.services.por_pais.por_pais import get_por_pais_report
 from tests.conftest_reporting import bind_test_reporting_database
 
 
@@ -181,7 +181,7 @@ async def test_returns_one_row_per_country(reporting_session_factory, clean_repo
         make_row(cart_product_id=2, site="colombia", lead_id=2, created_at=datetime(2025, 3, 1)),
         make_row(cart_product_id=3, site="mexico", lead_id=3, created_at=datetime(2025, 4, 1)),
     )
-    result = await getPorPaisReport(_filters())
+    result = await get_por_pais_report(_filters())
     countries = {row.country for row in result.current.summary_rows}
     assert countries == {"mexico", "colombia"}
     assert len(result.current.summary_rows) == 2
@@ -220,7 +220,7 @@ async def test_exam_count_per_country_correct(reporting_session_factory, clean_r
             created_at=datetime(2025, 5, 1),
         ),
     )
-    result = await getPorPaisReport(_filters())
+    result = await get_por_pais_report(_filters())
     mexico_row = next(r for r in result.current.summary_rows if r.country == "mexico")
     colombia_row = next(r for r in result.current.summary_rows if r.country == "colombia")
     # A2 Key maps to cambridge bucket
@@ -248,7 +248,7 @@ async def test_inactive_excluded(reporting_session_factory, clean_reporting_db):
             created_at=datetime(2025, 3, 1),
         ),
     )
-    result = await getPorPaisReport(_filters())
+    result = await get_por_pais_report(_filters())
     assert len(result.current.summary_rows) == 1
     mexico_row = result.current.summary_rows[0]
     assert mexico_row.total_schools == 1  # only the active lead
@@ -274,7 +274,7 @@ async def test_unapproved_excluded(reporting_session_factory, clean_reporting_db
             created_at=datetime(2025, 3, 1),
         ),
     )
-    result = await getPorPaisReport(_filters())
+    result = await get_por_pais_report(_filters())
     assert len(result.current.summary_rows) == 1
     assert result.current.summary_rows[0].total_schools == 1
 
@@ -289,7 +289,7 @@ async def test_date_range_filter(reporting_session_factory, clean_reporting_db):
         make_row(cart_product_id=2, site="mexico", lead_id=2, created_at=datetime(2026, 1, 10)),
     )
     # Only 2025 rows included
-    result = await getPorPaisReport(_filters(date_from="2025-01-01", date_to="2025-12-31"))
+    result = await get_por_pais_report(_filters(date_from="2025-01-01", date_to="2025-12-31"))
     assert len(result.current.summary_rows) == 1
     assert result.current.summary_rows[0].total_schools == 1
 
@@ -317,7 +317,7 @@ async def test_multiple_countries(reporting_session_factory, clean_reporting_db)
             cart_product_id=3, site="peru", lead_id=3, created_at=datetime(2025, 3, 1), quantity=8
         ),
     )
-    result = await getPorPaisReport(_filters())
+    result = await get_por_pais_report(_filters())
     assert len(result.current.summary_rows) == 3
     countries = {row.country for row in result.current.summary_rows}
     assert countries == {"mexico", "colombia", "peru"}
@@ -341,7 +341,7 @@ async def test_status_rows_ganado_perdido_mantenido(reporting_session_factory, c
         make_row(cart_product_id=3, site="mexico", lead_id=2, created_at=datetime(2024, 6, 1)),
         make_row(cart_product_id=4, site="mexico", lead_id=3, created_at=datetime(2024, 7, 1)),
     )
-    result = await getPorPaisReport(
+    result = await get_por_pais_report(
         _filters(date_from="2025-01-01", date_to="2025-12-31", show_comparison=True)
     )
     mexico_status = next((r for r in result.current.status_rows if r.country == "mexico"), None)

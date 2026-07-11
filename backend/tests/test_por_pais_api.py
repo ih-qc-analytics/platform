@@ -58,7 +58,7 @@ DETAIL_RESPONSE = PorPaisDetailResponse(
 @pytest.mark.asyncio(loop_scope="session")
 async def test_por_pais_post_returns_200():
     with patch(
-        "app.routers.por_pais.getPorPaisReport",
+        "app.routers.por_pais.get_por_pais_report",
         new=AsyncMock(return_value=REPORT_RESPONSE),
     ):
         app.dependency_overrides[verify_token] = lambda: {"sub": "test-user"}
@@ -77,7 +77,7 @@ async def test_por_pais_post_returns_200():
 @pytest.mark.asyncio(loop_scope="session")
 async def test_por_pais_post_parses_filters():
     mock = AsyncMock(return_value=REPORT_RESPONSE)
-    with patch("app.routers.por_pais.getPorPaisReport", new=mock):
+    with patch("app.routers.por_pais.get_por_pais_report", new=mock):
         app.dependency_overrides[verify_token] = lambda: {"sub": "test-user"}
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:  # type: ignore[arg-type]
             await client.post(
@@ -94,7 +94,7 @@ async def test_por_pais_post_parses_filters():
 @pytest.mark.asyncio(loop_scope="session")
 async def test_por_pais_detail_returns_200():
     with patch(
-        "app.routers.por_pais.getPorPaisDetail",
+        "app.routers.por_pais.get_por_pais_detail",
         new=AsyncMock(return_value=DETAIL_RESPONSE),
     ):
         app.dependency_overrides[verify_token] = lambda: {"sub": "test-user"}
@@ -113,7 +113,7 @@ async def test_por_pais_detail_returns_200():
 @pytest.mark.asyncio(loop_scope="session")
 async def test_por_pais_detail_parses_body_and_country():
     mock = AsyncMock(return_value=DETAIL_RESPONSE)
-    with patch("app.routers.por_pais.getPorPaisDetail", new=mock):
+    with patch("app.routers.por_pais.get_por_pais_detail", new=mock):
         app.dependency_overrides[verify_token] = lambda: {"sub": "test-user"}
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:  # type: ignore[arg-type]
             await client.post(

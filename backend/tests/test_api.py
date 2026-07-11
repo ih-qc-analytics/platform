@@ -49,7 +49,7 @@ MOCK_RESPONSE = TotalSalesResponse(
 
 async def post(body: dict = {}):
     with patch(
-        "app.routers.total_sales.getTotalSalesData", new=AsyncMock(return_value=MOCK_RESPONSE)
+        "app.routers.total_sales.get_total_sales_data", new=AsyncMock(return_value=MOCK_RESPONSE)
     ):
         app.dependency_overrides[verify_token] = lambda: {"sub": "test-user"}
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:  # type: ignore[arg-type]
@@ -126,7 +126,7 @@ async def test_product_mix_shape():
 @pytest.mark.asyncio(loop_scope="session")
 async def test_single_country_parsed():
     mock = AsyncMock(return_value=MOCK_RESPONSE)
-    with patch("app.routers.total_sales.getTotalSalesData", new=mock):
+    with patch("app.routers.total_sales.get_total_sales_data", new=mock):
         app.dependency_overrides[verify_token] = lambda: {"sub": "test-user"}
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:  # type: ignore[arg-type]
             await client.post(BASE, json={"countries": ["mexico"]})
@@ -138,7 +138,7 @@ async def test_single_country_parsed():
 @pytest.mark.asyncio(loop_scope="session")
 async def test_multiple_countries_parsed():
     mock = AsyncMock(return_value=MOCK_RESPONSE)
-    with patch("app.routers.total_sales.getTotalSalesData", new=mock):
+    with patch("app.routers.total_sales.get_total_sales_data", new=mock):
         app.dependency_overrides[verify_token] = lambda: {"sub": "test-user"}
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:  # type: ignore[arg-type]
             await client.post(BASE, json={"countries": ["mexico", "colombia"]})
@@ -150,7 +150,7 @@ async def test_multiple_countries_parsed():
 @pytest.mark.asyncio(loop_scope="session")
 async def test_date_params_parsed():
     mock = AsyncMock(return_value=MOCK_RESPONSE)
-    with patch("app.routers.total_sales.getTotalSalesData", new=mock):
+    with patch("app.routers.total_sales.get_total_sales_data", new=mock):
         app.dependency_overrides[verify_token] = lambda: {"sub": "test-user"}
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:  # type: ignore[arg-type]
             await client.post(BASE, json={"date_from": "2025-01-01", "date_to": "2025-01-31"})
@@ -163,7 +163,7 @@ async def test_date_params_parsed():
 @pytest.mark.asyncio(loop_scope="session")
 async def test_empty_body_uses_defaults():
     mock = AsyncMock(return_value=MOCK_RESPONSE)
-    with patch("app.routers.total_sales.getTotalSalesData", new=mock):
+    with patch("app.routers.total_sales.get_total_sales_data", new=mock):
         app.dependency_overrides[verify_token] = lambda: {"sub": "test-user"}
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:  # type: ignore[arg-type]
             await client.post(BASE, json={})
@@ -204,7 +204,7 @@ async def test_product_mix_null_when_service_returns_none():
         }
     )
     with patch(
-        "app.routers.total_sales.getTotalSalesData", new=AsyncMock(return_value=empty_response)
+        "app.routers.total_sales.get_total_sales_data", new=AsyncMock(return_value=empty_response)
     ):
         app.dependency_overrides[verify_token] = lambda: {"sub": "test-user"}
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:  # type: ignore[arg-type]

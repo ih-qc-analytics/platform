@@ -3,12 +3,12 @@ from datetime import datetime
 
 from sqlalchemy import text
 
-logger = logging.getLogger(__name__)
-
 from app.database import SessionLocal
 from app.enums import ETLJobName
 from app.etl.shared import LEAD_ADDRESS_SUBQUERY, log_etl_run, split_multi_value
 from app.reporting.database import ReportingSessionLocal
+
+logger = logging.getLogger(__name__)
 
 
 DIMENSIONAL_QUERY = """
