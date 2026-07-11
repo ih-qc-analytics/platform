@@ -55,7 +55,12 @@ async def fetch_country_allocated_revenue_rows(
                 text(f"""
             SELECT
                 site AS country,
-                COALESCE(SUM({paid_total}), 0) AS allocated_revenue
+                COALESCE(SUM({paid_total}), 0)                                                    AS allocated_revenue,
+                COALESCE(SUM(CASE WHEN product_type = 'exam'   THEN {paid_total} ELSE 0 END), 0)  AS exam_revenue,
+                COALESCE(SUM(CASE WHEN product_type = 'book'   THEN {paid_total} ELSE 0 END), 0)  AS book_revenue,
+                COALESCE(SUM(CASE WHEN product_type = 'course' THEN {paid_total} ELSE 0 END), 0)  AS course_revenue,
+                COALESCE(SUM(CASE WHEN product_type = 'book'   THEN quantity     ELSE 0 END), 0)  AS total_books,
+                COALESCE(SUM(CASE WHEN product_type = 'course' THEN quantity     ELSE 0 END), 0)  AS total_courses
             FROM report_line_items
             WHERE {where}
             GROUP BY site
@@ -104,7 +109,26 @@ async def fetch_country_presence_rows(filters: PorPaisFilters) -> list:
         ).fetchall()
 
 
-async def fetch_country_metric_rows(filters: PorPaisFilters) -> list:
+async def fetch_country_books_courses_presence_rows(filters: PorPaisFilters) -> list:
+    where, params = _line_where(filters, require_product_breakdown=True)
+    async with ReportingSessionLocal() as session:
+        return (
+            await session.execute(
+                text(f"""
+            SELECT DISTINCT
+                site AS country,
+                lead_id
+            FROM report_line_items
+            WHERE product_type IN ('book', 'course')
+              AND {where}
+            ORDER BY country ASC, lead_id ASC
+        """),
+                params,
+            )
+        ).fetchall()
+
+
+async def fetch_country_product_metric_rows(filters: PorPaisFilters) -> list:
     where, params = _line_where(filters, require_product_breakdown=True)
     async with ReportingSessionLocal() as session:
         return (
@@ -113,9 +137,11 @@ async def fetch_country_metric_rows(filters: PorPaisFilters) -> list:
             SELECT
                 site AS country,
                 lead_id,
-                SUM(quantity) AS exams
+                SUM(CASE WHEN product_type = 'exam'   THEN quantity ELSE 0 END) AS exams,
+                SUM(CASE WHEN product_type = 'book'   THEN quantity ELSE 0 END) AS books,
+                SUM(CASE WHEN product_type = 'course' THEN quantity ELSE 0 END) AS courses
             FROM report_line_items
-            WHERE {where} AND product_type = 'exam'
+            WHERE {where}
             GROUP BY site, lead_id
             ORDER BY country ASC, lead_id ASC
         """),

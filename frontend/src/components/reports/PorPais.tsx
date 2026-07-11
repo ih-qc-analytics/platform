@@ -102,7 +102,7 @@ export default function PorPais() {
                     )}
 
                     {isLoading ? (
-                        <PorPaisTableSkeleton columns={10} />
+                        <PorPaisTableSkeleton columns={12} />
                     ) : summaryRows.length === 0 ? (
                         <div className="px-6 py-10 text-sm text-muted-foreground">
                             No hay resultados para el período seleccionado.
@@ -123,6 +123,8 @@ export default function PorPais() {
                                         <TableHeadCell className="min-w-24 text-right">MET</TableHeadCell>
                                         <TableHeadCell className="min-w-24 text-right">TEA</TableHeadCell>
                                         <TableHeadCell className="min-w-24 text-right">Otros</TableHeadCell>
+                                        <TableHeadCell className="min-w-24 text-right">Libros</TableHeadCell>
+                                        <TableHeadCell className="min-w-24 text-right">Cursos</TableHeadCell>
                                         <TableHeadCell className="w-10" />
                                     </TableRow>
                                 </TableHeader>
@@ -183,6 +185,11 @@ export default function PorPais() {
                                             <TableHeadCell className="min-w-24 text-center">
                                                 Exámenes Mantenidos
                                             </TableHeadCell>
+                                            <TableHeadCell className="min-w-24 text-center">L+C Ganados</TableHeadCell>
+                                            <TableHeadCell className="min-w-24 text-center">L+C Perdidos</TableHeadCell>
+                                            <TableHeadCell className="min-w-24 text-center">
+                                                L+C Mantenidos
+                                            </TableHeadCell>
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
@@ -197,6 +204,8 @@ export default function PorPais() {
                 </Card>
             )}
 
+            <AsesorGlossaryNote />
+
             <PorPaisDetail
                 country={selectedCountry}
                 open={selectedCountry !== null}
@@ -205,6 +214,20 @@ export default function PorPais() {
                 }}
                 filters={filters}
             />
+        </div>
+    )
+}
+
+function AsesorGlossaryNote() {
+    return (
+        <div className="rounded-xl border border-slate-200 bg-slate-50 px-5 py-4 text-xs text-slate-500 space-y-1">
+            <p className="font-semibold text-slate-600 mb-2">Notas</p>
+            <p>
+                <span className="font-medium text-slate-700">Sin categorizar:</span> Pagos registrados sin ningún
+                detalle de producto en el sistema — no existen líneas de venta asociadas. No es que el producto sea
+                desconocido: es que no hay registro de qué se vendió. Se suman al ingreso total pero no aparecen en
+                ningún desglose por tipo.
+            </p>
         </div>
     )
 }
@@ -292,6 +315,18 @@ function ClickableCountryRow({
                 align="right"
                 emphasize
             />
+            <MetricCell
+                value={row.total_books}
+                comparisonValue={comparisonRow?.total_books}
+                showComparison={showComparison}
+                align="right"
+            />
+            <MetricCell
+                value={row.total_courses}
+                comparisonValue={comparisonRow?.total_courses}
+                showComparison={showComparison}
+                align="right"
+            />
             <TableBodyCell className="w-12 text-right text-slate-400">
                 <ChevronRight className="ml-auto size-5" />
             </TableBodyCell>
@@ -311,6 +346,9 @@ function StatusRowView({ row }: { row: PorPaisStatusRow }) {
             <StatusMetricCell value={row.exams_ganados} tone="success" />
             <StatusMetricCell value={row.exams_perdidos} tone="danger" />
             <StatusMetricCell value={row.exams_mantenidos} tone="info" />
+            <StatusMetricCell value={row.books_courses_ganados} tone="success" />
+            <StatusMetricCell value={row.books_courses_perdidos} tone="danger" />
+            <StatusMetricCell value={row.books_courses_mantenidos} tone="info" />
         </TableRow>
     )
 }

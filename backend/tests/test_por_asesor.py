@@ -42,6 +42,14 @@ async def test_por_asesor_2025_summary_uses_allocated_exam_breakdowns_and_paymen
         "mantenidos": 1,
         "uncategorized_revenue": 0.0,
         "total_revenue": 7100.0,
+        "total_books": 0,
+        "total_courses": 1,
+        "exam_revenue": 6500.0,
+        "book_revenue": 0.0,
+        "course_revenue": 600.0,
+        "books_courses_ganados": 1,
+        "books_courses_perdidos": 0,
+        "books_courses_mantenidos": 0,
     }
     assert by_name["Ana Garcia"].model_dump() == {
         "seller_id": 1,
@@ -59,6 +67,14 @@ async def test_por_asesor_2025_summary_uses_allocated_exam_breakdowns_and_paymen
         "mantenidos": 1,
         "uncategorized_revenue": 0.0,
         "total_revenue": 4400.0,
+        "total_books": 1,
+        "total_courses": 0,
+        "exam_revenue": 4100.0,
+        "book_revenue": 300.0,
+        "course_revenue": 0.0,
+        "books_courses_ganados": 1,
+        "books_courses_perdidos": 0,
+        "books_courses_mantenidos": 0,
     }
 
 
@@ -146,9 +162,13 @@ async def test_por_asesor_detail_for_ana_matches_expected_paid_geo_breakdown_and
             "TEA (Test of English for Aviation)": {"exams": 0, "schools": 0, "revenue": 0.0},
             "Placement & Otros": {"exams": 0, "schools": 0, "revenue": 0.0},
         },
-        "ganados": {"schools": 1, "exams": 1, "revenue": 1500.0},
-        "perdidos": {"schools": 0, "exams": 0, "revenue": 0.0},
-        "mantenidos": {"schools": 1, "exams": 3, "revenue": 2900.0},
+        "ganados": {"schools": 1, "exams": 1, "books": 1, "courses": 0, "revenue": 1500.0},
+        "perdidos": {"schools": 0, "exams": 0, "books": 0, "courses": 0, "revenue": 0.0},
+        "mantenidos": {"schools": 1, "exams": 3, "books": 0, "courses": 0, "revenue": 2900.0},
+        "total_books": 1,
+        "total_courses": 0,
+        "book_revenue": 300.0,
+        "course_revenue": 0.0,
     }
 
 
@@ -178,9 +198,13 @@ async def test_por_asesor_detail_for_carlos_matches_expected_paid_geo_breakdown_
             "TEA (Test of English for Aviation)": {"exams": 2, "schools": 1, "revenue": 2200.0},
             "Placement & Otros": {"exams": 0, "schools": 0, "revenue": 0.0},
         },
-        "ganados": {"schools": 1, "exams": 3, "revenue": 3500.0},
-        "perdidos": {"schools": 0, "exams": 0, "revenue": 0.0},
-        "mantenidos": {"schools": 1, "exams": 2, "revenue": 3600.0},
+        "ganados": {"schools": 1, "exams": 3, "books": 0, "courses": 0, "revenue": 3500.0},
+        "perdidos": {"schools": 0, "exams": 0, "books": 0, "courses": 0, "revenue": 0.0},
+        "mantenidos": {"schools": 1, "exams": 2, "books": 0, "courses": 1, "revenue": 3600.0},
+        "total_books": 0,
+        "total_courses": 1,
+        "book_revenue": 0.0,
+        "course_revenue": 600.0,
     }
 
 
@@ -231,6 +255,77 @@ async def test_por_asesor_detail_for_year_with_no_rows_returns_zero_breakdowns(u
     assert result.current.total_exams == 0
     assert result.current.uncategorized_revenue == 0.0
     assert result.current.total_revenue == 0.0
-    assert result.current.ganados.model_dump() == {"schools": 0, "exams": 0, "revenue": 0.0}
-    assert result.current.perdidos.model_dump() == {"schools": 0, "exams": 0, "revenue": 0.0}
-    assert result.current.mantenidos.model_dump() == {"schools": 0, "exams": 0, "revenue": 0.0}
+    assert result.current.ganados.model_dump() == {
+        "schools": 0,
+        "exams": 0,
+        "books": 0,
+        "courses": 0,
+        "revenue": 0.0,
+    }
+    assert result.current.perdidos.model_dump() == {
+        "schools": 0,
+        "exams": 0,
+        "books": 0,
+        "courses": 0,
+        "revenue": 0.0,
+    }
+    assert result.current.mantenidos.model_dump() == {
+        "schools": 0,
+        "exams": 0,
+        "books": 0,
+        "courses": 0,
+        "revenue": 0.0,
+    }
+
+
+@pytest.mark.asyncio(loop_scope="session")
+async def test_por_asesor_summary_books_courses_gpm_counts(ui_dev_reporting_db):
+    # Full year 2025 vs previous year 2024 (no books/courses in 2024 seed data)
+    result = await getAsesorReport(
+        AsesorFilters(date_from="2025-01-01", date_to="2025-12-31", show_comparison=True)
+    )
+    by_name = {row.seller_name: row for row in result.current.rows}
+
+    # Carlos has 1 course school in 2025 (cart 7, colombia lead 3 = Prep Course) — not in 2024
+    assert by_name["Carlos Rodriguez"].books_courses_ganados == 1
+    assert by_name["Carlos Rodriguez"].books_courses_perdidos == 0
+    assert by_name["Carlos Rodriguez"].books_courses_mantenidos == 0
+
+    # Ana has 1 book school in 2025 — not in 2024
+    assert by_name["Ana Garcia"].books_courses_ganados == 1
+    assert by_name["Ana Garcia"].books_courses_perdidos == 0
+    assert by_name["Ana Garcia"].books_courses_mantenidos == 0
+
+
+@pytest.mark.asyncio(loop_scope="session")
+async def test_por_asesor_detail_status_tiles_include_books_and_courses_counts(ui_dev_reporting_db):
+    # Carlos (seller_id=2) has 1 course in mantenidos schools
+    carlos = await getAsesorDetail(
+        2, AsesorFilters(date_from="2025-01-01", date_to="2025-12-31", show_comparison=True)
+    )
+    # Sum of books/courses across all statuses must match totals
+    total_books = (
+        carlos.current.ganados.books
+        + carlos.current.perdidos.books
+        + carlos.current.mantenidos.books
+    )
+    total_courses = (
+        carlos.current.ganados.courses
+        + carlos.current.perdidos.courses
+        + carlos.current.mantenidos.courses
+    )
+    assert total_books == carlos.current.total_books  # 0
+    assert total_courses == carlos.current.total_courses  # 1
+
+    # Ana (seller_id=1) has 1 book in ganados schools
+    ana = await getAsesorDetail(
+        1, AsesorFilters(date_from="2025-01-01", date_to="2025-12-31", show_comparison=True)
+    )
+    total_books_ana = (
+        ana.current.ganados.books + ana.current.perdidos.books + ana.current.mantenidos.books
+    )
+    total_courses_ana = (
+        ana.current.ganados.courses + ana.current.perdidos.courses + ana.current.mantenidos.courses
+    )
+    assert total_books_ana == ana.current.total_books  # 1
+    assert total_courses_ana == ana.current.total_courses  # 0
