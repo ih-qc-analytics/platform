@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react"
-import { ChevronRight } from "lucide-react"
+import { ChevronDown, ChevronRight, ChevronUp, ChevronsUpDown } from "lucide-react"
 
 import { exportAsesorExcel, exportAsesorExcelAll, exportPorAsesorPdf } from "@/api/reports"
 import AsesorFilterBar from "@/components/reports/AsesorFilterBar"
@@ -11,7 +11,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { useAsesorReport, useFilterOptions, useSellerOptions } from "@/hooks/useReports"
 import useCursorPagination from "@/hooks/useCursorPagination"
-import type { AsesorFilters, AsesorRow } from "@/types"
+import type { AsesorFilters, AsesorRow, AsesorSortColumn, AsesorSortDir } from "@/types"
 import { cn, formatCurrency, formatInteger, formatPercentChange, getPercentChange } from "@/lib/utils"
 import { TABLE_DISPLAY_GROUPS } from "@/components/reports/asesorCategories"
 import { getDefaultAsesorFilters } from "@/lib/reportFilters"
@@ -25,7 +25,19 @@ export default function PorAsesor() {
     const [isExportingExcel, setIsExportingExcel] = useState(false)
     const [exportingExcelVariant, setExportingExcelVariant] = useState<"filtered" | "all" | null>(null)
     const [exportError, setExportError] = useState<string | null>(null)
+    const [sortBy, setSortBy] = useState<AsesorSortColumn>("total_revenue")
+    const [sortDir, setSortDir] = useState<AsesorSortDir>("desc")
     const { page, currentCursor, reset, goPrevious, goNext } = useCursorPagination<string>()
+
+    const handleSort = (column: AsesorSortColumn) => {
+        if (sortBy === column) {
+            setSortDir((d) => (d === "desc" ? "asc" : "desc"))
+        } else {
+            setSortBy(column)
+            setSortDir("desc")
+        }
+        reset()
+    }
 
     const { data: filterOptions } = useFilterOptions()
     const { data: sellerOptionsResponse } = useSellerOptions()
@@ -42,8 +54,10 @@ export default function PorAsesor() {
             ...normalizedFilters,
             limit: PAGE_SIZE,
             cursor: currentCursor,
+            sort_by: sortBy,
+            sort_dir: sortDir,
         }),
-        [currentCursor, normalizedFilters],
+        [currentCursor, normalizedFilters, sortBy, sortDir],
     )
     const { data, isLoading, isError } = useAsesorReport(requestFilters)
     const showComparisonValues = Boolean(filters.show_comparison && data?.comparison)
@@ -62,7 +76,7 @@ export default function PorAsesor() {
             if (variant === "filtered") {
                 await exportAsesorExcel(requestFilters)
             } else {
-                await exportAsesorExcelAll(normalizedFilters)
+                await exportAsesorExcelAll({ ...normalizedFilters, sort_by: sortBy, sort_dir: sortDir })
             }
         } catch {
             setExportError("No fue posible exportar el archivo. Intenta de nuevo.")
@@ -76,7 +90,7 @@ export default function PorAsesor() {
         setExportError(null)
         setIsExportingPdf(true)
         try {
-            await exportPorAsesorPdf(normalizedFilters)
+            await exportPorAsesorPdf({ ...normalizedFilters, sort_by: sortBy, sort_dir: sortDir })
         } catch {
             setExportError("No fue posible exportar el archivo. Intenta de nuevo.")
         } finally {
@@ -129,9 +143,15 @@ export default function PorAsesor() {
                                 <Table className="min-w-max">
                                     <TableHeader>
                                         <TableRow className="hover:bg-transparent">
-                                            <TableHeadCell className="sticky left-0 z-10 min-w-44 whitespace-nowrap bg-card text-left">
+                                            <SortableTableHeadCell
+                                                sortKey="seller_name"
+                                                currentSortBy={sortBy}
+                                                currentSortDir={sortDir}
+                                                onSort={handleSort}
+                                                className="sticky left-0 z-10 min-w-44 whitespace-nowrap bg-card text-left"
+                                            >
                                                 Asesor
-                                            </TableHeadCell>
+                                            </SortableTableHeadCell>
                                             {TABLE_DISPLAY_GROUPS.map((group) => (
                                                 <TableHeadCell
                                                     key={group.label}
@@ -171,21 +191,51 @@ export default function PorAsesor() {
                                             <TableHeadCell className="min-w-36 whitespace-nowrap text-right">
                                                 Sin Categorizar
                                             </TableHeadCell>
-                                            <TableHeadCell className="min-w-36 whitespace-nowrap text-right">
+                                            <SortableTableHeadCell
+                                                sortKey="total_revenue"
+                                                currentSortBy={sortBy}
+                                                currentSortDir={sortDir}
+                                                onSort={handleSort}
+                                                className="min-w-36 whitespace-nowrap text-right"
+                                            >
                                                 Valor Total
-                                            </TableHeadCell>
-                                            <TableHeadCell className="min-w-36 whitespace-nowrap text-right">
+                                            </SortableTableHeadCell>
+                                            <SortableTableHeadCell
+                                                sortKey="allocated_revenue"
+                                                currentSortBy={sortBy}
+                                                currentSortDir={sortDir}
+                                                onSort={handleSort}
+                                                className="min-w-36 whitespace-nowrap text-right"
+                                            >
                                                 Ing. Asignado
-                                            </TableHeadCell>
-                                            <TableHeadCell className="min-w-36 whitespace-nowrap text-right">
+                                            </SortableTableHeadCell>
+                                            <SortableTableHeadCell
+                                                sortKey="expected_revenue"
+                                                currentSortBy={sortBy}
+                                                currentSortDir={sortDir}
+                                                onSort={handleSort}
+                                                className="min-w-36 whitespace-nowrap text-right"
+                                            >
                                                 Ing. Esperado
-                                            </TableHeadCell>
-                                            <TableHeadCell className="min-w-32 whitespace-nowrap text-right">
+                                            </SortableTableHeadCell>
+                                            <SortableTableHeadCell
+                                                sortKey="expected_cost"
+                                                currentSortBy={sortBy}
+                                                currentSortDir={sortDir}
+                                                onSort={handleSort}
+                                                className="min-w-32 whitespace-nowrap text-right"
+                                            >
                                                 Costo Esperado
-                                            </TableHeadCell>
-                                            <TableHeadCell className="min-w-24 whitespace-nowrap text-right">
+                                            </SortableTableHeadCell>
+                                            <SortableTableHeadCell
+                                                sortKey="profit_margin"
+                                                currentSortBy={sortBy}
+                                                currentSortDir={sortDir}
+                                                onSort={handleSort}
+                                                className="min-w-24 whitespace-nowrap text-right"
+                                            >
                                                 Margen
-                                            </TableHeadCell>
+                                            </SortableTableHeadCell>
                                             <TableHeadCell className="w-10" />
                                         </TableRow>
                                     </TableHeader>
@@ -393,6 +443,39 @@ function TableHeadCell({ className, children }: { className?: string; children?:
     return (
         <TableHead className={cn("px-3 py-3 text-xs font-semibold uppercase tracking-wide text-slate-700", className)}>
             {children}
+        </TableHead>
+    )
+}
+
+function SortableTableHeadCell({
+    sortKey,
+    currentSortBy,
+    currentSortDir,
+    onSort,
+    className,
+    children,
+}: {
+    sortKey: AsesorSortColumn
+    currentSortBy: AsesorSortColumn
+    currentSortDir: AsesorSortDir
+    onSort: (key: AsesorSortColumn) => void
+    className?: string
+    children: React.ReactNode
+}) {
+    const isActive = currentSortBy === sortKey
+    const Icon = isActive ? (currentSortDir === "desc" ? ChevronDown : ChevronUp) : ChevronsUpDown
+    return (
+        <TableHead
+            className={cn(
+                "cursor-pointer select-none px-3 py-3 text-xs font-semibold uppercase tracking-wide text-slate-700 hover:text-slate-900",
+                className,
+            )}
+            onClick={() => onSort(sortKey)}
+        >
+            <span className="inline-flex items-center gap-1">
+                {children}
+                <Icon className={cn("size-3.5 shrink-0", isActive ? "text-slate-900" : "text-slate-400")} />
+            </span>
         </TableHead>
     )
 }

@@ -174,6 +174,8 @@ async def test_por_asesor_export_all_ignores_optional_filters_and_adds_detail_sh
         "comparison_date_to": None,
         "date_from": "2025-01-01",
         "date_to": "2025-12-31",
+        "sort_by": "total_revenue",
+        "sort_dir": "desc",
     }
     assert set(row.seller_name for row in report.current.rows) == {
         "Carlos Rodriguez",
@@ -218,8 +220,10 @@ async def test_detalle_export_preserves_canonical_exam_columns_and_headers_only_
             date_to="2025-12-31",
             search="Ana",
             countries=["mexico"],
-            cursor=7,
+            cursor=None,
             page_size=3,
+            sort_by="seller_name",
+            sort_dir="asc",
         )
     )
     report = await getAllDetalleRows(export_filters)
@@ -253,6 +257,8 @@ async def test_detalle_export_preserves_canonical_exam_columns_and_headers_only_
         "comparison_mode": ComparisonMode.PREVIOUS_YEAR,
         "comparison_date_from": None,
         "comparison_date_to": None,
+        "sort_by": "seller_name",
+        "sort_dir": "asc",
     }
     assert row_values(sheet, 1, 4 + len(DETALLE_EXAM_NAME_ORDER)) == [
         "Seller",

@@ -391,3 +391,60 @@ async def test_por_asesor_detail_zero_revenue_yields_zero_margin(ui_dev_reportin
     assert result.current.total_revenue == 0.0
     assert result.current.expected_cost == 0.0
     assert result.current.profit_margin == 0.0
+
+
+@pytest.mark.asyncio(loop_scope="session")
+async def test_por_asesor_summary_default_sort_is_total_revenue_desc(ui_dev_reporting_db):
+    result = await getAsesorReport(AsesorFilters(date_from="2025-01-01", date_to="2025-12-31"))
+
+    revenues = [row.total_revenue for row in result.current.rows]
+    assert revenues == sorted(revenues, reverse=True)
+
+
+@pytest.mark.asyncio(loop_scope="session")
+async def test_por_asesor_summary_sort_by_seller_name_asc(ui_dev_reporting_db):
+    result = await getAsesorReport(
+        AsesorFilters(
+            date_from="2025-01-01", date_to="2025-12-31", sort_by="seller_name", sort_dir="asc"
+        )
+    )
+
+    names = [row.seller_name for row in result.current.rows]
+    assert names == sorted(names)
+
+
+@pytest.mark.asyncio(loop_scope="session")
+async def test_por_asesor_summary_sort_by_profit_margin_desc(ui_dev_reporting_db):
+    result = await getAsesorReport(
+        AsesorFilters(
+            date_from="2025-01-01", date_to="2025-12-31", sort_by="profit_margin", sort_dir="desc"
+        )
+    )
+
+    margins = [row.profit_margin for row in result.current.rows]
+    assert margins == sorted(margins, reverse=True)
+
+
+@pytest.mark.asyncio(loop_scope="session")
+async def test_por_asesor_summary_sort_pagination_stable(ui_dev_reporting_db):
+    """Paginating under a non-default sort yields no duplicates and full coverage."""
+    all_seller_ids: list[int] = []
+    cursor = None
+    while True:
+        page = await getAsesorReport(
+            AsesorFilters(
+                date_from="2025-01-01",
+                date_to="2025-12-31",
+                sort_by="seller_name",
+                sort_dir="asc",
+                limit=2,
+                cursor=cursor,
+            )
+        )
+        all_seller_ids.extend(row.seller_id for row in page.current.rows)
+        if not page.current.has_more or page.current.next_cursor is None:
+            break
+        cursor = page.current.next_cursor
+
+    assert len(all_seller_ids) == len(set(all_seller_ids)), "Duplicate seller_ids across pages"
+    assert len(all_seller_ids) == 4, "Expected all 4 sellers in 2025"

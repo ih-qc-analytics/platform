@@ -1,10 +1,20 @@
 from __future__ import annotations
 
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel
 
 from app.enums import ComparisonMode
+
+AsesorSortColumn = Literal[
+    "seller_name",
+    "total_revenue",
+    "allocated_revenue",
+    "expected_revenue",
+    "expected_cost",
+    "profit_margin",
+]
+AsesorSortDir = Literal["asc", "desc"]
 
 
 class BaseGeoFilters(BaseModel):
@@ -107,6 +117,8 @@ class AsesorFilters(BaseGeoFilters, DateRangeFilterFields, ComparisonFilterField
     sellers: list[str] = []
     limit: int = 25
     cursor: Optional[str] = None
+    sort_by: AsesorSortColumn = "total_revenue"
+    sort_dir: AsesorSortDir = "desc"
 
 
 class AsesorRow(BaseModel):
@@ -200,10 +212,16 @@ class AsesorDetailResponse(BaseModel):
     comparison: Optional[AsesorDetailComparison] = None
 
 
+DetalleSortColumn = Literal["seller_name", "school_name", "exam_date", "total"]
+DetalleSortDir = Literal["asc", "desc"]
+
+
 class DetalleFilters(ReportFilters):
     search: Optional[str] = None
-    cursor: Optional[int] = None
+    cursor: Optional[str] = None
     page_size: int = 8
+    sort_by: DetalleSortColumn = "exam_date"
+    sort_dir: DetalleSortDir = "desc"
 
 
 class DetalleRow(BaseModel):
@@ -218,7 +236,7 @@ class DetalleRow(BaseModel):
 
 class DetalleReportBase(BaseModel):
     rows: list[DetalleRow]
-    next_cursor: Optional[int]
+    next_cursor: Optional[str]
     has_more: bool
 
 

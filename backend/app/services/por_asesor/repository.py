@@ -14,9 +14,25 @@ from app.services.utils.report_currency import (
 )
 from app.services.shared import build_line_item_where_clause, build_payment_where_clause
 
+# Whitelist — only these strings ever reach SQL interpolation
+SORTABLE_COLUMNS: dict[str, str] = {
+    "seller_name": "seller_name",
+    "total_revenue": "total_revenue",
+    "allocated_revenue": "allocated_revenue",
+    "expected_revenue": "expected_revenue",
+    "expected_cost": "expected_cost",
+    "profit_margin": "profit_margin",
+}
 
-def encode_cursor(total_revenue: float, seller_name: str, seller_id: int) -> str:
-    payload = {"total_revenue": total_revenue, "seller_name": seller_name, "seller_id": seller_id}
+
+def encode_cursor(sort_by: str, sort_dir: str, sort_value, seller_name: str, seller_id: int) -> str:
+    payload = {
+        "sort_by": sort_by,
+        "sort_dir": sort_dir,
+        "sort_value": sort_value,
+        "seller_name": seller_name,
+        "seller_id": seller_id,
+    }
     return base64.urlsafe_b64encode(json.dumps(payload).encode()).decode()
 
 
@@ -24,7 +40,9 @@ def decode_cursor(cursor: str) -> dict:
     padding = "=" * (-len(cursor) % 4)
     payload = json.loads(base64.urlsafe_b64decode((cursor + padding).encode()).decode())
     return {
-        "cursor_total_revenue": float(payload["total_revenue"]),
+        "cursor_sort_by": str(payload["sort_by"]),
+        "cursor_sort_dir": str(payload["sort_dir"]),
+        "cursor_sort_value": payload["sort_value"],
         "cursor_seller_name": str(payload["seller_name"]),
         "cursor_seller_id": int(payload["seller_id"]),
     }
@@ -64,40 +82,129 @@ def _line_where(
     return where, params
 
 
+def _build_cte_query(
+    payment_where: str,
+    line_where: str,
+    payment_amount: str,
+    paid_total: str,
+    expected_cost: str,
+    expected_total: str,
+    *,
+    cursor_clause: str = "",
+    sort_col: str = "total_revenue",
+    sort_dir_sql: str = "DESC",
+    limit_clause: str = "",
+    seller_ids_clause: str = "",
+) -> str:
+    return f"""
+        WITH payment_agg AS (
+            SELECT
+                seller_id,
+                MIN(seller_name)                   AS seller_name,
+                COALESCE(SUM({payment_amount}), 0) AS total_revenue
+            FROM report_payments
+            WHERE {payment_where}
+            {seller_ids_clause}
+            GROUP BY seller_id
+        ),
+        line_agg AS (
+            SELECT
+                seller_id,
+                COALESCE(SUM({paid_total}), 0)                                                    AS allocated_revenue,
+                COALESCE(SUM(CASE WHEN product_type = 'exam'   THEN {paid_total} ELSE 0 END), 0)  AS exam_revenue,
+                COALESCE(SUM(CASE WHEN product_type = 'book'   THEN {paid_total} ELSE 0 END), 0)  AS book_revenue,
+                COALESCE(SUM(CASE WHEN product_type = 'course' THEN {paid_total} ELSE 0 END), 0)  AS course_revenue,
+                COALESCE(SUM(CASE WHEN product_type = 'book'   THEN quantity     ELSE 0 END), 0)  AS total_books,
+                COALESCE(SUM(CASE WHEN product_type = 'course' THEN quantity     ELSE 0 END), 0)  AS total_courses,
+                COALESCE(SUM({expected_cost}), 0)                                                 AS expected_cost,
+                COALESCE(SUM({expected_total}), 0)                                                AS expected_revenue
+            FROM report_line_items
+            WHERE {line_where}
+              AND include_in_product_breakdown = TRUE
+            {seller_ids_clause}
+            GROUP BY seller_id
+        ),
+        combined AS (
+            SELECT
+                p.seller_id,
+                p.seller_name,
+                p.total_revenue,
+                COALESCE(li.allocated_revenue, 0) AS allocated_revenue,
+                COALESCE(li.exam_revenue,      0) AS exam_revenue,
+                COALESCE(li.book_revenue,      0) AS book_revenue,
+                COALESCE(li.course_revenue,    0) AS course_revenue,
+                COALESCE(li.total_books,       0) AS total_books,
+                COALESCE(li.total_courses,     0) AS total_courses,
+                COALESCE(li.expected_cost,     0) AS expected_cost,
+                COALESCE(li.expected_revenue,  0) AS expected_revenue,
+                CASE
+                    WHEN COALESCE(li.allocated_revenue, 0) > 0
+                    THEN (COALESCE(li.allocated_revenue, 0) - COALESCE(li.expected_cost, 0))
+                         / li.allocated_revenue * 100
+                    ELSE 0
+                END AS profit_margin
+            FROM payment_agg p
+            LEFT JOIN line_agg li ON li.seller_id = p.seller_id
+        )
+        SELECT * FROM combined
+        {cursor_clause}
+        ORDER BY {sort_col} {sort_dir_sql}, seller_name ASC, seller_id ASC
+        {limit_clause}
+    """
+
+
 async def fetch_paginated_summary_rows(
     filters: AsesorFilters,
     limit: int,
     cursor: str | None,
     base_currency: BaseCurrency = BaseCurrency.MXN,
 ) -> tuple[list, bool, str | None]:
-    where, params = _payment_where(filters)
+    payment_where, params = _payment_where(filters)
+    line_where, line_params = _line_where(filters, require_product_breakdown=True)
+    # Merge params — both WHERE clauses use identical filter keys/values
+    params.update(line_params)
+
     payment_amount = payment_amount_column(base_currency)
+    paid_total = line_paid_total_column(base_currency)
+    expected_cost_col = line_expected_cost_column(base_currency)
+    expected_total_col = line_expected_total_column(base_currency)
+
+    sort_by = filters.sort_by if filters.sort_by in SORTABLE_COLUMNS else "total_revenue"
+    sort_dir = filters.sort_dir if filters.sort_dir in ("asc", "desc") else "desc"
+    sort_col = SORTABLE_COLUMNS[sort_by]
+    sort_dir_sql = sort_dir.upper()
 
     cursor_clause = ""
     if cursor:
         cp = decode_cursor(cursor)
+        cv = cp["cursor_sort_value"]
+        csn = cp["cursor_seller_name"]
+        csi = cp["cursor_seller_id"]
+        params["cursor_sort_value"] = cv
+        params["cursor_seller_name"] = csn
+        params["cursor_seller_id"] = csi
+        cmp_op = "<" if sort_dir == "desc" else ">"
         cursor_clause = f"""
-            HAVING
-                SUM({payment_amount}) < :cursor_total_revenue
-                OR (SUM({payment_amount}) = :cursor_total_revenue AND MIN(seller_name) > :cursor_seller_name)
-                OR (SUM({payment_amount}) = :cursor_total_revenue AND MIN(seller_name) = :cursor_seller_name
-                    AND seller_id > :cursor_seller_id)
+            WHERE {sort_col} {cmp_op} :cursor_sort_value
+               OR ({sort_col} = :cursor_sort_value AND seller_name > :cursor_seller_name)
+               OR ({sort_col} = :cursor_sort_value AND seller_name = :cursor_seller_name
+                   AND seller_id > :cursor_seller_id)
         """
-        params.update(cp)
 
     params["page_size"] = limit + 1
-    query = f"""
-        SELECT
-            seller_id,
-            MIN(seller_name) AS seller_name,
-            COALESCE(SUM({payment_amount}), 0) AS total_revenue
-        FROM report_payments
-        WHERE {where}
-        GROUP BY seller_id
-        {cursor_clause}
-        ORDER BY total_revenue DESC, seller_name ASC, seller_id ASC
-        LIMIT :page_size
-    """
+    query = _build_cte_query(
+        payment_where,
+        line_where,
+        payment_amount,
+        paid_total,
+        expected_cost_col,
+        expected_total_col,
+        cursor_clause=cursor_clause,
+        sort_col=sort_col,
+        sort_dir_sql=sort_dir_sql,
+        limit_clause="LIMIT :page_size",
+    )
+
     async with ReportingSessionLocal() as session:
         rows = (await session.execute(text(query), params)).fetchall()
 
@@ -106,66 +213,54 @@ async def fetch_paginated_summary_rows(
     next_cursor = None
     if has_more and page_rows:
         last = page_rows[-1]
+        sort_value = getattr(last, sort_col, None)
+        # Normalize: strings for seller_name, floats for all numeric columns (Decimal not JSON-safe)
+        if sort_by == "seller_name":
+            sort_value = str(sort_value) if sort_value is not None else ""
+        else:
+            sort_value = float(sort_value) if sort_value is not None else 0.0
         next_cursor = encode_cursor(
-            total_revenue=float(last.total_revenue or 0),
+            sort_by=sort_by,
+            sort_dir=sort_dir,
+            sort_value=sort_value,
             seller_name=last.seller_name,
             seller_id=int(last.seller_id),
         )
     return page_rows, has_more, next_cursor
 
 
-async def fetch_summary_allocated_revenue_rows_by_seller_ids(
+async def fetch_comparison_rows_by_seller_ids(
     seller_ids: list[int],
     filters: AsesorFilters,
     base_currency: BaseCurrency = BaseCurrency.MXN,
 ) -> list:
+    """Replaces both fetch_summary_rows_by_seller_ids and
+    fetch_summary_allocated_revenue_rows_by_seller_ids for the comparison path.
+    Returns one row per seller with all aggregated metrics."""
     if not seller_ids:
         return []
-    where, params = _line_where(filters, require_product_breakdown=True)
+    payment_where, params = _payment_where(filters)
+    line_where, line_params = _line_where(filters, require_product_breakdown=True)
+    params.update(line_params)
     params["seller_ids"] = seller_ids
-    paid_total = line_paid_total_column(base_currency)
-    expected_cost = line_expected_cost_column(base_currency)
-    expected_total = line_expected_total_column(base_currency)
-    query = f"""
-        SELECT
-            seller_id,
-            COALESCE(SUM({paid_total}), 0)                                                    AS allocated_revenue,
-            COALESCE(SUM(CASE WHEN product_type = 'exam'   THEN {paid_total} ELSE 0 END), 0)  AS exam_revenue,
-            COALESCE(SUM(CASE WHEN product_type = 'book'   THEN {paid_total} ELSE 0 END), 0)  AS book_revenue,
-            COALESCE(SUM(CASE WHEN product_type = 'course' THEN {paid_total} ELSE 0 END), 0)  AS course_revenue,
-            COALESCE(SUM(CASE WHEN product_type = 'book'   THEN quantity     ELSE 0 END), 0)  AS total_books,
-            COALESCE(SUM(CASE WHEN product_type = 'course' THEN quantity     ELSE 0 END), 0)  AS total_courses,
-            COALESCE(SUM({expected_cost}), 0)                                                 AS expected_cost,
-            COALESCE(SUM({expected_total}), 0)                                                AS expected_revenue
-        FROM report_line_items
-        WHERE {where}
-          AND seller_id = ANY(:seller_ids)
-        GROUP BY seller_id
-    """
-    async with ReportingSessionLocal() as session:
-        return (await session.execute(text(query), params)).fetchall()
 
-
-async def fetch_summary_rows_by_seller_ids(
-    seller_ids: list[int],
-    filters: AsesorFilters,
-    base_currency: BaseCurrency = BaseCurrency.MXN,
-) -> list:
-    if not seller_ids:
-        return []
-    where, params = _payment_where(filters)
-    params["seller_ids"] = seller_ids
     payment_amount = payment_amount_column(base_currency)
-    query = f"""
-        SELECT
-            seller_id,
-            MIN(seller_name) AS seller_name,
-            COALESCE(SUM({payment_amount}), 0) AS total_revenue
-        FROM report_payments
-        WHERE {where}
-          AND seller_id = ANY(:seller_ids)
-        GROUP BY seller_id
-    """
+    paid_total = line_paid_total_column(base_currency)
+    expected_cost_col = line_expected_cost_column(base_currency)
+    expected_total_col = line_expected_total_column(base_currency)
+
+    query = _build_cte_query(
+        payment_where,
+        line_where,
+        payment_amount,
+        paid_total,
+        expected_cost_col,
+        expected_total_col,
+        seller_ids_clause="AND seller_id = ANY(:seller_ids)",
+        sort_col="total_revenue",
+        sort_dir_sql="DESC",
+    )
+
     async with ReportingSessionLocal() as session:
         return (await session.execute(text(query), params)).fetchall()
 

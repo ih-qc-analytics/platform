@@ -1,3 +1,7 @@
+import base64
+import json
+from datetime import date as date_type
+
 from app.schemas.pdf import DetalleAsesorPDFPayload, PDFTable, PDFTableRow
 from app.schemas.reports import (
     DetalleFilters,
@@ -22,6 +26,30 @@ DETALLE_EXPORT_COLUMNS = [
     *[ExcelColumn(name, name) for name in DETALLE_EXAM_NAME_ORDER],
     ExcelColumn("total", "Total"),
 ]
+
+# Whitelist — only these strings ever reach SQL interpolation
+SORTABLE_COLUMNS: dict[str, str] = {
+    "seller_name": "seller_name",
+    "school_name": "school_name",
+    "exam_date": "payment_day",
+    "total": "quantity",
+}
+
+
+def encode_cursor(sort_by: str, sort_dir: str, sort_value, row_id: int) -> str:
+    payload = {"sort_by": sort_by, "sort_dir": sort_dir, "sort_value": sort_value, "id": row_id}
+    return base64.urlsafe_b64encode(json.dumps(payload).encode()).decode()
+
+
+def decode_cursor(cursor: str) -> dict:
+    padding = "=" * (-len(cursor) % 4)
+    payload = json.loads(base64.urlsafe_b64decode((cursor + padding).encode()).decode())
+    return {
+        "cursor_sort_by": str(payload["sort_by"]),
+        "cursor_sort_dir": str(payload["sort_dir"]),
+        "cursor_sort_value": payload["sort_value"],
+        "cursor_id": int(payload["id"]),
+    }
 
 
 def _build_where(filters: DetalleFilters) -> tuple[str, dict]:
@@ -73,10 +101,30 @@ def _row_from_record(row) -> DetalleRow:
 
 async def _fetch_current_base(filters: DetalleFilters) -> DetalleReportBase:
     where, params = _build_where(filters)
+
+    sort_by = filters.sort_by if filters.sort_by in SORTABLE_COLUMNS else "exam_date"
+    sort_dir = filters.sort_dir if filters.sort_dir in ("asc", "desc") else "desc"
+    sort_col = SORTABLE_COLUMNS[sort_by]
+    sort_dir_sql = sort_dir.upper()
+    cmp_op = "<" if sort_dir == "desc" else ">"
+
+    cursor_clause = ""
+    if filters.cursor:
+        cp = decode_cursor(filters.cursor)
+        params["cursor_id"] = cp["cursor_id"]
+        # asyncpg requires Python date objects for date column comparisons
+        raw_cv = cp["cursor_sort_value"]
+        params["cursor_sort_value"] = (
+            date_type.fromisoformat(raw_cv) if sort_by == "exam_date" else raw_cv
+        )
+        cursor_clause = f"""
+            AND (
+                {sort_col} {cmp_op} :cursor_sort_value
+                OR ({sort_col} = :cursor_sort_value AND cart_product_id > :cursor_id)
+            )
+        """
+
     params["page_size"] = filters.page_size + 1
-    if filters.cursor is not None:
-        where = f"{where} AND cart_product_id > :cursor"
-        params["cursor"] = filters.cursor
     query = f"""
         SELECT
             cart_product_id AS id,
@@ -84,17 +132,33 @@ async def _fetch_current_base(filters: DetalleFilters) -> DetalleReportBase:
             school_name,
             payment_day::text AS exam_date,
             exam_canonical_name AS exam_name,
-            quantity
+            quantity,
+            {sort_col} AS sort_val
         FROM report_line_items
         WHERE {where}
-        ORDER BY cart_product_id ASC
+        {cursor_clause}
+        ORDER BY {sort_col} {sort_dir_sql}, cart_product_id ASC
         LIMIT :page_size
     """
     async with ReportingSessionLocal() as session:
         records = (await session.execute(text(query), params)).fetchall()
-    rows = [_row_from_record(row) for row in records[: filters.page_size]]
+
+    page_records = records[: filters.page_size]
+    rows = [_row_from_record(row) for row in page_records]
     has_more = len(records) > filters.page_size
-    next_cursor = rows[-1].id if has_more and rows else None
+
+    next_cursor = None
+    if has_more and rows:
+        last_record = page_records[-1]
+        last_row = rows[-1]
+        raw_sort_val = last_record.sort_val
+        # Normalize to JSON-safe types: strings for text/date, int for quantity
+        if sort_by == "total":
+            sort_value = int(raw_sort_val) if raw_sort_val is not None else 0
+        else:
+            sort_value = str(raw_sort_val) if raw_sort_val is not None else ""
+        next_cursor = encode_cursor(sort_by, sort_dir, sort_value, last_row.id)
+
     return DetalleReportBase(rows=rows, next_cursor=next_cursor, has_more=has_more)
 
 
@@ -114,6 +178,7 @@ def build_detalle_export_filters_for_all(filters: DetalleFilters) -> DetalleFilt
             "cursor": None,
             "page_size": 500,
             "show_comparison": False,
+            # sort_by and sort_dir preserved intentionally
         }
     )
 

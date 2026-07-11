@@ -227,7 +227,7 @@ async def test_cursor_pagination_second_page(reporting_session_factory, clean_re
             make_row(cart_product_id=i, lead_id=i, quantity=i),
         )
     first_page = await getDetalleData(_filters(page_size=3))
-    assert first_page.current.next_cursor == 3
+    assert isinstance(first_page.current.next_cursor, str)
 
     second_page = await getDetalleData(_filters(page_size=3, cursor=first_page.current.next_cursor))
     assert len(second_page.current.rows) == 2
@@ -244,7 +244,7 @@ async def test_cursor_pagination_has_more_true(reporting_session_factory, clean_
         )
     result = await getDetalleData(_filters(page_size=3))
     assert result.current.has_more is True
-    assert result.current.next_cursor == 3
+    assert isinstance(result.current.next_cursor, str)
 
 
 @pytest.mark.asyncio
