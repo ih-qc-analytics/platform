@@ -168,10 +168,22 @@ export type SellerOptionsResponse = {
     sellers: string[]
 }
 
+export type AsesorSortColumn =
+    | "seller_name"
+    | "total_revenue"
+    | "allocated_revenue"
+    | "expected_revenue"
+    | "expected_cost"
+    | "profit_margin"
+
+export type AsesorSortDir = "asc" | "desc"
+
 export type AsesorFilters = ReportFilters & {
     sellers?: string[]
     limit?: number
     cursor?: string | null
+    sort_by?: AsesorSortColumn
+    sort_dir?: AsesorSortDir
 }
 
 export type AsesorRow = {

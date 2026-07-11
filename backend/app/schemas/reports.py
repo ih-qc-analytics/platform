@@ -1,10 +1,20 @@
 from __future__ import annotations
 
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel
 
 from app.enums import ComparisonMode
+
+AsesorSortColumn = Literal[
+    "seller_name",
+    "total_revenue",
+    "allocated_revenue",
+    "expected_revenue",
+    "expected_cost",
+    "profit_margin",
+]
+AsesorSortDir = Literal["asc", "desc"]
 
 
 class BaseGeoFilters(BaseModel):
@@ -107,6 +117,8 @@ class AsesorFilters(BaseGeoFilters, DateRangeFilterFields, ComparisonFilterField
     sellers: list[str] = []
     limit: int = 25
     cursor: Optional[str] = None
+    sort_by: AsesorSortColumn = "total_revenue"
+    sort_dir: AsesorSortDir = "desc"
 
 
 class AsesorRow(BaseModel):

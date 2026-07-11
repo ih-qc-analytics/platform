@@ -174,6 +174,8 @@ async def test_por_asesor_export_all_ignores_optional_filters_and_adds_detail_sh
         "comparison_date_to": None,
         "date_from": "2025-01-01",
         "date_to": "2025-12-31",
+        "sort_by": "total_revenue",
+        "sort_dir": "desc",
     }
     assert set(row.seller_name for row in report.current.rows) == {
         "Carlos Rodriguez",

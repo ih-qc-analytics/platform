@@ -40,14 +40,13 @@ from app.services.exports.pdf_helpers import (
 from app.services.por_asesor.product_grouping import EXAM_CATEGORY_ORDER
 from app.services.por_asesor.repository import (
     fetch_books_courses_presence_rows,
+    fetch_comparison_rows_by_seller_ids,
     fetch_detail_exam_breakdown_rows,
     fetch_paginated_summary_rows,
     fetch_school_allocated_revenue_metric_rows,
     fetch_school_product_metric_rows,
     fetch_school_presence_rows,
-    fetch_summary_allocated_revenue_rows_by_seller_ids,
     fetch_summary_exam_breakdown_rows_by_seller_ids,
-    fetch_summary_rows_by_seller_ids,
     _line_where,
     _payment_where,
 )
@@ -362,39 +361,16 @@ def build_asesor_report_base(
     summary_rows,
     exam_breakdowns: dict[int, dict[str, int]],
     status_counts: dict[int, dict[str, int]],
-    allocated_rows,
     *,
     next_cursor: str | None,
     has_more: bool,
 ) -> AsesorReportBase:
-    allocated_rev_by_seller: dict[int, float] = {}
-    exam_rev_by_seller: dict[int, float] = {}
-    book_rev_by_seller: dict[int, float] = {}
-    course_rev_by_seller: dict[int, float] = {}
-    books_by_seller: dict[int, int] = {}
-    courses_by_seller: dict[int, int] = {}
-    expected_cost_by_seller: dict[int, float] = {}
-    expected_rev_by_seller: dict[int, float] = {}
-    for ar in allocated_rows:
-        sid = int(ar.seller_id)
-        allocated_rev_by_seller[sid] = float(getattr(ar, "allocated_revenue", 0) or 0)
-        exam_rev_by_seller[sid] = float(getattr(ar, "exam_revenue", 0) or 0)
-        book_rev_by_seller[sid] = float(getattr(ar, "book_revenue", 0) or 0)
-        course_rev_by_seller[sid] = float(getattr(ar, "course_revenue", 0) or 0)
-        books_by_seller[sid] = int(getattr(ar, "total_books", 0) or 0)
-        courses_by_seller[sid] = int(getattr(ar, "total_courses", 0) or 0)
-        expected_cost_by_seller[sid] = float(getattr(ar, "expected_cost", 0) or 0)
-        expected_rev_by_seller[sid] = float(getattr(ar, "expected_revenue", 0) or 0)
-
     rows = []
     for row in summary_rows:
         sid = int(row.seller_id)
         total_revenue = float(row.total_revenue or 0)
-        exam_rev = exam_rev_by_seller.get(sid, 0.0)
-        book_rev = book_rev_by_seller.get(sid, 0.0)
-        course_rev = course_rev_by_seller.get(sid, 0.0)
-        allocated_rev = allocated_rev_by_seller.get(sid, 0.0)
-        expected_cost = expected_cost_by_seller.get(sid, 0.0)
+        allocated_rev = float(getattr(row, "allocated_revenue", 0) or 0)
+        expected_cost = float(getattr(row, "expected_cost", 0) or 0)
         rows.append(
             AsesorRow(
                 seller_id=sid,
@@ -406,19 +382,17 @@ def build_asesor_report_base(
                 total_revenue=total_revenue,
                 uncategorized_revenue=total_revenue - allocated_rev,
                 allocated_revenue=allocated_rev,
-                expected_revenue=expected_rev_by_seller.get(sid, 0.0),
-                total_books=books_by_seller.get(sid, 0),
-                total_courses=courses_by_seller.get(sid, 0),
-                exam_revenue=exam_rev,
-                book_revenue=book_rev,
-                course_revenue=course_rev,
+                expected_revenue=float(getattr(row, "expected_revenue", 0) or 0),
+                total_books=int(getattr(row, "total_books", 0) or 0),
+                total_courses=int(getattr(row, "total_courses", 0) or 0),
+                exam_revenue=float(getattr(row, "exam_revenue", 0) or 0),
+                book_revenue=float(getattr(row, "book_revenue", 0) or 0),
+                course_revenue=float(getattr(row, "course_revenue", 0) or 0),
                 books_courses_ganados=int(status_counts.get(sid, {}).get("bc_ganado", 0)),
                 books_courses_perdidos=int(status_counts.get(sid, {}).get("bc_perdido", 0)),
                 books_courses_mantenidos=int(status_counts.get(sid, {}).get("bc_mantenido", 0)),
                 expected_cost=expected_cost,
-                profit_margin=((allocated_rev - expected_cost) / allocated_rev * 100)
-                if allocated_rev > 0
-                else 0.0,
+                profit_margin=float(getattr(row, "profit_margin", 0) or 0),
             )
         )
     return AsesorReportBase(rows=rows, next_cursor=next_cursor, has_more=has_more)
@@ -523,18 +497,14 @@ async def _get_asesor_report_base(
         base_currency=base_currency,
     )
     seller_ids = [int(row.seller_id) for row in summary_rows]
-    breakdown_rows, allocated_rows, status_counts = await asyncio.gather(
+    breakdown_rows, status_counts = await asyncio.gather(
         fetch_summary_exam_breakdown_rows_by_seller_ids(seller_ids, current_filters),
-        fetch_summary_allocated_revenue_rows_by_seller_ids(
-            seller_ids, current_filters, base_currency=base_currency
-        ),
         fetch_summary_status_counts(current_filters, comparison_filters, seller_ids),
     )
     return build_asesor_report_base(
         summary_rows,
         map_summary_exam_breakdowns(breakdown_rows),
         status_counts,
-        allocated_rows,
         next_cursor=next_cursor,
         has_more=has_more,
     )
@@ -579,23 +549,18 @@ async def getAsesorReport(
     (
         comparison_summary_rows,
         comparison_breakdown_rows,
-        comparison_allocated_rows,
         comparison_status_counts,
     ) = await asyncio.gather(
-        fetch_summary_rows_by_seller_ids(
+        fetch_comparison_rows_by_seller_ids(
             seller_ids, comparison_filters, base_currency=base_currency
         ),
         fetch_summary_exam_breakdown_rows_by_seller_ids(seller_ids, comparison_filters),
-        fetch_summary_allocated_revenue_rows_by_seller_ids(
-            seller_ids, comparison_filters, base_currency=base_currency
-        ),
         fetch_summary_status_counts(comparison_filters, current_filters, seller_ids),
     )
     comparison = build_asesor_report_base(
         comparison_summary_rows,
         map_summary_exam_breakdowns(comparison_breakdown_rows),
         comparison_status_counts,
-        comparison_allocated_rows,
         next_cursor=None,
         has_more=False,
     )
@@ -744,23 +709,18 @@ async def getAllAsesorReportRows(
     (
         comp_summary_rows,
         comp_breakdown_rows,
-        comp_allocated_rows,
         comp_status_counts,
     ) = await asyncio.gather(
-        fetch_summary_rows_by_seller_ids(
+        fetch_comparison_rows_by_seller_ids(
             seller_ids, comparison_filters, base_currency=base_currency
         ),
         fetch_summary_exam_breakdown_rows_by_seller_ids(seller_ids, comparison_filters),
-        fetch_summary_allocated_revenue_rows_by_seller_ids(
-            seller_ids, comparison_filters, base_currency=base_currency
-        ),
         fetch_summary_status_counts(comparison_filters, current_filters, seller_ids),
     )
     comparison_base = build_asesor_report_base(
         comp_summary_rows,
         map_summary_exam_breakdowns(comp_breakdown_rows),
         comp_status_counts,
-        comp_allocated_rows,
         next_cursor=None,
         has_more=False,
     )
