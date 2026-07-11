@@ -220,8 +220,10 @@ async def test_detalle_export_preserves_canonical_exam_columns_and_headers_only_
             date_to="2025-12-31",
             search="Ana",
             countries=["mexico"],
-            cursor=7,
+            cursor=None,
             page_size=3,
+            sort_by="seller_name",
+            sort_dir="asc",
         )
     )
     report = await getAllDetalleRows(export_filters)
@@ -255,6 +257,8 @@ async def test_detalle_export_preserves_canonical_exam_columns_and_headers_only_
         "comparison_mode": ComparisonMode.PREVIOUS_YEAR,
         "comparison_date_from": None,
         "comparison_date_to": None,
+        "sort_by": "seller_name",
+        "sort_dir": "asc",
     }
     assert row_values(sheet, 1, 4 + len(DETALLE_EXAM_NAME_ORDER)) == [
         "Seller",

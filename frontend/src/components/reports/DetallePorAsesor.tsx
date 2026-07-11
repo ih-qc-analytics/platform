@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react"
-import { Search } from "lucide-react"
+import { ChevronDown, ChevronUp, ChevronsUpDown, Search } from "lucide-react"
 
 import { exportDetalleAsesorExcel, exportDetalleAsesorExcelAll, exportDetalleAsesorPdf } from "@/api/reports"
 import FilterBar from "@/components/filters/FilterBar"
@@ -13,7 +13,7 @@ import useCursorPagination from "@/hooks/useCursorPagination"
 import { useDetalleAsesorReport } from "@/hooks/useReports"
 import { getDefaultReportFilters } from "@/lib/reportFilters"
 import { cn, formatInteger } from "@/lib/utils"
-import type { DetalleAsesorFilters, ReportFilters } from "@/types"
+import type { DetalleAsesorFilters, DetalleSortColumn, DetalleSortDir, ReportFilters } from "@/types"
 
 const PAGE_SIZE = 8
 
@@ -25,7 +25,19 @@ export default function DetallePorAsesor() {
     const [isExportingExcel, setIsExportingExcel] = useState(false)
     const [exportingExcelVariant, setExportingExcelVariant] = useState<"filtered" | "all" | null>(null)
     const [exportError, setExportError] = useState<string | null>(null)
-    const { page, currentCursor, reset, goPrevious, goNext } = useCursorPagination<number>()
+    const [sortBy, setSortBy] = useState<DetalleSortColumn>("exam_date")
+    const [sortDir, setSortDir] = useState<DetalleSortDir>("desc")
+    const { page, currentCursor, reset, goPrevious, goNext } = useCursorPagination<string>()
+
+    const handleSort = (column: DetalleSortColumn) => {
+        if (sortBy === column) {
+            setSortDir((d) => (d === "desc" ? "asc" : "desc"))
+        } else {
+            setSortBy(column)
+            setSortDir("desc")
+        }
+        reset()
+    }
 
     useEffect(() => {
         const timeoutId = window.setTimeout(() => {
@@ -42,8 +54,10 @@ export default function DetallePorAsesor() {
             search: search || undefined,
             cursor: currentCursor,
             page_size: PAGE_SIZE,
+            sort_by: sortBy,
+            sort_dir: sortDir,
         }),
-        [currentCursor, filters, search],
+        [currentCursor, filters, search, sortBy, sortDir],
     )
 
     const { data, isLoading, isError } = useDetalleAsesorReport(requestFilters)
@@ -65,6 +79,8 @@ export default function DetallePorAsesor() {
                 await exportDetalleAsesorExcelAll({
                     ...filters,
                     search: search || undefined,
+                    sort_by: sortBy,
+                    sort_dir: sortDir,
                 })
             }
         } catch {
@@ -84,7 +100,7 @@ export default function DetallePorAsesor() {
         setExportError(null)
         setIsExportingPdf(true)
         try {
-            await exportDetalleAsesorPdf({ ...filters, search: search || undefined })
+            await exportDetalleAsesorPdf({ ...filters, search: search || undefined, sort_by: sortBy, sort_dir: sortDir })
         } catch {
             setExportError("No fue posible exportar el archivo. Intenta de nuevo.")
         } finally {
@@ -156,15 +172,47 @@ export default function DetallePorAsesor() {
                                 <Table className="w-full">
                                     <TableHeader>
                                         <TableRow className="hover:bg-transparent">
-                                            <DetalleHeadCell className="text-left">Asesor</DetalleHeadCell>
-                                            <DetalleHeadCell className="text-left">Escuela</DetalleHeadCell>
-                                            <DetalleHeadCell className="text-left">Fecha</DetalleHeadCell>
+                                            <SortableDetalleHeadCell
+                                                sortKey="seller_name"
+                                                currentSortBy={sortBy}
+                                                currentSortDir={sortDir}
+                                                onSort={handleSort}
+                                                className="text-left"
+                                            >
+                                                Asesor
+                                            </SortableDetalleHeadCell>
+                                            <SortableDetalleHeadCell
+                                                sortKey="school_name"
+                                                currentSortBy={sortBy}
+                                                currentSortDir={sortDir}
+                                                onSort={handleSort}
+                                                className="text-left"
+                                            >
+                                                Escuela
+                                            </SortableDetalleHeadCell>
+                                            <SortableDetalleHeadCell
+                                                sortKey="exam_date"
+                                                currentSortBy={sortBy}
+                                                currentSortDir={sortDir}
+                                                onSort={handleSort}
+                                                className="text-left"
+                                            >
+                                                Fecha
+                                            </SortableDetalleHeadCell>
                                             {EXAM_TYPE_LABELS.map((examType) => (
                                                 <DetalleHeadCell key={examType} className="text-center">
                                                     {examType}
                                                 </DetalleHeadCell>
                                             ))}
-                                            <DetalleHeadCell className="text-center">Total</DetalleHeadCell>
+                                            <SortableDetalleHeadCell
+                                                sortKey="total"
+                                                currentSortBy={sortBy}
+                                                currentSortDir={sortDir}
+                                                onSort={handleSort}
+                                                className="text-center"
+                                            >
+                                                Total
+                                            </SortableDetalleHeadCell>
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
@@ -216,6 +264,39 @@ function DetalleHeadCell({ className, children }: { className?: string; children
             )}
         >
             {children}
+        </TableHead>
+    )
+}
+
+function SortableDetalleHeadCell({
+    sortKey,
+    currentSortBy,
+    currentSortDir,
+    onSort,
+    className,
+    children,
+}: {
+    sortKey: DetalleSortColumn
+    currentSortBy: DetalleSortColumn
+    currentSortDir: DetalleSortDir
+    onSort: (key: DetalleSortColumn) => void
+    className?: string
+    children: React.ReactNode
+}) {
+    const isActive = currentSortBy === sortKey
+    const Icon = isActive ? (currentSortDir === "desc" ? ChevronDown : ChevronUp) : ChevronsUpDown
+    return (
+        <TableHead
+            className={cn(
+                "cursor-pointer select-none px-2 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-700 whitespace-normal break-words align-bottom hover:text-slate-900",
+                className,
+            )}
+            onClick={() => onSort(sortKey)}
+        >
+            <span className="inline-flex items-center gap-0.5">
+                {children}
+                <Icon className={cn("size-3 shrink-0", isActive ? "text-slate-900" : "text-slate-400")} />
+            </span>
         </TableHead>
     )
 }

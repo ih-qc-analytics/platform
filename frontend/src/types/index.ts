@@ -257,10 +257,15 @@ export type AsesorDetailBase = {
 
 export type AsesorDetailResponse = ComparedResponse<AsesorDetailBase>
 
+export type DetalleSortColumn = "seller_name" | "school_name" | "exam_date" | "total"
+export type DetalleSortDir = "asc" | "desc"
+
 export type DetalleAsesorFilters = ReportFilters & {
     search?: string
-    cursor?: number | null
+    cursor?: string | null
     page_size?: number
+    sort_by?: DetalleSortColumn
+    sort_dir?: DetalleSortDir
 }
 
 export type DetalleAsesorRow = {
@@ -275,7 +280,7 @@ export type DetalleAsesorRow = {
 
 export type DetalleAsesorReportBase = {
     rows: DetalleAsesorRow[]
-    next_cursor: number | null
+    next_cursor: string | null
     has_more: boolean
 }
 

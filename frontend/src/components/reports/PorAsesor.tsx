@@ -76,7 +76,7 @@ export default function PorAsesor() {
             if (variant === "filtered") {
                 await exportAsesorExcel(requestFilters)
             } else {
-                await exportAsesorExcelAll(normalizedFilters)
+                await exportAsesorExcelAll({ ...normalizedFilters, sort_by: sortBy, sort_dir: sortDir })
             }
         } catch {
             setExportError("No fue posible exportar el archivo. Intenta de nuevo.")
@@ -90,7 +90,7 @@ export default function PorAsesor() {
         setExportError(null)
         setIsExportingPdf(true)
         try {
-            await exportPorAsesorPdf(normalizedFilters)
+            await exportPorAsesorPdf({ ...normalizedFilters, sort_by: sortBy, sort_dir: sortDir })
         } catch {
             setExportError("No fue posible exportar el archivo. Intenta de nuevo.")
         } finally {

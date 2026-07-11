@@ -212,10 +212,16 @@ class AsesorDetailResponse(BaseModel):
     comparison: Optional[AsesorDetailComparison] = None
 
 
+DetalleSortColumn = Literal["seller_name", "school_name", "exam_date", "total"]
+DetalleSortDir = Literal["asc", "desc"]
+
+
 class DetalleFilters(ReportFilters):
     search: Optional[str] = None
-    cursor: Optional[int] = None
+    cursor: Optional[str] = None
     page_size: int = 8
+    sort_by: DetalleSortColumn = "exam_date"
+    sort_dir: DetalleSortDir = "desc"
 
 
 class DetalleRow(BaseModel):
@@ -230,7 +236,7 @@ class DetalleRow(BaseModel):
 
 class DetalleReportBase(BaseModel):
     rows: list[DetalleRow]
-    next_cursor: Optional[int]
+    next_cursor: Optional[str]
     has_more: bool
 
 
