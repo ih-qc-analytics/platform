@@ -100,7 +100,12 @@ export default function DetallePorAsesor() {
         setExportError(null)
         setIsExportingPdf(true)
         try {
-            await exportDetalleAsesorPdf({ ...filters, search: search || undefined, sort_by: sortBy, sort_dir: sortDir })
+            await exportDetalleAsesorPdf({
+                ...filters,
+                search: search || undefined,
+                sort_by: sortBy,
+                sort_dir: sortDir,
+            })
         } catch {
             setExportError("No fue posible exportar el archivo. Intenta de nuevo.")
         } finally {

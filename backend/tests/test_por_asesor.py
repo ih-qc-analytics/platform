@@ -404,7 +404,9 @@ async def test_por_asesor_summary_default_sort_is_total_revenue_desc(ui_dev_repo
 @pytest.mark.asyncio(loop_scope="session")
 async def test_por_asesor_summary_sort_by_seller_name_asc(ui_dev_reporting_db):
     result = await getAsesorReport(
-        AsesorFilters(date_from="2025-01-01", date_to="2025-12-31", sort_by="seller_name", sort_dir="asc")
+        AsesorFilters(
+            date_from="2025-01-01", date_to="2025-12-31", sort_by="seller_name", sort_dir="asc"
+        )
     )
 
     names = [row.seller_name for row in result.current.rows]
@@ -414,7 +416,9 @@ async def test_por_asesor_summary_sort_by_seller_name_asc(ui_dev_reporting_db):
 @pytest.mark.asyncio(loop_scope="session")
 async def test_por_asesor_summary_sort_by_profit_margin_desc(ui_dev_reporting_db):
     result = await getAsesorReport(
-        AsesorFilters(date_from="2025-01-01", date_to="2025-12-31", sort_by="profit_margin", sort_dir="desc")
+        AsesorFilters(
+            date_from="2025-01-01", date_to="2025-12-31", sort_by="profit_margin", sort_dir="desc"
+        )
     )
 
     margins = [row.profit_margin for row in result.current.rows]

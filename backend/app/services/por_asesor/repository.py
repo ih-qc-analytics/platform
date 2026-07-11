@@ -25,9 +25,7 @@ SORTABLE_COLUMNS: dict[str, str] = {
 }
 
 
-def encode_cursor(
-    sort_by: str, sort_dir: str, sort_value, seller_name: str, seller_id: int
-) -> str:
+def encode_cursor(sort_by: str, sort_dir: str, sort_value, seller_name: str, seller_id: int) -> str:
     payload = {
         "sort_by": sort_by,
         "sort_dir": sort_dir,
