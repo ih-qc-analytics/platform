@@ -5,6 +5,7 @@ from app.services.exports.pdf_renderer import render_detalle_asesor_pdf
 from app.services.detalle_asesor.detalle_asesor import (
     build_detalle_asesor_pdf_payload,
     build_detalle_export_filters_for_all,
+    build_detalle_filtered_export_filters,
     build_detalle_export_worksheets,
     getAllDetalleRows,
     getDetalleData,
@@ -27,7 +28,7 @@ async def export_detalle_asesor_pdf(filters: DetalleFilters):
 
 @router.post("/detalle-asesor/export/excel")
 async def export_detalle_asesor_excel(filters: DetalleFilters):
-    report = await getDetalleData(filters)
+    report = await getAllDetalleRows(build_detalle_filtered_export_filters(filters))
     return generate_excel_response(
         "detalle-asesor",
         build_detalle_export_worksheets(report),
