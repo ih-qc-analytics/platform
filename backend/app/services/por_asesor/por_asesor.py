@@ -771,6 +771,18 @@ def build_asesor_export_filters_for_all(filters: AsesorFilters) -> AsesorFilters
     )
 
 
+def build_asesor_filtered_export_filters(filters: AsesorFilters) -> AsesorFilters:
+    """Strip cursor/limit so the filtered export fetches all matching rows, not just the current page."""
+    return filters.model_copy(
+        update={
+            "cursor": None,
+            "limit": 100,
+            "show_comparison": False,
+            # countries, zones, states, cities, sellers, sort_by, sort_dir preserved
+        }
+    )
+
+
 def build_asesor_export_worksheets(
     report: AsesorReportResponse, details: list[AsesorDetailBase]
 ) -> list[ExcelWorksheetSpec]:

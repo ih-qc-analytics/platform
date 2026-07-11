@@ -9,6 +9,7 @@ from app.services.por_asesor.por_asesor import (
     build_asesor_detail_pdf_payload,
     build_por_asesor_pdf_payload,
     build_asesor_export_filters_for_all,
+    build_asesor_filtered_export_filters,
     build_asesor_export_worksheets,
     getAllAsesorReportRows,
     getAsesorDetail,
@@ -68,12 +69,13 @@ async def export_por_asesor_pdf(filters: AsesorFilters, request: Request):
 async def export_por_asesor_excel(filters: AsesorFilters, request: Request):
     country_rates = resolve_por_asesor_country_rates(request)
     base_currency = get_request_base_currency(request)
-    report = await getAsesorReport(
-        filters, country_rates=country_rates, base_currency=base_currency
+    export_filters = build_asesor_filtered_export_filters(filters)
+    report = await getAllAsesorReportRows(
+        export_filters, country_rates=country_rates, base_currency=base_currency
     )
     details = await getAsesorDetailsForRows(
         report.current.rows,
-        filters,
+        export_filters,
         country_rates=country_rates,
         base_currency=base_currency,
     )

@@ -183,6 +183,18 @@ def build_detalle_export_filters_for_all(filters: DetalleFilters) -> DetalleFilt
     )
 
 
+def build_detalle_filtered_export_filters(filters: DetalleFilters) -> DetalleFilters:
+    """Strip cursor/page_size so the filtered export fetches all matching rows, not just the current page."""
+    return filters.model_copy(
+        update={
+            "cursor": None,
+            "page_size": 500,
+            "show_comparison": False,
+            # countries, zones, states, cities, search, sort_by, sort_dir preserved
+        }
+    )
+
+
 async def getAllDetalleRows(filters: DetalleFilters) -> DetalleReportResponse:
     all_rows: list[DetalleRow] = []
     cursor = filters.cursor
