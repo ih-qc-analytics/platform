@@ -1,6 +1,9 @@
+import logging
 from datetime import datetime
 
 from sqlalchemy import text
+
+logger = logging.getLogger(__name__)
 
 from app.database import SessionLocal
 from app.enums import ETLJobName
@@ -64,6 +67,8 @@ async def run_dimensional_refresh() -> dict:
                         await reporting.execute(text(DIMENSION_UPDATE.format(table=table)), row)
 
         await log_etl_run(ETLJobName.DIMENSIONAL_REFRESH, len(rows), "success", start)
+        duration = (datetime.now() - start).total_seconds()
+        logger.info("ETL dimensional refresh — leads: %d  (%.1fs)", len(rows), duration)
         return {"leads_refreshed": len(rows)}
     except Exception as error:
         await log_etl_run(ETLJobName.DIMENSIONAL_REFRESH, 0, "failed", start, error=str(error))

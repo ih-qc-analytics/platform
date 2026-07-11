@@ -1,7 +1,10 @@
 import asyncio
+import logging
 from datetime import date, datetime, timedelta
 
 from sqlalchemy import bindparam, text
+
+logger = logging.getLogger(__name__)
 
 from app.database import SessionLocal
 from app.enums import ETLJobName, ExamCategory, PaymentStatus, ProductType
@@ -630,6 +633,11 @@ async def run_upsert(
         total_rows = len(payment_rows) + len(line_item_rows) + len(allocation_rows)
         await log_etl_run(job_name, total_rows, "success", start)
         deleted = len(deleted_cart_product_ids) + len(deleted_cart_ids)
+        duration = (datetime.now() - start).total_seconds()
+        logger.info(
+            "ETL upsert — payments: %d  line_items: %d  allocations: %d  deleted: %d  (%.1fs)",
+            len(payment_rows), len(line_item_rows), len(allocation_rows), deleted, duration,
+        )
         return {
             "payments": len(payment_rows),
             "line_items": len(line_item_rows),

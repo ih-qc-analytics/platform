@@ -44,32 +44,32 @@ from app.services.por_pais.repository import (
 DETALLE_EXAM_NAME_ORDER = [*EXAM_NAME_ORDER, "Other"]
 
 POR_PAIS_SUMMARY_COLUMNS = [
-    ExcelColumn("country", "Country"),
-    ExcelColumn("total_schools", "Total Schools"),
-    ExcelColumn("total_revenue", "Total Revenue"),
+    ExcelColumn("country", "País"),
+    ExcelColumn("total_schools", "Total Colegios"),
+    ExcelColumn("total_revenue", "Ingreso Total"),
     ExcelColumn("exam_revenue", "Ingreso Exámenes"),
     ExcelColumn("book_revenue", "Ingreso Libros"),
     ExcelColumn("course_revenue", "Ingreso Cursos"),
-    ExcelColumn("uncategorized_revenue", "Uncategorized Revenue"),
+    ExcelColumn("uncategorized_revenue", "Ingreso Sin Categorizar"),
     ExcelColumn("cambridge", "Cambridge"),
     ExcelColumn("ielts", "IELTS"),
     ExcelColumn("michigan", "Michigan"),
     ExcelColumn("tea", "TEA"),
-    ExcelColumn("other", "Other"),
+    ExcelColumn("other", "Otros"),
     ExcelColumn("total_books", "Libros"),
     ExcelColumn("total_courses", "Cursos"),
 ]
 POR_PAIS_STATUS_COLUMNS = [
-    ExcelColumn("country", "Country"),
-    ExcelColumn("schools_ganados", "Schools Ganados"),
-    ExcelColumn("schools_perdidos", "Schools Perdidos"),
-    ExcelColumn("schools_mantenidos", "Schools Mantenidos"),
-    ExcelColumn("exams_ganados", "Exams Ganados"),
-    ExcelColumn("exams_perdidos", "Exams Perdidos"),
-    ExcelColumn("exams_mantenidos", "Exams Mantenidos"),
+    ExcelColumn("country", "País"),
+    ExcelColumn("schools_ganados", "Colegios Ganados"),
+    ExcelColumn("schools_perdidos", "Colegios Perdidos"),
+    ExcelColumn("schools_mantenidos", "Colegios Mantenidos"),
+    ExcelColumn("exams_ganados", "Exámenes Ganados"),
+    ExcelColumn("exams_perdidos", "Exámenes Perdidos"),
+    ExcelColumn("exams_mantenidos", "Exámenes Mantenidos"),
 ]
 POR_PAIS_DETAIL_COLUMNS = [
-    ExcelColumn("country", "Country"),
+    ExcelColumn("country", "País"),
     *[ExcelColumn(name, name) for name in DETALLE_EXAM_NAME_ORDER],
     ExcelColumn("total_books", "Libros"),
     ExcelColumn("total_courses", "Cursos"),
@@ -235,7 +235,7 @@ async def _get_por_pais_base(
     )
 
 
-async def getPorPaisReport(
+async def get_por_pais_report(
     filters: PorPaisFilters,
     base_currency: BaseCurrency = BaseCurrency.MXN,
 ) -> PorPaisReportResponse:
@@ -345,7 +345,7 @@ def _extract_country_product_totals(allocated_rows, country: str) -> dict:
     }
 
 
-async def getPorPaisDetail(country: str, filters: PorPaisFilters) -> PorPaisDetailResponse:
+async def get_por_pais_detail(country: str, filters: PorPaisFilters) -> PorPaisDetailResponse:
     comparison_meta = resolve_comparison_range(filters)
     current_filters = filters.model_copy(
         update={"show_comparison": False, "comparison_date_from": None, "comparison_date_to": None}
@@ -392,7 +392,7 @@ async def getPorPaisDetail(country: str, filters: PorPaisFilters) -> PorPaisDeta
     )
 
 
-async def getPorPaisDetailsForReport(
+async def get_por_pais_details_for_report(
     report: PorPaisReportResponse,
     filters: PorPaisFilters,
 ) -> list[PorPaisDetailResponse]:

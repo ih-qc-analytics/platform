@@ -44,31 +44,31 @@ from app.services.shared import (
 )
 
 TOTAL_SALES_SUMMARY_COLUMNS = [
-    ExcelColumn("total_clients", "Total Clients"),
-    ExcelColumn("total_exams", "Total Exams"),
-    ExcelColumn("exam_revenue", "Exam Revenue"),
-    ExcelColumn("total_books", "Total Books"),
-    ExcelColumn("book_revenue", "Book Revenue"),
-    ExcelColumn("total_courses", "Total Courses"),
-    ExcelColumn("course_revenue", "Course Revenue"),
+    ExcelColumn("total_clients", "Total Clientes"),
+    ExcelColumn("total_exams", "Total Exámenes"),
+    ExcelColumn("exam_revenue", "Ingreso Exámenes"),
+    ExcelColumn("total_books", "Total Libros"),
+    ExcelColumn("book_revenue", "Ingreso Libros"),
+    ExcelColumn("total_courses", "Total Cursos"),
+    ExcelColumn("course_revenue", "Ingreso Cursos"),
     ExcelColumn("total_otros", "Total Otros"),
-    ExcelColumn("otros_revenue", "Otros Revenue"),
-    ExcelColumn("total_revenue", "Total Revenue"),
-    ExcelColumn("expected_revenue", "Expected Revenue"),
-    ExcelColumn("expected_cost", "Expected Cost"),
-    ExcelColumn("uncategorized_revenue", "Uncategorized Revenue"),
-    ExcelColumn("unknown_site_revenue", "Unknown Site Revenue"),
-    ExcelColumn("unknown_site_expected_revenue", "Unknown Site Expected Revenue"),
-    ExcelColumn("profit_margin", "Profit Margin"),
-    ExcelColumn("prior_year_revenue", "Prior Year Revenue"),
-    ExcelColumn("growth_pct", "Growth %"),
+    ExcelColumn("otros_revenue", "Ingreso Otros"),
+    ExcelColumn("total_revenue", "Ingreso Total"),
+    ExcelColumn("expected_revenue", "Ingreso Esperado"),
+    ExcelColumn("expected_cost", "Costo Esperado"),
+    ExcelColumn("uncategorized_revenue", "Ingreso Sin Categorizar"),
+    ExcelColumn("unknown_site_revenue", "Ingreso Sitio Desconocido"),
+    ExcelColumn("unknown_site_expected_revenue", "Ingreso Esperado Sitio Desconocido"),
+    ExcelColumn("profit_margin", "Margen (%)"),
+    ExcelColumn("prior_year_revenue", "Ingreso Año Anterior"),
+    ExcelColumn("growth_pct", "Crecimiento %"),
 ]
 
 TOTAL_SALES_CHART_COLUMNS = [
-    ExcelColumn("month", "Month"),
-    ExcelColumn("trend_revenue", "Trend Revenue"),
-    ExcelColumn("dimension", "Country"),
-    ExcelColumn("geo_revenue", "Geo Revenue"),
+    ExcelColumn("month", "Mes"),
+    ExcelColumn("trend_revenue", "Ingreso Tendencia"),
+    ExcelColumn("dimension", "País"),
+    ExcelColumn("geo_revenue", "Ingreso por País"),
 ]
 
 
@@ -246,7 +246,7 @@ def _total_sales_kpi_deltas(
     }
 
 
-async def getTotalSalesData(
+async def get_total_sales_data(
     filters: ReportFilters,
     country_rates: dict | None = None,
     base_currency: BaseCurrency = BaseCurrency.MXN,
@@ -362,25 +362,25 @@ async def build_ventas_totales_pdf_payload(
         PDFKpiItem(label="Total Clientes", value=str(base.total_clients), **_kw("total_clients")),
         PDFKpiItem(label="Total Exámenes", value=str(base.total_exams), **_kw("total_exams")),
         PDFKpiItem(
-            label="Ingreso por Exámenes",
+            label="Ingreso Exámenes",
             value=format_currency(base.exam_revenue, base_currency),
             **_kw("exam_revenue"),
         ),
         PDFKpiItem(label="Total Libros", value=str(base.total_books), **_kw("total_books")),
         PDFKpiItem(
-            label="Ingreso por Libros",
+            label="Ingreso Libros",
             value=format_currency(base.book_revenue, base_currency),
             **_kw("book_revenue"),
         ),
         PDFKpiItem(label="Total Cursos", value=str(base.total_courses), **_kw("total_courses")),
         PDFKpiItem(
-            label="Ingreso por Cursos",
+            label="Ingreso Cursos",
             value=format_currency(base.course_revenue, base_currency),
             **_kw("course_revenue"),
         ),
         PDFKpiItem(label="Otros", value=str(base.total_otros), **_kw("total_otros")),
         PDFKpiItem(
-            label="Ingreso por Otros",
+            label="Ingreso Otros",
             value=format_currency(base.otros_revenue, base_currency),
             **_kw("otros_revenue"),
         ),
@@ -569,16 +569,16 @@ def build_total_sales_export_worksheets(
         chart_columns = list(TOTAL_SALES_CHART_COLUMNS)
         if comp:
             chart_columns = [
-                ExcelColumn("month", "Month"),
-                ExcelColumn("trend_revenue", "Ingresos (Actual)"),
-                ExcelColumn("comp_trend_revenue", "Ingresos (Anterior)"),
-                ExcelColumn("dimension", "Country"),
-                ExcelColumn("geo_revenue", "Ingresos (Actual)"),
-                ExcelColumn("comp_geo_revenue", "Ingresos (Anterior)"),
+                ExcelColumn("month", "Mes"),
+                ExcelColumn("trend_revenue", "Ingresos (Act.)"),
+                ExcelColumn("comp_trend_revenue", "Ingresos (Ant.)"),
+                ExcelColumn("dimension", "País"),
+                ExcelColumn("geo_revenue", "Ingresos (Act.)"),
+                ExcelColumn("comp_geo_revenue", "Ingresos (Ant.)"),
             ]
         worksheets.append(
             ExcelWorksheetSpec(
-                name="Ventas Totales Charts",
+                name="Ventas Totales Gráficas",
                 columns=chart_columns,
                 rows=chart_rows,
                 post_process=add_total_sales_charts,
