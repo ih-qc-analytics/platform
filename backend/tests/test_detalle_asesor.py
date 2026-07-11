@@ -1,13 +1,13 @@
 import pytest
 
 from app.schemas.reports import DetalleFilters
-from app.services.detalle_asesor.detalle_asesor import getDetalleData
+from app.services.detalle_asesor.detalle_asesor import get_detalle_data
 
 
 @pytest.mark.asyncio(loop_scope="session")
 async def test_detalle_asesor_2025_returns_only_paid_exam_cart_products(ui_dev_reporting_db):
     # Explicit sort to keep a deterministic order independent of the default
-    result = await getDetalleData(
+    result = await get_detalle_data(
         DetalleFilters(
             date_from="2025-01-01",
             date_to="2025-12-31",
@@ -26,7 +26,7 @@ async def test_detalle_asesor_2025_returns_only_paid_exam_cart_products(ui_dev_r
 async def test_detalle_asesor_dedupes_multi_student_allocations_to_single_cart_product_quantities(
     ui_dev_reporting_db,
 ):
-    result = await getDetalleData(
+    result = await get_detalle_data(
         DetalleFilters(date_from="2025-01-01", date_to="2025-12-31", page_size=20)
     )
     rows = {row.id: row for row in result.current.rows}
@@ -39,7 +39,7 @@ async def test_detalle_asesor_dedupes_multi_student_allocations_to_single_cart_p
 
 @pytest.mark.asyncio(loop_scope="session")
 async def test_detalle_asesor_excludes_non_exam_pending_and_deleted_rows(ui_dev_reporting_db):
-    result = await getDetalleData(
+    result = await get_detalle_data(
         DetalleFilters(date_from="2025-01-01", date_to="2025-12-31", page_size=20)
     )
 
@@ -54,7 +54,7 @@ async def test_detalle_asesor_excludes_non_exam_pending_and_deleted_rows(ui_dev_
 
 @pytest.mark.asyncio(loop_scope="session")
 async def test_detalle_asesor_supports_search_by_seller_name(ui_dev_reporting_db):
-    result = await getDetalleData(
+    result = await get_detalle_data(
         DetalleFilters(
             date_from="2025-01-01",
             date_to="2025-12-31",
@@ -69,7 +69,7 @@ async def test_detalle_asesor_supports_search_by_seller_name(ui_dev_reporting_db
 
 @pytest.mark.asyncio(loop_scope="session")
 async def test_detalle_asesor_supports_search_by_school_name(ui_dev_reporting_db):
-    result = await getDetalleData(
+    result = await get_detalle_data(
         DetalleFilters(
             date_from="2025-01-01",
             date_to="2025-12-31",
@@ -88,7 +88,7 @@ async def test_detalle_asesor_cursor_pagination_stable(ui_dev_reporting_db):
     all_ids: list[int] = []
     cursor = None
     while True:
-        page = await getDetalleData(
+        page = await get_detalle_data(
             DetalleFilters(
                 date_from="2025-01-01",
                 date_to="2025-12-31",
@@ -111,7 +111,7 @@ async def test_detalle_asesor_cursor_pagination_stable(ui_dev_reporting_db):
 
 @pytest.mark.asyncio(loop_scope="session")
 async def test_detalle_asesor_empty_range_returns_no_rows(ui_dev_reporting_db):
-    result = await getDetalleData(
+    result = await get_detalle_data(
         DetalleFilters(date_from="2030-01-01", date_to="2030-12-31", page_size=20)
     )
 
@@ -122,7 +122,7 @@ async def test_detalle_asesor_empty_range_returns_no_rows(ui_dev_reporting_db):
 
 @pytest.mark.asyncio(loop_scope="session")
 async def test_detalle_asesor_default_sort_is_exam_date_desc(ui_dev_reporting_db):
-    result = await getDetalleData(
+    result = await get_detalle_data(
         DetalleFilters(date_from="2025-01-01", date_to="2025-12-31", page_size=20)
     )
 
@@ -132,7 +132,7 @@ async def test_detalle_asesor_default_sort_is_exam_date_desc(ui_dev_reporting_db
 
 @pytest.mark.asyncio(loop_scope="session")
 async def test_detalle_asesor_sort_by_seller_name_asc(ui_dev_reporting_db):
-    result = await getDetalleData(
+    result = await get_detalle_data(
         DetalleFilters(
             date_from="2025-01-01",
             date_to="2025-12-31",
@@ -152,7 +152,7 @@ async def test_detalle_asesor_sort_pagination_stable(ui_dev_reporting_db):
     all_ids: list[int] = []
     cursor = None
     while True:
-        page = await getDetalleData(
+        page = await get_detalle_data(
             DetalleFilters(
                 date_from="2025-01-01",
                 date_to="2025-12-31",

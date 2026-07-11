@@ -166,9 +166,9 @@ def add_total_sales_charts(
     geo_col = col_keys.index("geo_revenue") + 1
 
     trend_chart = LineChart()
-    trend_chart.title = "Revenue Trend"
-    trend_chart.y_axis.title = "Revenue"
-    trend_chart.x_axis.title = "Month"
+    trend_chart.title = "Tendencia de Ingresos"
+    trend_chart.y_axis.title = "Ingreso"
+    trend_chart.x_axis.title = "Mes"
     trend_data = Reference(worksheet, min_col=trend_col, min_row=header_row, max_row=data_end)
     trend_categories = Reference(worksheet, min_col=1, min_row=data_start, max_row=data_end)
     trend_chart.add_data(trend_data, titles_from_data=True)
@@ -182,9 +182,9 @@ def add_total_sales_charts(
     worksheet.add_chart(trend_chart, "G2")
 
     geo_chart = BarChart()
-    geo_chart.title = "Revenue by Country"
-    geo_chart.y_axis.title = "Revenue"
-    geo_chart.x_axis.title = "Country"
+    geo_chart.title = "Ingresos por País"
+    geo_chart.y_axis.title = "Ingreso"
+    geo_chart.x_axis.title = "País"
     geo_data = Reference(worksheet, min_col=geo_col, min_row=header_row, max_row=data_end)
     geo_categories = Reference(worksheet, min_col=dim_col, min_row=data_start, max_row=data_end)
     geo_chart.add_data(geo_data, titles_from_data=True)

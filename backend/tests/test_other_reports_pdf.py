@@ -67,7 +67,7 @@ async def test_build_por_asesor_pdf_payload_formats_summary():
         ),
     )
     with patch(
-        "app.services.por_asesor.por_asesor.getAllAsesorReportRows",
+        "app.services.por_asesor.por_asesor.get_all_asesor_report_rows",
         new=AsyncMock(return_value=report),
     ):
         payload = await build_por_asesor_pdf_payload(
@@ -102,7 +102,7 @@ async def test_build_detalle_asesor_pdf_payload_uses_landscape_and_split_tables(
         )
     )
     with patch(
-        "app.services.detalle_asesor.detalle_asesor.getAllDetalleRows",
+        "app.services.detalle_asesor.detalle_asesor.get_all_detalle_rows",
         new=AsyncMock(return_value=report),
     ):
         payload = await build_detalle_asesor_pdf_payload(
@@ -146,7 +146,7 @@ async def test_build_por_pais_pdf_payload_contains_summary_and_status_tables():
         ),
     )
     with patch(
-        "app.services.por_pais.por_pais.getPorPaisReport",
+        "app.services.por_pais.por_pais.get_por_pais_report",
         new=AsyncMock(return_value=report),
     ):
         payload = await build_por_pais_pdf_payload(
@@ -172,7 +172,7 @@ async def test_build_por_pais_detail_pdf_payload_contains_country_breakdown():
         },
     )
     with patch(
-        "app.services.por_pais.por_pais.getPorPaisDetail",
+        "app.services.por_pais.por_pais.get_por_pais_detail",
         new=AsyncMock(return_value=detail),
     ):
         payload = await build_por_pais_detail_pdf_payload(
@@ -213,7 +213,7 @@ async def test_build_asesor_detail_pdf_payload_contains_drawer_sections():
         )
     )
     with patch(
-        "app.services.por_asesor.por_asesor.getAsesorDetail",
+        "app.services.por_asesor.por_asesor.get_asesor_detail",
         new=AsyncMock(return_value=detail),
     ):
         payload = await build_asesor_detail_pdf_payload(

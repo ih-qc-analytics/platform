@@ -24,7 +24,7 @@ async def test_filter_options_endpoint_returns_200():
     app.dependency_overrides[verify_token] = lambda: {"sub": "test-user"}
     try:
         with patch(
-            "app.routers.filters.getFilters",
+            "app.routers.filters.get_filters",
             new=AsyncMock(return_value=FILTER_OPTIONS_RESPONSE),
         ):
             async with AsyncClient(
@@ -43,7 +43,7 @@ async def test_seller_options_endpoint_returns_200():
     app.dependency_overrides[verify_token] = lambda: {"sub": "test-user"}
     try:
         with patch(
-            "app.routers.filters.getSellerOptions",
+            "app.routers.filters.get_seller_options",
             new=AsyncMock(return_value=SELLER_OPTIONS_RESPONSE),
         ):
             async with AsyncClient(

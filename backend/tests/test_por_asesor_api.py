@@ -71,7 +71,7 @@ DETAIL_RESPONSE = AsesorDetailResponse(
 @pytest.mark.asyncio(loop_scope="session")
 async def test_por_asesor_post_returns_200():
     with patch(
-        "app.routers.por_asesor.getAsesorReport",
+        "app.routers.por_asesor.get_asesor_report",
         new=AsyncMock(return_value=SUMMARY_RESPONSE),
     ):
         app.dependency_overrides[verify_token] = lambda: {"sub": "test-user"}
@@ -90,7 +90,7 @@ async def test_por_asesor_post_returns_200():
 @pytest.mark.asyncio(loop_scope="session")
 async def test_por_asesor_post_parses_filters():
     mock = AsyncMock(return_value=SUMMARY_RESPONSE)
-    with patch("app.routers.por_asesor.getAsesorReport", new=mock):
+    with patch("app.routers.por_asesor.get_asesor_report", new=mock):
         app.dependency_overrides[verify_token] = lambda: {"sub": "test-user"}
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:  # type: ignore[arg-type]
             await client.post(
@@ -118,7 +118,7 @@ async def test_por_asesor_post_parses_filters():
 @pytest.mark.asyncio(loop_scope="session")
 async def test_por_asesor_detail_returns_200():
     with patch(
-        "app.routers.por_asesor.getAsesorDetail",
+        "app.routers.por_asesor.get_asesor_detail",
         new=AsyncMock(return_value=DETAIL_RESPONSE),
     ):
         app.dependency_overrides[verify_token] = lambda: {"sub": "test-user"}
@@ -136,7 +136,7 @@ async def test_por_asesor_detail_returns_200():
 @pytest.mark.asyncio(loop_scope="session")
 async def test_por_asesor_detail_parses_body():
     mock = AsyncMock(return_value=DETAIL_RESPONSE)
-    with patch("app.routers.por_asesor.getAsesorDetail", new=mock):
+    with patch("app.routers.por_asesor.get_asesor_detail", new=mock):
         app.dependency_overrides[verify_token] = lambda: {"sub": "test-user"}
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:  # type: ignore[arg-type]
             await client.post(

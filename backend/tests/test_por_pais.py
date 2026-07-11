@@ -1,14 +1,14 @@
 import pytest
 
 from app.schemas.reports import PorPaisFilters
-from app.services.por_pais.por_pais import getPorPaisDetail, getPorPaisReport
+from app.services.por_pais.por_pais import get_por_pais_detail, get_por_pais_report
 
 
 @pytest.mark.asyncio(loop_scope="session")
 async def test_por_pais_full_year_summary_and_status_rows_match_payment_based_model(
     ui_dev_reporting_db,
 ):
-    result = await getPorPaisReport(
+    result = await get_por_pais_report(
         PorPaisFilters(date_from="2025-01-01", date_to="2025-12-31", show_comparison=True)
     )
 
@@ -104,11 +104,11 @@ async def test_por_pais_full_year_summary_and_status_rows_match_payment_based_mo
 
 @pytest.mark.asyncio(loop_scope="session")
 async def test_por_pais_detail_returns_canonical_exam_counts_per_country(ui_dev_reporting_db):
-    mexico = await getPorPaisDetail(
+    mexico = await get_por_pais_detail(
         "mexico",
         PorPaisFilters(date_from="2025-01-01", date_to="2025-12-31"),
     )
-    colombia = await getPorPaisDetail(
+    colombia = await get_por_pais_detail(
         "colombia",
         PorPaisFilters(date_from="2025-01-01", date_to="2025-12-31"),
     )
@@ -125,11 +125,11 @@ async def test_por_pais_detail_returns_canonical_exam_counts_per_country(ui_dev_
 
 @pytest.mark.asyncio(loop_scope="session")
 async def test_por_pais_detail_returns_product_revenue_breakdown(ui_dev_reporting_db):
-    mexico = await getPorPaisDetail(
+    mexico = await get_por_pais_detail(
         "mexico",
         PorPaisFilters(date_from="2025-01-01", date_to="2025-12-31"),
     )
-    colombia = await getPorPaisDetail(
+    colombia = await get_por_pais_detail(
         "colombia",
         PorPaisFilters(date_from="2025-01-01", date_to="2025-12-31"),
     )
@@ -151,7 +151,7 @@ async def test_por_pais_detail_returns_product_revenue_breakdown(ui_dev_reportin
 
 @pytest.mark.asyncio(loop_scope="session")
 async def test_por_pais_detail_comparison_includes_exam_revenue(ui_dev_reporting_db):
-    result = await getPorPaisDetail(
+    result = await get_por_pais_detail(
         "colombia",
         PorPaisFilters(
             date_from="2025-05-01",
@@ -173,7 +173,7 @@ async def test_por_pais_detail_comparison_includes_exam_revenue(ui_dev_reporting
 
 @pytest.mark.asyncio(loop_scope="session")
 async def test_por_pais_midyear_range_status_rows_use_comparison_period(ui_dev_reporting_db):
-    result = await getPorPaisReport(
+    result = await get_por_pais_report(
         PorPaisFilters(date_from="2025-05-01", date_to="2025-08-31", show_comparison=True)
     )
 
@@ -269,7 +269,7 @@ async def test_por_pais_midyear_range_status_rows_use_comparison_period(ui_dev_r
 
 @pytest.mark.asyncio(loop_scope="session")
 async def test_por_pais_empty_range_returns_empty_sections(ui_dev_reporting_db):
-    result = await getPorPaisReport(PorPaisFilters(date_from="2030-01-01", date_to="2030-12-31"))
+    result = await get_por_pais_report(PorPaisFilters(date_from="2030-01-01", date_to="2030-12-31"))
 
     assert result.current.summary_rows == []
     assert result.current.status_rows == []
@@ -278,7 +278,7 @@ async def test_por_pais_empty_range_returns_empty_sections(ui_dev_reporting_db):
 @pytest.mark.asyncio(loop_scope="session")
 async def test_por_pais_full_year_status_rows_include_books_courses_gpm(ui_dev_reporting_db):
     # Full year 2025 vs previous year 2024 (no books/courses in 2024 seed data)
-    result = await getPorPaisReport(
+    result = await get_por_pais_report(
         PorPaisFilters(date_from="2025-01-01", date_to="2025-12-31", show_comparison=True)
     )
 

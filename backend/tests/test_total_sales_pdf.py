@@ -83,7 +83,7 @@ async def test_build_ventas_totales_pdf_payload_formats_kpis_and_scales_series()
     )
 
     with patch(
-        "app.services.total_sales.total_sales.getTotalSalesData",
+        "app.services.total_sales.total_sales.get_total_sales_data",
         new=AsyncMock(return_value=MOCK_RESPONSE),
     ):
         payload = await build_ventas_totales_pdf_payload(filters)
@@ -101,7 +101,7 @@ async def test_build_ventas_totales_pdf_payload_formats_kpis_and_scales_series()
         {"label": "Total Clientes", "value": "3", "growth": "N/A", "growth_positive": None},
         {"label": "Total Exámenes", "value": "6", "growth": "N/A", "growth_positive": None},
         {
-            "label": "Ingreso por Exámenes",
+            "label": "Ingreso Exámenes",
             "value": "$6,000",
             "growth": "N/A",
             "growth_positive": None,
@@ -109,7 +109,7 @@ async def test_build_ventas_totales_pdf_payload_formats_kpis_and_scales_series()
         {"label": "Total Libros", "value": "3", "growth": "N/A", "growth_positive": None},
     ]
     assert any(item.label == "Otros" and item.value == "2" for item in payload.kpis)
-    assert any(item.label == "Ingreso por Otros" and item.value == "$400" for item in payload.kpis)
+    assert any(item.label == "Ingreso Otros" and item.value == "$400" for item in payload.kpis)
     assert any(item.label == "Ingreso Esperado" and item.value == "$7,300" for item in payload.kpis)
     assert any(item.label == "Sin Categorizar" and item.value == "$800" for item in payload.kpis)
     assert any(
@@ -157,7 +157,7 @@ async def test_build_ventas_totales_pdf_payload_handles_empty_dataset():
     empty_response = TotalSalesResponse(current=empty_base)
 
     with patch(
-        "app.services.total_sales.total_sales.getTotalSalesData",
+        "app.services.total_sales.total_sales.get_total_sales_data",
         new=AsyncMock(return_value=empty_response),
     ):
         payload = await build_ventas_totales_pdf_payload(ReportFilters())

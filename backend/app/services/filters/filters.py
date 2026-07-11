@@ -6,7 +6,7 @@ from app.schemas.reports import FilterOptionsResponse, SellerOptionsResponse
 
 # obtener los filtros geograficos disponibles en los datos, es decir todas las ciudades/zonas... donde
 # hay operaciones
-async def getFilters() -> FilterOptionsResponse:
+async def get_filters() -> FilterOptionsResponse:
     async with ReportingSessionLocal() as session:
         t = text("""
             SELECT DISTINCT 'country' AS filter_type, site AS value
@@ -39,7 +39,7 @@ async def getFilters() -> FilterOptionsResponse:
         )
 
 
-async def getSellerOptions() -> SellerOptionsResponse:
+async def get_seller_options() -> SellerOptionsResponse:
     async with ReportingSessionLocal() as session:
         t = text("""
             SELECT DISTINCT seller_name

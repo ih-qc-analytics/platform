@@ -20,9 +20,9 @@ from sqlalchemy import text
 DETALLE_EXAM_NAME_ORDER = [*EXAM_NAME_ORDER, "Other"]
 
 DETALLE_EXPORT_COLUMNS = [
-    ExcelColumn("seller_name", "Seller"),
-    ExcelColumn("school_name", "School"),
-    ExcelColumn("exam_date", "Exam Date"),
+    ExcelColumn("seller_name", "Asesor"),
+    ExcelColumn("school_name", "Colegio"),
+    ExcelColumn("exam_date", "Fecha de Examen"),
     *[ExcelColumn(name, name) for name in DETALLE_EXAM_NAME_ORDER],
     ExcelColumn("total", "Total"),
 ]
@@ -162,7 +162,7 @@ async def _fetch_current_base(filters: DetalleFilters) -> DetalleReportBase:
     return DetalleReportBase(rows=rows, next_cursor=next_cursor, has_more=has_more)
 
 
-async def getDetalleData(filters: DetalleFilters) -> DetalleReportResponse:
+async def get_detalle_data(filters: DetalleFilters) -> DetalleReportResponse:
     current = await _fetch_current_base(filters)
     return DetalleReportResponse(current=current)
 
@@ -195,11 +195,11 @@ def build_detalle_filtered_export_filters(filters: DetalleFilters) -> DetalleFil
     )
 
 
-async def getAllDetalleRows(filters: DetalleFilters) -> DetalleReportResponse:
+async def get_all_detalle_rows(filters: DetalleFilters) -> DetalleReportResponse:
     all_rows: list[DetalleRow] = []
     cursor = filters.cursor
     while True:
-        page = await getDetalleData(
+        page = await get_detalle_data(
             filters.model_copy(update={"cursor": cursor, "show_comparison": False})
         )
         all_rows.extend(page.current.rows)
@@ -229,7 +229,7 @@ def build_detalle_export_worksheets(report: DetalleReportResponse) -> list[Excel
 
 
 async def build_detalle_asesor_pdf_payload(filters: DetalleFilters) -> DetalleAsesorPDFPayload:
-    report = await getAllDetalleRows(build_detalle_export_filters_for_all(filters))
+    report = await get_all_detalle_rows(build_detalle_export_filters_for_all(filters))
     identity_rows = [
         PDFTableRow(
             cells=[

@@ -11,7 +11,7 @@ from datetime import datetime, date
 from sqlalchemy import text
 
 from app.schemas.reports import DetalleFilters
-from app.services.detalle_asesor.detalle_asesor import getDetalleData
+from app.services.detalle_asesor.detalle_asesor import get_detalle_data
 from tests.conftest_reporting import bind_test_reporting_database
 
 
@@ -109,7 +109,7 @@ async def test_returns_one_row_per_cart_product(reporting_session_factory, clean
         make_row(cart_product_id=2, exam_canonical_name="B2 First", quantity=7, lead_id=2),
         make_row(cart_product_id=3, exam_canonical_name="C1 Advanced", quantity=2, lead_id=3),
     )
-    result = await getDetalleData(_filters())
+    result = await get_detalle_data(_filters())
     assert len(result.current.rows) == 3
     ids = {row.id for row in result.current.rows}
     assert ids == {1, 2, 3}
@@ -122,7 +122,7 @@ async def test_exam_counts_keyed_by_canonical_name(reporting_session_factory, cl
         reporting_session_factory,
         make_row(cart_product_id=1, exam_canonical_name="A2 Key", quantity=5),
     )
-    result = await getDetalleData(_filters())
+    result = await get_detalle_data(_filters())
     assert len(result.current.rows) == 1
     row = result.current.rows[0]
     assert row.exam_counts.get("A2 Key") == 5
@@ -135,7 +135,7 @@ async def test_total_equals_sum_of_exam_counts(reporting_session_factory, clean_
         reporting_session_factory,
         make_row(cart_product_id=1, exam_canonical_name="B2 First", quantity=8),
     )
-    result = await getDetalleData(_filters())
+    result = await get_detalle_data(_filters())
     assert len(result.current.rows) == 1
     row = result.current.rows[0]
     assert row.total == sum(row.exam_counts.values())
@@ -154,7 +154,7 @@ async def test_search_by_seller_name(reporting_session_factory, clean_reporting_
         make_row(cart_product_id=1, seller_name="Ana Garcia", quantity=3),
         make_row(cart_product_id=2, seller_name="Luis Rodriguez", quantity=5, lead_id=2),
     )
-    result = await getDetalleData(_filters(search="Ana"))
+    result = await get_detalle_data(_filters(search="Ana"))
     assert len(result.current.rows) == 1
     assert result.current.rows[0].seller_name == "Ana Garcia"
 
@@ -167,7 +167,7 @@ async def test_search_by_school_name(reporting_session_factory, clean_reporting_
         make_row(cart_product_id=1, school_name="Colegio Americano", quantity=3),
         make_row(cart_product_id=2, school_name="Instituto Moderno", quantity=5, lead_id=2),
     )
-    result = await getDetalleData(_filters(search="Instituto"))
+    result = await get_detalle_data(_filters(search="Instituto"))
     assert len(result.current.rows) == 1
     assert result.current.rows[0].school_name == "Instituto Moderno"
 
@@ -179,10 +179,10 @@ async def test_search_case_insensitive(reporting_session_factory, clean_reportin
         reporting_session_factory,
         make_row(cart_product_id=1, seller_name="Ana Garcia", quantity=3),
     )
-    result = await getDetalleData(_filters(search="ana garcia"))
+    result = await get_detalle_data(_filters(search="ana garcia"))
     assert len(result.current.rows) == 1
 
-    result2 = await getDetalleData(_filters(search="ANA GARCIA"))
+    result2 = await get_detalle_data(_filters(search="ANA GARCIA"))
     assert len(result2.current.rows) == 1
 
 
@@ -194,7 +194,7 @@ async def test_search_partial_match(reporting_session_factory, clean_reporting_d
         make_row(cart_product_id=1, seller_name="Ana Garcia", quantity=3),
         make_row(cart_product_id=2, seller_name="Luis Rodriguez", quantity=5, lead_id=2),
     )
-    result = await getDetalleData(_filters(search="Garc"))
+    result = await get_detalle_data(_filters(search="Garc"))
     assert len(result.current.rows) == 1
     assert result.current.rows[0].seller_name == "Ana Garcia"
 
@@ -212,7 +212,7 @@ async def test_cursor_pagination_first_page(reporting_session_factory, clean_rep
             reporting_session_factory,
             make_row(cart_product_id=i, lead_id=i, quantity=i),
         )
-    result = await getDetalleData(_filters(page_size=3))
+    result = await get_detalle_data(_filters(page_size=3))
     assert len(result.current.rows) == 3
     assert result.current.rows[0].id == 1
     assert result.current.rows[2].id == 3
@@ -226,10 +226,12 @@ async def test_cursor_pagination_second_page(reporting_session_factory, clean_re
             reporting_session_factory,
             make_row(cart_product_id=i, lead_id=i, quantity=i),
         )
-    first_page = await getDetalleData(_filters(page_size=3))
+    first_page = await get_detalle_data(_filters(page_size=3))
     assert isinstance(first_page.current.next_cursor, str)
 
-    second_page = await getDetalleData(_filters(page_size=3, cursor=first_page.current.next_cursor))
+    second_page = await get_detalle_data(
+        _filters(page_size=3, cursor=first_page.current.next_cursor)
+    )
     assert len(second_page.current.rows) == 2
     assert second_page.current.rows[0].id == 4
 
@@ -242,7 +244,7 @@ async def test_cursor_pagination_has_more_true(reporting_session_factory, clean_
             reporting_session_factory,
             make_row(cart_product_id=i, lead_id=i, quantity=i),
         )
-    result = await getDetalleData(_filters(page_size=3))
+    result = await get_detalle_data(_filters(page_size=3))
     assert result.current.has_more is True
     assert isinstance(result.current.next_cursor, str)
 
@@ -257,7 +259,7 @@ async def test_cursor_pagination_has_more_false_on_last_page(
             reporting_session_factory,
             make_row(cart_product_id=i, lead_id=i, quantity=i),
         )
-    result = await getDetalleData(_filters(page_size=5))
+    result = await get_detalle_data(_filters(page_size=5))
     assert result.current.has_more is False
     assert result.current.next_cursor is None
 
@@ -272,8 +274,8 @@ async def test_cursor_pagination_no_duplicates_across_pages(
             reporting_session_factory,
             make_row(cart_product_id=i, lead_id=i, quantity=i),
         )
-    page1 = await getDetalleData(_filters(page_size=4))
-    page2 = await getDetalleData(_filters(page_size=4, cursor=page1.current.next_cursor))
+    page1 = await get_detalle_data(_filters(page_size=4))
+    page2 = await get_detalle_data(_filters(page_size=4, cursor=page1.current.next_cursor))
 
     ids_p1 = {r.id for r in page1.current.rows}
     ids_p2 = {r.id for r in page2.current.rows}
@@ -294,7 +296,7 @@ async def test_date_filter(reporting_session_factory, clean_reporting_db):
         make_row(cart_product_id=1, created_at=datetime(2025, 1, 10), quantity=3),
         make_row(cart_product_id=2, created_at=datetime(2025, 3, 10), quantity=5, lead_id=2),
     )
-    result = await getDetalleData(_filters(date_from="2025-02-01", date_to="2025-12-31"))
+    result = await get_detalle_data(_filters(date_from="2025-02-01", date_to="2025-12-31"))
     assert len(result.current.rows) == 1
     assert result.current.rows[0].id == 2
 
@@ -307,6 +309,6 @@ async def test_country_filter(reporting_session_factory, clean_reporting_db):
         make_row(cart_product_id=1, site="mexico", quantity=3),
         make_row(cart_product_id=2, site="colombia", quantity=5, lead_id=2),
     )
-    result = await getDetalleData(_filters(countries=["colombia"]))
+    result = await get_detalle_data(_filters(countries=["colombia"]))
     assert len(result.current.rows) == 1
     assert result.current.rows[0].id == 2

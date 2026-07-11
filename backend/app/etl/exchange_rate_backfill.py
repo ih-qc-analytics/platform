@@ -39,6 +39,7 @@ async def ensure_exchange_rates_for_range(
     start_date: date,
     end_date: date | None = None,
 ) -> None:
+    t0 = datetime.now()
     start_date = _coerce_date(start_date)
     end_date = end_date or date.today()
     if start_date > end_date:
@@ -74,6 +75,8 @@ async def ensure_exchange_rates_for_range(
 
     if all_rows:
         await _upsert_exchange_rates(all_rows)
+        duration = (datetime.now() - t0).total_seconds()
+        logger.info("ETL exchange rates — rates stored: %d  (%.1fs)", len(all_rows), duration)
 
 
 async def run_historical_exchange_rate_backfill() -> date | None:

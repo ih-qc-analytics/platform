@@ -11,10 +11,10 @@ from app.services.por_asesor.por_asesor import (
     build_asesor_export_filters_for_all,
     build_asesor_filtered_export_filters,
     build_asesor_export_worksheets,
-    getAllAsesorReportRows,
-    getAsesorDetail,
-    getAsesorDetailsForRows,
-    getAsesorReport,
+    get_all_asesor_report_rows,
+    get_asesor_detail,
+    get_asesor_details_for_rows,
+    get_asesor_report,
 )
 
 
@@ -27,7 +27,7 @@ def resolve_por_asesor_country_rates(request: Request) -> dict[str, float]:
 
 @router.post("/por-asesor", response_model=AsesorReportResponse)
 async def get_por_asesor_data(filters: AsesorFilters, request: Request):
-    return await getAsesorReport(
+    return await get_asesor_report(
         filters,
         country_rates=resolve_por_asesor_country_rates(request),
         base_currency=get_request_base_currency(request),
@@ -36,7 +36,7 @@ async def get_por_asesor_data(filters: AsesorFilters, request: Request):
 
 @router.post("/por-asesor/{seller_id}", response_model=AsesorDetailResponse)
 async def get_por_asesor_detail(seller_id: int, filters: AsesorFilters, request: Request):
-    return await getAsesorDetail(
+    return await get_asesor_detail(
         seller_id,
         filters,
         country_rates=resolve_por_asesor_country_rates(request),
@@ -70,10 +70,10 @@ async def export_por_asesor_excel(filters: AsesorFilters, request: Request):
     country_rates = resolve_por_asesor_country_rates(request)
     base_currency = get_request_base_currency(request)
     export_filters = build_asesor_filtered_export_filters(filters)
-    report = await getAllAsesorReportRows(
+    report = await get_all_asesor_report_rows(
         export_filters, country_rates=country_rates, base_currency=base_currency
     )
-    details = await getAsesorDetailsForRows(
+    details = await get_asesor_details_for_rows(
         report.current.rows,
         export_filters,
         country_rates=country_rates,
@@ -90,12 +90,12 @@ async def export_por_asesor_excel_all(filters: AsesorFilters, request: Request):
     country_rates = resolve_por_asesor_country_rates(request)
     base_currency = get_request_base_currency(request)
     export_filters = build_asesor_export_filters_for_all(filters)
-    report = await getAllAsesorReportRows(
+    report = await get_all_asesor_report_rows(
         export_filters,
         country_rates=country_rates,
         base_currency=base_currency,
     )
-    details = await getAsesorDetailsForRows(
+    details = await get_asesor_details_for_rows(
         report.current.rows,
         export_filters,
         country_rates=country_rates,

@@ -10,7 +10,7 @@ from datetime import datetime, date
 from sqlalchemy import text
 
 from app.schemas.reports import ReportFilters
-from app.services.total_sales.total_sales import getTotalSalesData
+from app.services.total_sales.total_sales import get_total_sales_data
 from tests.conftest_reporting import bind_test_reporting_database
 
 
@@ -173,7 +173,7 @@ async def test_no_filters_returns_all_approved_active_rows(
         make_row(cart_product_id=1, lead_id=1, total_mxn=1000.0, cost_mxn=400.0),
         make_row(cart_product_id=2, lead_id=2, total_mxn=2000.0, cost_mxn=800.0),
     )
-    result = await getTotalSalesData(ReportFilters())
+    result = await get_total_sales_data(ReportFilters())
     assert result.current.total_revenue == pytest.approx(3000.0)
     assert result.current.total_clients == 2
 
@@ -186,7 +186,7 @@ async def test_inactive_rows_excluded(reporting_session_factory, clean_reporting
         make_row(cart_product_id=1, total_mxn=1000.0, cost_mxn=400.0),
         make_row(cart_product_id=2, total_mxn=2000.0, cost_mxn=800.0, is_active=False),
     )
-    result = await getTotalSalesData(ReportFilters())
+    result = await get_total_sales_data(ReportFilters())
     assert result.current.total_revenue == pytest.approx(1000.0)
 
 
@@ -198,7 +198,7 @@ async def test_unapproved_payment_rows_excluded(reporting_session_factory, clean
         make_row(cart_product_id=1, total_mxn=1000.0, cost_mxn=400.0, payment_status="Aprobado"),
         make_row(cart_product_id=2, total_mxn=2000.0, cost_mxn=800.0, payment_status="Pendiente"),
     )
-    result = await getTotalSalesData(ReportFilters())
+    result = await get_total_sales_data(ReportFilters())
     assert result.current.total_revenue == pytest.approx(1000.0)
 
 
@@ -215,7 +215,7 @@ async def test_country_filter_mexico_only(reporting_session_factory, clean_repor
         make_row(cart_product_id=1, site="mexico", total_mxn=1000.0, cost_mxn=400.0),
         make_row(cart_product_id=2, site="colombia", total_mxn=2000.0, cost_mxn=800.0),
     )
-    result = await getTotalSalesData(ReportFilters(countries=["mexico"]))
+    result = await get_total_sales_data(ReportFilters(countries=["mexico"]))
     assert result.current.total_revenue == pytest.approx(1000.0)
 
 
@@ -227,7 +227,7 @@ async def test_country_filter_colombia_only(reporting_session_factory, clean_rep
         make_row(cart_product_id=1, site="mexico", total_mxn=1000.0, cost_mxn=400.0),
         make_row(cart_product_id=2, site="colombia", total_mxn=2000.0, cost_mxn=800.0),
     )
-    result = await getTotalSalesData(ReportFilters(countries=["colombia"]))
+    result = await get_total_sales_data(ReportFilters(countries=["colombia"]))
     assert result.current.total_revenue == pytest.approx(2000.0)
 
 
@@ -240,7 +240,7 @@ async def test_two_countries_sum_correctly(reporting_session_factory, clean_repo
         make_row(cart_product_id=2, site="colombia", total_mxn=2000.0, cost_mxn=800.0),
         make_row(cart_product_id=3, site="peru", total_mxn=3000.0, cost_mxn=1200.0),
     )
-    result = await getTotalSalesData(ReportFilters(countries=["mexico", "colombia"]))
+    result = await get_total_sales_data(ReportFilters(countries=["mexico", "colombia"]))
     assert result.current.total_revenue == pytest.approx(3000.0)
 
 
@@ -252,7 +252,7 @@ async def test_zone_filter(reporting_session_factory, clean_reporting_db):
         make_row(cart_product_id=1, zone_name="Zona Norte", total_mxn=1000.0, cost_mxn=400.0),
         make_row(cart_product_id=2, zone_name="Zona Sur", total_mxn=2000.0, cost_mxn=800.0),
     )
-    result = await getTotalSalesData(ReportFilters(zones=["Zona Norte"]))
+    result = await get_total_sales_data(ReportFilters(zones=["Zona Norte"]))
     assert result.current.total_revenue == pytest.approx(1000.0)
 
 
@@ -264,7 +264,7 @@ async def test_state_filter(reporting_session_factory, clean_reporting_db):
         make_row(cart_product_id=1, state_name="CDMX", total_mxn=1000.0, cost_mxn=400.0),
         make_row(cart_product_id=2, state_name="Jalisco", total_mxn=2000.0, cost_mxn=800.0),
     )
-    result = await getTotalSalesData(ReportFilters(states=["CDMX"]))
+    result = await get_total_sales_data(ReportFilters(states=["CDMX"]))
     assert result.current.total_revenue == pytest.approx(1000.0)
 
 
@@ -276,7 +276,7 @@ async def test_city_filter(reporting_session_factory, clean_reporting_db):
         make_row(cart_product_id=1, city="CDMX", total_mxn=1000.0, cost_mxn=400.0),
         make_row(cart_product_id=2, city="Guadalajara", total_mxn=2000.0, cost_mxn=800.0),
     )
-    result = await getTotalSalesData(ReportFilters(cities=["CDMX"]))
+    result = await get_total_sales_data(ReportFilters(cities=["CDMX"]))
     assert result.current.total_revenue == pytest.approx(1000.0)
 
 
@@ -297,7 +297,7 @@ async def test_date_from_filter(reporting_session_factory, clean_reporting_db):
             cart_product_id=2, created_at=datetime(2025, 2, 10), total_mxn=2000.0, cost_mxn=800.0
         ),
     )
-    result = await getTotalSalesData(ReportFilters(date_from="2025-02-01"))
+    result = await get_total_sales_data(ReportFilters(date_from="2025-02-01"))
     assert result.current.total_revenue == pytest.approx(2000.0)
 
 
@@ -313,7 +313,7 @@ async def test_date_to_filter(reporting_session_factory, clean_reporting_db):
             cart_product_id=2, created_at=datetime(2025, 2, 10), total_mxn=2000.0, cost_mxn=800.0
         ),
     )
-    result = await getTotalSalesData(ReportFilters(date_to="2025-01-31"))
+    result = await get_total_sales_data(ReportFilters(date_to="2025-01-31"))
     assert result.current.total_revenue == pytest.approx(1000.0)
 
 
@@ -332,7 +332,7 @@ async def test_date_range_filter(reporting_session_factory, clean_reporting_db):
             cart_product_id=3, created_at=datetime(2025, 6, 20), total_mxn=2000.0, cost_mxn=800.0
         ),
     )
-    result = await getTotalSalesData(ReportFilters(date_from="2025-02-01", date_to="2025-05-31"))
+    result = await get_total_sales_data(ReportFilters(date_from="2025-02-01", date_to="2025-05-31"))
     assert result.current.total_revenue == pytest.approx(1500.0)
 
 
@@ -345,7 +345,7 @@ async def test_future_date_returns_zeros(reporting_session_factory, clean_report
             cart_product_id=1, created_at=datetime(2025, 1, 15), total_mxn=5000.0, cost_mxn=2000.0
         ),
     )
-    result = await getTotalSalesData(ReportFilters(date_from="2099-01-01", date_to="2099-12-31"))
+    result = await get_total_sales_data(ReportFilters(date_from="2099-01-01", date_to="2099-12-31"))
     assert result.current.total_revenue == 0.0
     assert result.current.total_clients == 0
 
@@ -363,7 +363,7 @@ async def test_exam_revenue_calculation(reporting_session_factory, clean_reporti
         make_row(cart_product_id=1, product_type="exam", total_mxn=3000.0, cost_mxn=1200.0),
         make_row(cart_product_id=2, product_type="book", total_mxn=1000.0, cost_mxn=400.0),
     )
-    result = await getTotalSalesData(ReportFilters())
+    result = await get_total_sales_data(ReportFilters())
     assert result.current.exam_revenue == pytest.approx(3000.0)
     assert result.current.total_exams == 5
 
@@ -378,7 +378,7 @@ async def test_book_revenue_calculation(reporting_session_factory, clean_reporti
             cart_product_id=2, product_type="book", total_mxn=1000.0, cost_mxn=400.0, quantity=2
         ),
     )
-    result = await getTotalSalesData(ReportFilters())
+    result = await get_total_sales_data(ReportFilters())
     assert result.current.book_revenue == pytest.approx(1000.0)
     assert result.current.total_books == 2
 
@@ -392,7 +392,7 @@ async def test_course_revenue_calculation(reporting_session_factory, clean_repor
             cart_product_id=1, product_type="course", total_mxn=4000.0, cost_mxn=1600.0, quantity=1
         ),
     )
-    result = await getTotalSalesData(ReportFilters())
+    result = await get_total_sales_data(ReportFilters())
     assert result.current.course_revenue == pytest.approx(4000.0)
     assert result.current.total_courses == 1
 
@@ -410,7 +410,7 @@ async def test_otros_revenue_catches_uncategorized(reporting_session_factory, cl
             quantity=1,
         ),
     )
-    result = await getTotalSalesData(ReportFilters())
+    result = await get_total_sales_data(ReportFilters())
     assert result.current.otros_revenue == pytest.approx(500.0)
     assert result.current.total_otros == 1
 
@@ -425,7 +425,7 @@ async def test_total_revenue_sum_of_all_types(reporting_session_factory, clean_r
         make_row(cart_product_id=3, product_type="course", total_mxn=750.0, cost_mxn=300.0),
         make_row(cart_product_id=4, product_type="UNCATEGORIZED", total_mxn=250.0, cost_mxn=100.0),
     )
-    result = await getTotalSalesData(ReportFilters())
+    result = await get_total_sales_data(ReportFilters())
     assert result.current.total_revenue == pytest.approx(2500.0)
     assert (
         result.current.exam_revenue
@@ -448,7 +448,7 @@ async def test_profit_margin_calculation(reporting_session_factory, clean_report
         reporting_session_factory,
         make_row(cart_product_id=1, total_mxn=10000.0, cost_mxn=4000.0),
     )
-    result = await getTotalSalesData(ReportFilters())
+    result = await get_total_sales_data(ReportFilters())
     # profit_margin = (10000 - 4000) / 10000 * 100 = 60%
     assert result.current.profit_margin == pytest.approx(60.0)
 
@@ -467,7 +467,7 @@ async def test_total_clients_distinct_lead_ids(reporting_session_factory, clean_
         make_row(cart_product_id=2, lead_id=20, total_mxn=1000.0, cost_mxn=400.0),
         make_row(cart_product_id=3, lead_id=30, total_mxn=1000.0, cost_mxn=400.0),
     )
-    result = await getTotalSalesData(ReportFilters())
+    result = await get_total_sales_data(ReportFilters())
     assert result.current.total_clients == 3
 
 
@@ -485,7 +485,7 @@ async def test_client_not_double_counted_across_products(
             cart_product_id=2, lead_id=10, product_type="book", total_mxn=500.0, cost_mxn=200.0
         ),
     )
-    result = await getTotalSalesData(ReportFilters())
+    result = await get_total_sales_data(ReportFilters())
     assert result.current.total_clients == 1  # same lead_id, counted once
     assert result.current.total_revenue == pytest.approx(1500.0)
 
@@ -507,7 +507,7 @@ async def test_prior_year_revenue_with_date_filter(reporting_session_factory, cl
             cart_product_id=2, created_at=datetime(2024, 3, 15), total_mxn=3000.0, cost_mxn=1200.0
         ),
     )
-    result = await getTotalSalesData(
+    result = await get_total_sales_data(
         ReportFilters(date_from="2025-01-01", date_to="2025-12-31", show_comparison=True)
     )
     assert result.current.total_revenue == pytest.approx(5000.0)
@@ -524,7 +524,7 @@ async def test_prior_year_revenue_absent_without_dates(
         reporting_session_factory,
         make_row(cart_product_id=1, total_mxn=5000.0, cost_mxn=2000.0),
     )
-    result = await getTotalSalesData(ReportFilters())  # no date_from / date_to
+    result = await get_total_sales_data(ReportFilters())  # no date_from / date_to
     assert result.comparison is None
 
 
@@ -540,7 +540,7 @@ async def test_growth_pct_positive(reporting_session_factory, clean_reporting_db
             cart_product_id=2, created_at=datetime(2024, 1, 15), total_mxn=5000.0, cost_mxn=2000.0
         ),
     )
-    result = await getTotalSalesData(
+    result = await get_total_sales_data(
         ReportFilters(date_from="2025-01-01", date_to="2025-12-31", show_comparison=True)
     )
     assert result.comparison is not None
@@ -561,7 +561,7 @@ async def test_growth_pct_negative(reporting_session_factory, clean_reporting_db
             cart_product_id=2, created_at=datetime(2024, 1, 15), total_mxn=5000.0, cost_mxn=2000.0
         ),
     )
-    result = await getTotalSalesData(
+    result = await get_total_sales_data(
         ReportFilters(date_from="2025-01-01", date_to="2025-12-31", show_comparison=True)
     )
     assert result.comparison is not None
@@ -588,7 +588,7 @@ async def test_trend_points_chronological_order(reporting_session_factory, clean
             cart_product_id=3, created_at=datetime(2025, 2, 1), total_mxn=200.0, cost_mxn=80.0
         ),
     )
-    result = await getTotalSalesData(ReportFilters(date_from="2025-01-01", date_to="2025-12-31"))
+    result = await get_total_sales_data(ReportFilters(date_from="2025-01-01", date_to="2025-12-31"))
     months = [tp.month for tp in result.current.trend_points]
     assert months == sorted(months)
     assert months == ["2025-01", "2025-02", "2025-03"]
@@ -609,7 +609,7 @@ async def test_trend_points_revenue_matches_total(reporting_session_factory, cle
             cart_product_id=3, created_at=datetime(2025, 2, 1), total_mxn=2000.0, cost_mxn=800.0
         ),
     )
-    result = await getTotalSalesData(ReportFilters(date_from="2025-01-01", date_to="2025-12-31"))
+    result = await get_total_sales_data(ReportFilters(date_from="2025-01-01", date_to="2025-12-31"))
     total_from_trend = sum(tp.revenue for tp in result.current.trend_points)
     assert total_from_trend == pytest.approx(result.current.total_revenue)
 
@@ -628,7 +628,7 @@ async def test_geo_points_cover_all_countries(reporting_session_factory, clean_r
         make_row(cart_product_id=2, site="colombia", total_mxn=2000.0, cost_mxn=800.0),
         make_row(cart_product_id=3, site="peru", total_mxn=3000.0, cost_mxn=1200.0),
     )
-    result = await getTotalSalesData(ReportFilters())
+    result = await get_total_sales_data(ReportFilters())
     dimensions = {gp.dimension for gp in result.current.geo_points}
     assert dimensions == {"mexico", "colombia", "peru"}
 
@@ -641,6 +641,6 @@ async def test_geo_points_revenue_matches_total(reporting_session_factory, clean
         make_row(cart_product_id=1, site="mexico", total_mxn=1000.0, cost_mxn=400.0),
         make_row(cart_product_id=2, site="colombia", total_mxn=2000.0, cost_mxn=800.0),
     )
-    result = await getTotalSalesData(ReportFilters())
+    result = await get_total_sales_data(ReportFilters())
     total_from_geo = sum(gp.revenue for gp in result.current.geo_points)
     assert total_from_geo == pytest.approx(result.current.total_revenue)

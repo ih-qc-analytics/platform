@@ -8,7 +8,7 @@ from app.services.total_sales.total_sales import (
     build_ventas_totales_pdf_payload,
     build_total_sales_export_filters_for_all,
     build_total_sales_export_worksheets,
-    getTotalSalesData,
+    get_total_sales_data,
 )
 
 router = APIRouter()
@@ -19,8 +19,8 @@ def resolve_total_sales_country_rates(request: Request) -> dict[str, float]:
 
 
 @router.post("/ventas-totales", response_model=TotalSalesResponse)
-async def get_total_sales_data(filters: ReportFilters, request: Request):
-    return await getTotalSalesData(
+async def get_total_sales_data_endpoint(filters: ReportFilters, request: Request):
+    return await get_total_sales_data(
         filters,
         country_rates=resolve_total_sales_country_rates(request),
         base_currency=get_request_base_currency(request),
@@ -39,7 +39,7 @@ async def export_total_sales_pdf(filters: ReportFilters, request: Request):
 
 @router.post("/ventas-totales/export/excel")
 async def export_total_sales_excel(filters: ReportFilters, request: Request):
-    response = await getTotalSalesData(
+    response = await get_total_sales_data(
         filters,
         country_rates=resolve_total_sales_country_rates(request),
         base_currency=get_request_base_currency(request),
@@ -52,7 +52,7 @@ async def export_total_sales_excel(filters: ReportFilters, request: Request):
 
 @router.post("/ventas-totales/export/excel/all")
 async def export_total_sales_excel_all(filters: ReportFilters, request: Request):
-    response = await getTotalSalesData(
+    response = await get_total_sales_data(
         build_total_sales_export_filters_for_all(filters),
         country_rates=resolve_total_sales_country_rates(request),
         base_currency=get_request_base_currency(request),

@@ -62,7 +62,7 @@ from app.services.utils.report_currency import (
 )
 
 ASESOR_SUMMARY_COLUMNS = [
-    ExcelColumn("seller_name", "Seller"),
+    ExcelColumn("seller_name", "Asesor"),
     *[ExcelColumn(category, category) for category in EXAM_CATEGORY_ORDER],
     ExcelColumn("total_books", "Libros"),
     ExcelColumn("total_courses", "Cursos"),
@@ -75,8 +75,8 @@ ASESOR_SUMMARY_COLUMNS = [
     ExcelColumn("books_courses_ganados", "L+C Ganados"),
     ExcelColumn("books_courses_perdidos", "L+C Perdidos"),
     ExcelColumn("books_courses_mantenidos", "L+C Mantenidos"),
-    ExcelColumn("uncategorized_revenue", "Uncategorized Revenue"),
-    ExcelColumn("total_revenue", "Total Revenue"),
+    ExcelColumn("uncategorized_revenue", "Ingreso Sin Categorizar"),
+    ExcelColumn("total_revenue", "Ingreso Total"),
     ExcelColumn("allocated_revenue", "Ingreso Asignado"),
     ExcelColumn("expected_revenue", "Ingreso Esperado"),
     ExcelColumn("expected_cost", "Costo Esperado"),
@@ -510,7 +510,7 @@ async def _get_asesor_report_base(
     )
 
 
-async def getAsesorReport(
+async def get_asesor_report(
     filters: AsesorFilters,
     country_rates: dict | None = None,
     base_currency: BaseCurrency = BaseCurrency.MXN,
@@ -625,7 +625,7 @@ async def _get_asesor_detail_base(
     )
 
 
-async def getAsesorDetail(
+async def get_asesor_detail(
     seller_id: int,
     filters: AsesorFilters,
     country_rates: dict | None = None,
@@ -668,7 +668,7 @@ async def getAsesorDetail(
     )
 
 
-async def getAllAsesorReportRows(
+async def get_all_asesor_report_rows(
     filters: AsesorFilters,
     country_rates: dict | None = None,
     base_currency: BaseCurrency = BaseCurrency.MXN,
@@ -682,7 +682,7 @@ async def getAllAsesorReportRows(
     all_rows: list[AsesorRow] = []
     cursor = current_filters.cursor
     while True:
-        page = await getAsesorReport(
+        page = await get_asesor_report(
             current_filters.model_copy(update={"cursor": cursor}),
             country_rates=country_rates,
             base_currency=base_currency,
@@ -735,7 +735,7 @@ async def getAllAsesorReportRows(
     )
 
 
-async def getAsesorDetailsForRows(
+async def get_asesor_details_for_rows(
     rows: list[AsesorRow],
     filters: AsesorFilters,
     country_rates: dict | None = None,
@@ -855,19 +855,19 @@ def build_asesor_export_worksheets(
     ]
 
     detail_columns = [
-        ExcelColumn("seller_name", "Seller"),
-        ExcelColumn("countries", "Countries"),
-        ExcelColumn("zones", "Zones"),
-        ExcelColumn("states", "States"),
-        ExcelColumn("cities", "Cities"),
-        ExcelColumn("total_schools", "Total Schools"),
-        ExcelColumn("total_exams", "Total Exams"),
+        ExcelColumn("seller_name", "Asesor"),
+        ExcelColumn("countries", "Países"),
+        ExcelColumn("zones", "Sedes"),
+        ExcelColumn("states", "Estados"),
+        ExcelColumn("cities", "Ciudades"),
+        ExcelColumn("total_schools", "Total Colegios"),
+        ExcelColumn("total_exams", "Total Exámenes"),
         ExcelColumn("total_books", "Total Libros"),
         ExcelColumn("total_courses", "Total Cursos"),
         ExcelColumn("book_revenue", "Ingreso Libros"),
         ExcelColumn("course_revenue", "Ingreso Cursos"),
-        ExcelColumn("uncategorized_revenue", "Uncategorized Revenue"),
-        ExcelColumn("total_revenue", "Total Revenue"),
+        ExcelColumn("uncategorized_revenue", "Ingreso Sin Categorizar"),
+        ExcelColumn("total_revenue", "Ingreso Total"),
         ExcelColumn("allocated_revenue", "Ingreso Asignado"),
         ExcelColumn("expected_revenue", "Ingreso Esperado"),
         ExcelColumn("expected_cost", "Costo Esperado"),
@@ -876,29 +876,29 @@ def build_asesor_export_worksheets(
     for _cat in EXAM_CATEGORY_ORDER:
         detail_columns.extend(
             [
-                ExcelColumn(f"{_cat}_exams", f"{_cat} Exams"),
-                ExcelColumn(f"{_cat}_schools", f"{_cat} Schools"),
-                ExcelColumn(f"{_cat}_revenue", f"{_cat} Revenue"),
+                ExcelColumn(f"{_cat}_exams", f"{_cat} Exámenes"),
+                ExcelColumn(f"{_cat}_schools", f"{_cat} Colegios"),
+                ExcelColumn(f"{_cat}_revenue", f"{_cat} Ingresos"),
             ]
         )
     if report.comparison:
         detail_columns.extend(
             [
-                ExcelColumn("ganados_schools", "Ganados Schools"),
-                ExcelColumn("ganados_exams", "Ganados Exams"),
-                ExcelColumn("ganados_revenue", "Ganados Revenue"),
-                ExcelColumn("perdidos_schools", "Perdidos Schools"),
-                ExcelColumn("perdidos_exams", "Perdidos Exams"),
-                ExcelColumn("perdidos_revenue", "Perdidos Revenue"),
-                ExcelColumn("mantenidos_schools", "Mantenidos Schools"),
-                ExcelColumn("mantenidos_exams", "Mantenidos Exams"),
-                ExcelColumn("mantenidos_revenue", "Mantenidos Revenue"),
+                ExcelColumn("ganados_schools", "Ganados Colegios"),
+                ExcelColumn("ganados_exams", "Ganados Exámenes"),
+                ExcelColumn("ganados_revenue", "Ganados Ingresos"),
+                ExcelColumn("perdidos_schools", "Perdidos Colegios"),
+                ExcelColumn("perdidos_exams", "Perdidos Exámenes"),
+                ExcelColumn("perdidos_revenue", "Perdidos Ingresos"),
+                ExcelColumn("mantenidos_schools", "Mantenidos Colegios"),
+                ExcelColumn("mantenidos_exams", "Mantenidos Exámenes"),
+                ExcelColumn("mantenidos_revenue", "Mantenidos Ingresos"),
             ]
         )
 
     specs = [
         ExcelWorksheetSpec(name="Por Asesor", columns=summary_columns, rows=summary_rows),
-        ExcelWorksheetSpec(name="Por Asesor Detail", columns=detail_columns, rows=detail_rows),
+        ExcelWorksheetSpec(name="Por Asesor Detalle", columns=detail_columns, rows=detail_rows),
     ]
 
     if report.comparison:
@@ -960,7 +960,7 @@ async def build_por_asesor_pdf_payload(
     country_rates: dict | None = None,
     base_currency: BaseCurrency = BaseCurrency.MXN,
 ) -> PorAsesorPDFPayload:
-    report = await getAllAsesorReportRows(
+    report = await get_all_asesor_report_rows(
         build_asesor_export_filters_for_all(filters),
         country_rates=country_rates,
         base_currency=base_currency,
@@ -1148,12 +1148,12 @@ async def build_por_asesor_pdf_payload(
                 **_kw(total_revenue, comp_total_revenue),
             ),
             PDFKpiItem(
-                label="Ing. Asignado",
+                label="Ingreso Asignado",
                 value=format_currency(total_allocated, base_currency),
                 **_kw(total_allocated, comp_total_allocated),
             ),
             PDFKpiItem(
-                label="Ing. Esperado",
+                label="Ingreso Esperado",
                 value=format_currency(total_expected, base_currency),
                 **_kw(total_expected, comp_total_expected),
             ),
@@ -1181,7 +1181,7 @@ async def build_asesor_detail_pdf_payload(
     country_rates: dict | None = None,
     base_currency: BaseCurrency = BaseCurrency.MXN,
 ) -> AsesorDetailPDFPayload:
-    response = await getAsesorDetail(
+    response = await get_asesor_detail(
         seller_id,
         filters,
         country_rates=country_rates,
@@ -1318,14 +1318,14 @@ async def build_asesor_detail_pdf_payload(
                 **_kw(detail.total_revenue, comp_detail.total_revenue if comp_detail else None),
             ),
             PDFKpiItem(
-                label="Ing. Asignado",
+                label="Ingreso Asignado",
                 value=format_currency(detail.allocated_revenue, base_currency),
                 **_kw(
                     detail.allocated_revenue, comp_detail.allocated_revenue if comp_detail else None
                 ),
             ),
             PDFKpiItem(
-                label="Ing. Esperado",
+                label="Ingreso Esperado",
                 value=format_currency(detail.expected_revenue, base_currency),
                 **_kw(
                     detail.expected_revenue, comp_detail.expected_revenue if comp_detail else None
