@@ -381,9 +381,9 @@ function AsesorGlossaryNote() {
                 diferencia entre el Ingreso Esperado y el Ingreso Asignado representa pagos pendientes de cobro.
             </p>
             <p>
-                <span className="font-medium text-slate-700">Margen de Utilidad:</span> Calculado como (Ingreso
-                Asignado − Costo Esperado) / Ingreso Asignado × 100. Se calcula sobre el ingreso asignado (no el
-                total) porque el costo esperado solo cubre los productos con detalle de línea.
+                <span className="font-medium text-slate-700">Margen de Utilidad:</span> Calculado como (Ingreso Asignado
+                − Costo Esperado) / Ingreso Asignado × 100. Se calcula sobre el ingreso asignado (no el total) porque el
+                costo esperado solo cubre los productos con detalle de línea.
             </p>
         </div>
     )

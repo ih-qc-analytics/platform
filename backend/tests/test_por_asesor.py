@@ -373,14 +373,13 @@ async def test_por_asesor_summary_profit_margin_matches_formula(ui_dev_reporting
 
 @pytest.mark.asyncio(loop_scope="session")
 async def test_por_asesor_detail_profit_margin_matches_formula(ui_dev_reporting_db):
-    result = await getAsesorDetail(
-        1, AsesorFilters(date_from="2025-01-01", date_to="2025-12-31")
-    )
+    result = await getAsesorDetail(1, AsesorFilters(date_from="2025-01-01", date_to="2025-12-31"))
     detail = result.current
 
     assert detail.expected_cost == 2150.0
     assert detail.profit_margin == pytest.approx(
-        (detail.allocated_revenue - detail.expected_cost) / detail.allocated_revenue * 100, abs=0.001
+        (detail.allocated_revenue - detail.expected_cost) / detail.allocated_revenue * 100,
+        abs=0.001,
     )
 
 

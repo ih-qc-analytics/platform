@@ -55,7 +55,12 @@ from app.services.utils.date_utils import (
     percent_change,
     resolve_comparison_range,
 )
-from app.services.utils.report_currency import line_expected_cost_column, line_expected_total_column, line_paid_total_column, payment_amount_column
+from app.services.utils.report_currency import (
+    line_expected_cost_column,
+    line_expected_total_column,
+    line_paid_total_column,
+    payment_amount_column,
+)
 
 ASESOR_SUMMARY_COLUMNS = [
     ExcelColumn("seller_name", "Seller"),
@@ -163,7 +168,9 @@ async def fetch_detail_aggregate_row(
         allocated_revenue=allocated_revenue,
         expected_revenue=expected_revenue,
         expected_cost=expected_cost,
-        profit_margin=((allocated_revenue - expected_cost) / allocated_revenue * 100) if allocated_revenue > 0 else 0.0,
+        profit_margin=((allocated_revenue - expected_cost) / allocated_revenue * 100)
+        if allocated_revenue > 0
+        else 0.0,
     )
 
 
@@ -409,7 +416,9 @@ def build_asesor_report_base(
                 books_courses_perdidos=int(status_counts.get(sid, {}).get("bc_perdido", 0)),
                 books_courses_mantenidos=int(status_counts.get(sid, {}).get("bc_mantenido", 0)),
                 expected_cost=expected_cost,
-                profit_margin=((allocated_rev - expected_cost) / allocated_rev * 100) if allocated_rev > 0 else 0.0,
+                profit_margin=((allocated_rev - expected_cost) / allocated_rev * 100)
+                if allocated_rev > 0
+                else 0.0,
             )
         )
     return AsesorReportBase(rows=rows, next_cursor=next_cursor, has_more=has_more)
@@ -993,7 +1002,9 @@ async def build_por_asesor_pdf_payload(
     total_allocated = sum(row.allocated_revenue for row in report.current.rows)
     total_expected = sum(row.expected_revenue for row in report.current.rows)
     total_cost = sum(row.expected_cost for row in report.current.rows)
-    total_margin = ((total_allocated - total_cost) / total_allocated * 100) if total_allocated > 0 else 0.0
+    total_margin = (
+        ((total_allocated - total_cost) / total_allocated * 100) if total_allocated > 0 else 0.0
+    )
 
     comp_by_seller = (
         {r.seller_name: r for r in report.comparison.data.rows} if report.comparison else {}
@@ -1125,7 +1136,14 @@ async def build_por_asesor_pdf_payload(
     if has_comparison:
         table_headers += ["Ganados", "Perdidos", "Mantenidos"]
         table_widths += [2, 2, 2]
-    table_headers += ["Sin Categorizar", "Valor Total", "Ing. Asignado", "Ing. Esperado", "Costo Esp.", "Margen"]
+    table_headers += [
+        "Sin Categorizar",
+        "Valor Total",
+        "Ing. Asignado",
+        "Ing. Esperado",
+        "Costo Esp.",
+        "Margen",
+    ]
     table_widths += [3, 3, 3, 3, 3, 2]
 
     return PorAsesorPDFPayload(
@@ -1330,12 +1348,16 @@ async def build_asesor_detail_pdf_payload(
             PDFKpiItem(
                 label="Ing. Asignado",
                 value=format_currency(detail.allocated_revenue, base_currency),
-                **_kw(detail.allocated_revenue, comp_detail.allocated_revenue if comp_detail else None),
+                **_kw(
+                    detail.allocated_revenue, comp_detail.allocated_revenue if comp_detail else None
+                ),
             ),
             PDFKpiItem(
                 label="Ing. Esperado",
                 value=format_currency(detail.expected_revenue, base_currency),
-                **_kw(detail.expected_revenue, comp_detail.expected_revenue if comp_detail else None),
+                **_kw(
+                    detail.expected_revenue, comp_detail.expected_revenue if comp_detail else None
+                ),
             ),
             PDFKpiItem(
                 label="Costo Esperado",

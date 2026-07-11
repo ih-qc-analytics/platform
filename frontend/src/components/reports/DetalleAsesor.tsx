@@ -292,9 +292,7 @@ export default function DetalleAsesor({ sellerId, sellerName, open, onOpenChange
                                     label="Ing. Esperado"
                                     value={formatCurrency(detail.expected_revenue)}
                                     comparisonValue={
-                                        comparisonDetail
-                                            ? formatCurrency(comparisonDetail.expected_revenue)
-                                            : undefined
+                                        comparisonDetail ? formatCurrency(comparisonDetail.expected_revenue) : undefined
                                     }
                                     comparisonPct={
                                         showComparison

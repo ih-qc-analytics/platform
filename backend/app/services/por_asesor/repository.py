@@ -6,7 +6,12 @@ from sqlalchemy import text
 from app.enums import BaseCurrency
 from app.reporting.database import ReportingSessionLocal
 from app.schemas.reports import AsesorFilters
-from app.services.utils.report_currency import line_expected_cost_column, line_expected_total_column, line_paid_total_column, payment_amount_column
+from app.services.utils.report_currency import (
+    line_expected_cost_column,
+    line_expected_total_column,
+    line_paid_total_column,
+    payment_amount_column,
+)
 from app.services.shared import build_line_item_where_clause, build_payment_where_clause
 
 
