@@ -183,6 +183,14 @@ export type AsesorRow = {
     mantenidos: number
     uncategorized_revenue: number
     total_revenue: number
+    total_books: number
+    total_courses: number
+    exam_revenue: number
+    book_revenue: number
+    course_revenue: number
+    books_courses_ganados: number
+    books_courses_perdidos: number
+    books_courses_mantenidos: number
 }
 
 export type AsesorReportBase = {
@@ -202,6 +210,8 @@ export type ExamBrandDetail = {
 export type BusinessStatusDetail = {
     schools: number
     exams: number
+    books: number
+    courses: number
     revenue: number
 }
 
@@ -219,6 +229,10 @@ export type AsesorDetailBase = {
     ganados: BusinessStatusDetail
     perdidos: BusinessStatusDetail
     mantenidos: BusinessStatusDetail
+    total_books: number
+    total_courses: number
+    book_revenue: number
+    course_revenue: number
 }
 
 export type AsesorDetailResponse = ComparedResponse<AsesorDetailBase>
@@ -264,6 +278,11 @@ export type PorPaisSummaryRow = {
     michigan: number
     tea: number
     other: number
+    total_books: number
+    total_courses: number
+    exam_revenue: number
+    book_revenue: number
+    course_revenue: number
 }
 
 export type PorPaisStatusRow = {
@@ -274,6 +293,9 @@ export type PorPaisStatusRow = {
     exams_ganados: number
     exams_perdidos: number
     exams_mantenidos: number
+    books_courses_ganados: number
+    books_courses_perdidos: number
+    books_courses_mantenidos: number
 }
 
 export type PorPaisReportBase = {
@@ -287,4 +309,14 @@ export type PorPaisDetailResponse = {
     country: string
     exam_counts: Record<string, number>
     comparison_exam_counts?: Record<string, number> | null
+    total_books: number
+    total_courses: number
+    book_revenue: number
+    course_revenue: number
+    comparison_total_books?: number | null
+    comparison_total_courses?: number | null
+    comparison_book_revenue?: number | null
+    comparison_course_revenue?: number | null
+    exam_revenue: number
+    comparison_exam_revenue?: number | null
 }

@@ -53,6 +53,11 @@ def test_por_pais_summary_and_detail_helpers_treat_missing_exam_labels_as_other(
             "michigan": 0,
             "tea": 0,
             "other": 3,
+            "total_books": 0,
+            "total_courses": 0,
+            "exam_revenue": 0.0,
+            "book_revenue": 0.0,
+            "course_revenue": 0.0,
         }
     ]
 

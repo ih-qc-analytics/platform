@@ -34,6 +34,10 @@ type BreakdownTileProps = {
     firstValue: number
     secondLabel: string
     secondValue: number
+    thirdLabel?: string
+    thirdValue?: number
+    fourthLabel?: string
+    fourthValue?: number
     totalLabel: string
     totalValue: number
     tone: "blue" | "purple" | "amber" | "green" | "rose" | "indigo"
@@ -150,6 +154,91 @@ export default function DetalleAsesor({ sellerId, sellerName, open, onOpenChange
                                     showComparison={showComparison}
                                 />
                                 <SummaryInfoCard
+                                    label="Libros"
+                                    value={formatInteger(detail.total_books)}
+                                    comparisonValue={
+                                        comparisonDetail ? formatInteger(comparisonDetail.total_books) : undefined
+                                    }
+                                    comparisonPct={
+                                        showComparison
+                                            ? getPercentChange(detail.total_books, comparisonDetail?.total_books)
+                                            : undefined
+                                    }
+                                    showComparison={showComparison}
+                                />
+                                <SummaryInfoCard
+                                    label="Cursos"
+                                    value={formatInteger(detail.total_courses)}
+                                    comparisonValue={
+                                        comparisonDetail ? formatInteger(comparisonDetail.total_courses) : undefined
+                                    }
+                                    comparisonPct={
+                                        showComparison
+                                            ? getPercentChange(detail.total_courses, comparisonDetail?.total_courses)
+                                            : undefined
+                                    }
+                                    showComparison={showComparison}
+                                />
+                                <SummaryInfoCard
+                                    label="Ing. Exámenes"
+                                    value={formatCurrency(
+                                        Object.values(detail.exam_breakdown).reduce((sum, cat) => sum + cat.revenue, 0),
+                                    )}
+                                    comparisonValue={
+                                        comparisonDetail
+                                            ? formatCurrency(
+                                                  Object.values(comparisonDetail.exam_breakdown).reduce(
+                                                      (sum, cat) => sum + cat.revenue,
+                                                      0,
+                                                  ),
+                                              )
+                                            : undefined
+                                    }
+                                    comparisonPct={
+                                        showComparison
+                                            ? getPercentChange(
+                                                  Object.values(detail.exam_breakdown).reduce(
+                                                      (sum, cat) => sum + cat.revenue,
+                                                      0,
+                                                  ),
+                                                  comparisonDetail
+                                                      ? Object.values(comparisonDetail.exam_breakdown).reduce(
+                                                            (sum, cat) => sum + cat.revenue,
+                                                            0,
+                                                        )
+                                                      : undefined,
+                                              )
+                                            : undefined
+                                    }
+                                    showComparison={showComparison}
+                                />
+                                <SummaryInfoCard
+                                    label="Ing. Libros"
+                                    value={formatCurrency(detail.book_revenue)}
+                                    comparisonValue={
+                                        comparisonDetail ? formatCurrency(comparisonDetail.book_revenue) : undefined
+                                    }
+                                    comparisonPct={
+                                        showComparison
+                                            ? getPercentChange(detail.book_revenue, comparisonDetail?.book_revenue)
+                                            : undefined
+                                    }
+                                    showComparison={showComparison}
+                                />
+                                <SummaryInfoCard
+                                    label="Ing. Cursos"
+                                    value={formatCurrency(detail.course_revenue)}
+                                    comparisonValue={
+                                        comparisonDetail ? formatCurrency(comparisonDetail.course_revenue) : undefined
+                                    }
+                                    comparisonPct={
+                                        showComparison
+                                            ? getPercentChange(detail.course_revenue, comparisonDetail?.course_revenue)
+                                            : undefined
+                                    }
+                                    showComparison={showComparison}
+                                />
+                                <SummaryInfoCard
                                     label="Sin Categorizar"
                                     value={formatCurrency(detail.uncategorized_revenue)}
                                     comparisonValue={
@@ -231,6 +320,10 @@ export default function DetalleAsesor({ sellerId, sellerName, open, onOpenChange
                                                 firstValue={detail.schools}
                                                 secondLabel="Exámenes"
                                                 secondValue={detail.exams}
+                                                thirdLabel="Libros"
+                                                thirdValue={detail.books}
+                                                fourthLabel="Cursos"
+                                                fourthValue={detail.courses}
                                                 totalLabel="Valor"
                                                 totalValue={detail.revenue}
                                                 tone={tone}
@@ -286,6 +379,10 @@ function BreakdownTile({
     firstValue,
     secondLabel,
     secondValue,
+    thirdLabel,
+    thirdValue,
+    fourthLabel,
+    fourthValue,
     totalLabel,
     totalValue,
     tone,
@@ -310,6 +407,12 @@ function BreakdownTile({
                         <span className="text-right text-xs text-muted-foreground">
                             ant. {formatInteger(comparisonSecondValue)}
                         </span>
+                    )}
+                    {thirdLabel !== undefined && thirdValue !== undefined && (
+                        <MetricRow label={thirdLabel} value={formatInteger(thirdValue)} />
+                    )}
+                    {fourthLabel !== undefined && fourthValue !== undefined && (
+                        <MetricRow label={fourthLabel} value={formatInteger(fourthValue)} />
                     )}
                 </div>
                 <div className="border-t border-current/15 pt-4">

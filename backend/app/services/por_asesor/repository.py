@@ -122,7 +122,12 @@ async def fetch_summary_allocated_revenue_rows_by_seller_ids(
     query = f"""
         SELECT
             seller_id,
-            COALESCE(SUM({paid_total}), 0) AS allocated_revenue
+            COALESCE(SUM({paid_total}), 0)                                                    AS allocated_revenue,
+            COALESCE(SUM(CASE WHEN product_type = 'exam'   THEN {paid_total} ELSE 0 END), 0)  AS exam_revenue,
+            COALESCE(SUM(CASE WHEN product_type = 'book'   THEN {paid_total} ELSE 0 END), 0)  AS book_revenue,
+            COALESCE(SUM(CASE WHEN product_type = 'course' THEN {paid_total} ELSE 0 END), 0)  AS course_revenue,
+            COALESCE(SUM(CASE WHEN product_type = 'book'   THEN quantity     ELSE 0 END), 0)  AS total_books,
+            COALESCE(SUM(CASE WHEN product_type = 'course' THEN quantity     ELSE 0 END), 0)  AS total_courses
         FROM report_line_items
         WHERE {where}
           AND seller_id = ANY(:seller_ids)
@@ -194,6 +199,22 @@ async def fetch_school_presence_rows(
         return (await session.execute(text(query), params)).fetchall()
 
 
+async def fetch_books_courses_presence_rows(
+    filters: AsesorFilters,
+    *,
+    seller_id: int | None = None,
+) -> list:
+    where, params = _line_where(filters, seller_id=seller_id, require_product_breakdown=True)
+    query = f"""
+        SELECT DISTINCT seller_id, lead_id
+        FROM report_line_items
+        WHERE product_type IN ('book', 'course')
+          AND {where}
+    """
+    async with ReportingSessionLocal() as session:
+        return (await session.execute(text(query), params)).fetchall()
+
+
 async def fetch_school_allocated_revenue_metric_rows(
     filters: AsesorFilters,
     *,
@@ -215,7 +236,7 @@ async def fetch_school_allocated_revenue_metric_rows(
         return (await session.execute(text(query), params)).fetchall()
 
 
-async def fetch_school_exam_metric_rows(
+async def fetch_school_product_metric_rows(
     filters: AsesorFilters,
     *,
     seller_id: int | None = None,
@@ -225,7 +246,9 @@ async def fetch_school_exam_metric_rows(
         SELECT
             seller_id,
             lead_id,
-            COALESCE(SUM(CASE WHEN product_type = 'exam' THEN quantity ELSE 0 END), 0) AS exams
+            COALESCE(SUM(CASE WHEN product_type = 'exam'   THEN quantity ELSE 0 END), 0) AS exams,
+            COALESCE(SUM(CASE WHEN product_type = 'book'   THEN quantity ELSE 0 END), 0) AS books,
+            COALESCE(SUM(CASE WHEN product_type = 'course' THEN quantity ELSE 0 END), 0) AS courses
         FROM report_line_items
         WHERE {where}
         GROUP BY seller_id, lead_id

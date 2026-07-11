@@ -23,6 +23,11 @@ async def test_por_pais_full_year_summary_and_status_rows_match_payment_based_mo
             "michigan": 1,
             "tea": 2,
             "other": 0,
+            "total_books": 0,
+            "total_courses": 1,
+            "exam_revenue": 6500.0,
+            "book_revenue": 0.0,
+            "course_revenue": 600.0,
         },
         {
             "country": "mexico",
@@ -34,6 +39,11 @@ async def test_por_pais_full_year_summary_and_status_rows_match_payment_based_mo
             "michigan": 0,
             "tea": 0,
             "other": 1,
+            "total_books": 1,
+            "total_courses": 0,
+            "exam_revenue": 4600.0,
+            "book_revenue": 300.0,
+            "course_revenue": 0.0,
         },
         {
             "country": "peru",
@@ -45,6 +55,11 @@ async def test_por_pais_full_year_summary_and_status_rows_match_payment_based_mo
             "michigan": 0,
             "tea": 0,
             "other": 0,
+            "total_books": 0,
+            "total_courses": 0,
+            "exam_revenue": 1700.0,
+            "book_revenue": 0.0,
+            "course_revenue": 0.0,
         },
     ]
     assert [row.model_dump() for row in result.current.status_rows] == [
@@ -56,6 +71,9 @@ async def test_por_pais_full_year_summary_and_status_rows_match_payment_based_mo
             "exams_ganados": 3,
             "exams_perdidos": 0,
             "exams_mantenidos": 2,
+            "books_courses_ganados": 1,
+            "books_courses_perdidos": 0,
+            "books_courses_mantenidos": 0,
         },
         {
             "country": "mexico",
@@ -65,6 +83,9 @@ async def test_por_pais_full_year_summary_and_status_rows_match_payment_based_mo
             "exams_ganados": 2,
             "exams_perdidos": 0,
             "exams_mantenidos": 3,
+            "books_courses_ganados": 1,
+            "books_courses_perdidos": 0,
+            "books_courses_mantenidos": 0,
         },
         {
             "country": "peru",
@@ -74,6 +95,9 @@ async def test_por_pais_full_year_summary_and_status_rows_match_payment_based_mo
             "exams_ganados": 0,
             "exams_perdidos": 0,
             "exams_mantenidos": 1,
+            "books_courses_ganados": 0,
+            "books_courses_perdidos": 0,
+            "books_courses_mantenidos": 0,
         },
     ]
 
@@ -100,6 +124,54 @@ async def test_por_pais_detail_returns_canonical_exam_counts_per_country(ui_dev_
 
 
 @pytest.mark.asyncio(loop_scope="session")
+async def test_por_pais_detail_returns_product_revenue_breakdown(ui_dev_reporting_db):
+    mexico = await getPorPaisDetail(
+        "mexico",
+        PorPaisFilters(date_from="2025-01-01", date_to="2025-12-31"),
+    )
+    colombia = await getPorPaisDetail(
+        "colombia",
+        PorPaisFilters(date_from="2025-01-01", date_to="2025-12-31"),
+    )
+
+    # Mexico: exam revenue excludes the book (300) → 4600, and has 1 book
+    assert mexico.exam_revenue == 4600.0
+    assert mexico.book_revenue == 300.0
+    assert mexico.course_revenue == 0.0
+    assert mexico.total_books == 1
+    assert mexico.total_courses == 0
+
+    # Colombia: has 1 course (600) → exam_revenue = total - course = 6500
+    assert colombia.exam_revenue == 6500.0
+    assert colombia.book_revenue == 0.0
+    assert colombia.course_revenue == 600.0
+    assert colombia.total_books == 0
+    assert colombia.total_courses == 1
+
+
+@pytest.mark.asyncio(loop_scope="session")
+async def test_por_pais_detail_comparison_includes_exam_revenue(ui_dev_reporting_db):
+    result = await getPorPaisDetail(
+        "colombia",
+        PorPaisFilters(
+            date_from="2025-05-01",
+            date_to="2025-12-31",
+            show_comparison=True,
+            comparison_mode="PREVIOUS_PERIOD",
+            comparison_date_from="2025-01-01",
+            comparison_date_to="2025-04-30",
+        ),
+    )
+
+    assert result.exam_revenue > 0
+    assert result.comparison_exam_revenue is not None
+    assert result.comparison_book_revenue == 0.0
+    assert (
+        result.comparison_course_revenue == 600.0
+    )  # course payment date 2025-04-02 falls in comparison period
+
+
+@pytest.mark.asyncio(loop_scope="session")
 async def test_por_pais_midyear_range_status_rows_use_comparison_period(ui_dev_reporting_db):
     result = await getPorPaisReport(
         PorPaisFilters(date_from="2025-05-01", date_to="2025-08-31", show_comparison=True)
@@ -116,6 +188,11 @@ async def test_por_pais_midyear_range_status_rows_use_comparison_period(ui_dev_r
             "michigan": 1,
             "tea": 2,
             "other": 0,
+            "total_books": 0,
+            "total_courses": 0,
+            "exam_revenue": 3500.0,
+            "book_revenue": 0.0,
+            "course_revenue": 0.0,
         },
         {
             "country": "mexico",
@@ -127,6 +204,11 @@ async def test_por_pais_midyear_range_status_rows_use_comparison_period(ui_dev_r
             "michigan": 0,
             "tea": 0,
             "other": 1,
+            "total_books": 0,
+            "total_courses": 0,
+            "exam_revenue": 500.0,
+            "book_revenue": 0.0,
+            "course_revenue": 0.0,
         },
         {
             "country": "peru",
@@ -138,6 +220,11 @@ async def test_por_pais_midyear_range_status_rows_use_comparison_period(ui_dev_r
             "michigan": 0,
             "tea": 0,
             "other": 0,
+            "total_books": 0,
+            "total_courses": 0,
+            "exam_revenue": 1700.0,
+            "book_revenue": 0.0,
+            "course_revenue": 0.0,
         },
     ]
     assert [row.model_dump() for row in result.current.status_rows] == [
@@ -149,6 +236,9 @@ async def test_por_pais_midyear_range_status_rows_use_comparison_period(ui_dev_r
             "exams_ganados": 3,
             "exams_perdidos": 1,
             "exams_mantenidos": 0,
+            "books_courses_ganados": 0,
+            "books_courses_perdidos": 0,
+            "books_courses_mantenidos": 0,
         },
         {
             "country": "mexico",
@@ -158,6 +248,9 @@ async def test_por_pais_midyear_range_status_rows_use_comparison_period(ui_dev_r
             "exams_ganados": 1,
             "exams_perdidos": 1,
             "exams_mantenidos": 0,
+            "books_courses_ganados": 0,
+            "books_courses_perdidos": 0,
+            "books_courses_mantenidos": 0,
         },
         {
             "country": "peru",
@@ -167,6 +260,9 @@ async def test_por_pais_midyear_range_status_rows_use_comparison_period(ui_dev_r
             "exams_ganados": 1,
             "exams_perdidos": 0,
             "exams_mantenidos": 0,
+            "books_courses_ganados": 0,
+            "books_courses_perdidos": 0,
+            "books_courses_mantenidos": 0,
         },
     ]
 
@@ -177,3 +273,28 @@ async def test_por_pais_empty_range_returns_empty_sections(ui_dev_reporting_db):
 
     assert result.current.summary_rows == []
     assert result.current.status_rows == []
+
+
+@pytest.mark.asyncio(loop_scope="session")
+async def test_por_pais_full_year_status_rows_include_books_courses_gpm(ui_dev_reporting_db):
+    # Full year 2025 vs previous year 2024 (no books/courses in 2024 seed data)
+    result = await getPorPaisReport(
+        PorPaisFilters(date_from="2025-01-01", date_to="2025-12-31", show_comparison=True)
+    )
+
+    status_by_country = {row.country: row for row in result.current.status_rows}
+
+    # Colombia has 1 course school in 2025 (none in 2024) → bc_ganado=1
+    assert status_by_country["colombia"].books_courses_ganados == 1
+    assert status_by_country["colombia"].books_courses_perdidos == 0
+    assert status_by_country["colombia"].books_courses_mantenidos == 0
+
+    # Mexico has 1 book school in 2025 (none in 2024) → bc_ganado=1
+    assert status_by_country["mexico"].books_courses_ganados == 1
+    assert status_by_country["mexico"].books_courses_perdidos == 0
+    assert status_by_country["mexico"].books_courses_mantenidos == 0
+
+    # Peru has no books/courses in 2025
+    assert status_by_country["peru"].books_courses_ganados == 0
+    assert status_by_country["peru"].books_courses_perdidos == 0
+    assert status_by_country["peru"].books_courses_mantenidos == 0

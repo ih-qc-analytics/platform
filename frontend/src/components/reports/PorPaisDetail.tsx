@@ -8,7 +8,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { Skeleton } from "@/components/ui/skeleton"
 import { usePorPaisDetail } from "@/hooks/useReports"
-import { cn, formatInteger, formatPercentChange, getPercentChange } from "@/lib/utils"
+import { cn, formatCurrency, formatInteger, formatPercentChange, getPercentChange } from "@/lib/utils"
 import type { PorPaisFilters } from "@/types"
 
 type PorPaisDetailProps = {
@@ -176,6 +176,214 @@ export default function PorPaisDetail({ country, open, onOpenChange, filters }: 
                                             </Card>
                                         )
                                     })}
+                                </div>
+                            </section>
+
+                            <section className="flex flex-col gap-3">
+                                <h2 className="text-lg font-semibold uppercase tracking-wide text-slate-700">
+                                    Ingresos por producto
+                                </h2>
+                                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5">
+                                    <Card className="rounded-2xl shadow-none">
+                                        <CardContent className="flex min-h-20 flex-col justify-between gap-2 p-4">
+                                            <span className="text-xs font-medium text-slate-500">Ing. Exámenes</span>
+                                            <span className="text-xl font-semibold tracking-tight text-slate-900">
+                                                {formatCurrency(data.exam_revenue)}
+                                            </span>
+                                            {showComparison &&
+                                                data.comparison_exam_revenue !== null &&
+                                                data.comparison_exam_revenue !== undefined && (
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="text-xs text-muted-foreground">
+                                                            {formatCurrency(data.comparison_exam_revenue)}
+                                                        </span>
+                                                        {getPercentChange(
+                                                            data.exam_revenue,
+                                                            data.comparison_exam_revenue,
+                                                        ) !== null && (
+                                                            <span
+                                                                className={cn(
+                                                                    "text-xs font-medium",
+                                                                    getPercentChange(
+                                                                        data.exam_revenue,
+                                                                        data.comparison_exam_revenue,
+                                                                    )! >= 0
+                                                                        ? "text-emerald-600"
+                                                                        : "text-rose-600",
+                                                                )}
+                                                            >
+                                                                {formatPercentChange(
+                                                                    getPercentChange(
+                                                                        data.exam_revenue,
+                                                                        data.comparison_exam_revenue,
+                                                                    )!,
+                                                                )}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                )}
+                                        </CardContent>
+                                    </Card>
+                                    <Card className="rounded-2xl shadow-none">
+                                        <CardContent className="flex min-h-20 flex-col justify-between gap-2 p-4">
+                                            <span className="text-xs font-medium text-slate-500">Libros</span>
+                                            <span className="text-xl font-semibold tracking-tight text-slate-900">
+                                                {formatInteger(data.total_books)}
+                                            </span>
+                                            {showComparison &&
+                                                data.comparison_total_books !== null &&
+                                                data.comparison_total_books !== undefined && (
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="text-xs text-muted-foreground">
+                                                            {formatInteger(data.comparison_total_books)}
+                                                        </span>
+                                                        {getPercentChange(
+                                                            data.total_books,
+                                                            data.comparison_total_books,
+                                                        ) !== null && (
+                                                            <span
+                                                                className={cn(
+                                                                    "text-xs font-medium",
+                                                                    getPercentChange(
+                                                                        data.total_books,
+                                                                        data.comparison_total_books,
+                                                                    )! >= 0
+                                                                        ? "text-emerald-600"
+                                                                        : "text-rose-600",
+                                                                )}
+                                                            >
+                                                                {formatPercentChange(
+                                                                    getPercentChange(
+                                                                        data.total_books,
+                                                                        data.comparison_total_books,
+                                                                    )!,
+                                                                )}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                )}
+                                        </CardContent>
+                                    </Card>
+                                    <Card className="rounded-2xl shadow-none">
+                                        <CardContent className="flex min-h-20 flex-col justify-between gap-2 p-4">
+                                            <span className="text-xs font-medium text-slate-500">Ing. Libros</span>
+                                            <span className="text-xl font-semibold tracking-tight text-slate-900">
+                                                {formatCurrency(data.book_revenue)}
+                                            </span>
+                                            {showComparison &&
+                                                data.comparison_book_revenue !== null &&
+                                                data.comparison_book_revenue !== undefined && (
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="text-xs text-muted-foreground">
+                                                            {formatCurrency(data.comparison_book_revenue)}
+                                                        </span>
+                                                        {getPercentChange(
+                                                            data.book_revenue,
+                                                            data.comparison_book_revenue,
+                                                        ) !== null && (
+                                                            <span
+                                                                className={cn(
+                                                                    "text-xs font-medium",
+                                                                    getPercentChange(
+                                                                        data.book_revenue,
+                                                                        data.comparison_book_revenue,
+                                                                    )! >= 0
+                                                                        ? "text-emerald-600"
+                                                                        : "text-rose-600",
+                                                                )}
+                                                            >
+                                                                {formatPercentChange(
+                                                                    getPercentChange(
+                                                                        data.book_revenue,
+                                                                        data.comparison_book_revenue,
+                                                                    )!,
+                                                                )}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                )}
+                                        </CardContent>
+                                    </Card>
+                                    <Card className="rounded-2xl shadow-none">
+                                        <CardContent className="flex min-h-20 flex-col justify-between gap-2 p-4">
+                                            <span className="text-xs font-medium text-slate-500">Cursos</span>
+                                            <span className="text-xl font-semibold tracking-tight text-slate-900">
+                                                {formatInteger(data.total_courses)}
+                                            </span>
+                                            {showComparison &&
+                                                data.comparison_total_courses !== null &&
+                                                data.comparison_total_courses !== undefined && (
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="text-xs text-muted-foreground">
+                                                            {formatInteger(data.comparison_total_courses)}
+                                                        </span>
+                                                        {getPercentChange(
+                                                            data.total_courses,
+                                                            data.comparison_total_courses,
+                                                        ) !== null && (
+                                                            <span
+                                                                className={cn(
+                                                                    "text-xs font-medium",
+                                                                    getPercentChange(
+                                                                        data.total_courses,
+                                                                        data.comparison_total_courses,
+                                                                    )! >= 0
+                                                                        ? "text-emerald-600"
+                                                                        : "text-rose-600",
+                                                                )}
+                                                            >
+                                                                {formatPercentChange(
+                                                                    getPercentChange(
+                                                                        data.total_courses,
+                                                                        data.comparison_total_courses,
+                                                                    )!,
+                                                                )}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                )}
+                                        </CardContent>
+                                    </Card>
+                                    <Card className="rounded-2xl shadow-none">
+                                        <CardContent className="flex min-h-20 flex-col justify-between gap-2 p-4">
+                                            <span className="text-xs font-medium text-slate-500">Ing. Cursos</span>
+                                            <span className="text-xl font-semibold tracking-tight text-slate-900">
+                                                {formatCurrency(data.course_revenue)}
+                                            </span>
+                                            {showComparison &&
+                                                data.comparison_course_revenue !== null &&
+                                                data.comparison_course_revenue !== undefined && (
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="text-xs text-muted-foreground">
+                                                            {formatCurrency(data.comparison_course_revenue)}
+                                                        </span>
+                                                        {getPercentChange(
+                                                            data.course_revenue,
+                                                            data.comparison_course_revenue,
+                                                        ) !== null && (
+                                                            <span
+                                                                className={cn(
+                                                                    "text-xs font-medium",
+                                                                    getPercentChange(
+                                                                        data.course_revenue,
+                                                                        data.comparison_course_revenue,
+                                                                    )! >= 0
+                                                                        ? "text-emerald-600"
+                                                                        : "text-rose-600",
+                                                                )}
+                                                            >
+                                                                {formatPercentChange(
+                                                                    getPercentChange(
+                                                                        data.course_revenue,
+                                                                        data.comparison_course_revenue,
+                                                                    )!,
+                                                                )}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                )}
+                                        </CardContent>
+                                    </Card>
                                 </div>
                             </section>
 

@@ -140,16 +140,31 @@ export default function PorAsesor() {
                                                     {group.label}
                                                 </TableHeadCell>
                                             ))}
+                                            <TableHeadCell className="min-w-24 whitespace-nowrap text-right">
+                                                Libros
+                                            </TableHeadCell>
+                                            <TableHeadCell className="min-w-24 whitespace-nowrap text-right">
+                                                Cursos
+                                            </TableHeadCell>
                                             {showComparisonValues && (
                                                 <>
                                                     <TableHeadCell className="min-w-24 whitespace-nowrap text-center">
-                                                        Ganados
+                                                        E. Ganados
                                                     </TableHeadCell>
                                                     <TableHeadCell className="min-w-24 whitespace-nowrap text-center">
-                                                        Perdidos
+                                                        E. Perdidos
                                                     </TableHeadCell>
                                                     <TableHeadCell className="min-w-28 whitespace-nowrap text-center">
-                                                        Mantenidos
+                                                        E. Mantenidos
+                                                    </TableHeadCell>
+                                                    <TableHeadCell className="min-w-24 whitespace-nowrap text-center">
+                                                        L+C Ganados
+                                                    </TableHeadCell>
+                                                    <TableHeadCell className="min-w-24 whitespace-nowrap text-center">
+                                                        L+C Perdidos
+                                                    </TableHeadCell>
+                                                    <TableHeadCell className="min-w-28 whitespace-nowrap text-center">
+                                                        L+C Mantenidos
                                                     </TableHeadCell>
                                                 </>
                                             )}
@@ -205,6 +220,20 @@ export default function PorAsesor() {
                                                             />
                                                         )
                                                     })}
+                                                    <TableMetricCell
+                                                        key={`${row.seller_id}-libros`}
+                                                        value={row.total_books}
+                                                        previousValue={previousRow?.total_books}
+                                                        align="right"
+                                                        showComparison={showComparisonValues}
+                                                    />
+                                                    <TableMetricCell
+                                                        key={`${row.seller_id}-cursos`}
+                                                        value={row.total_courses}
+                                                        previousValue={previousRow?.total_courses}
+                                                        align="right"
+                                                        showComparison={showComparisonValues}
+                                                    />
                                                     {showComparisonValues && (
                                                         <>
                                                             <TableBadgeCell
@@ -219,6 +248,21 @@ export default function PorAsesor() {
                                                             />
                                                             <TableBadgeCell
                                                                 value={row.mantenidos}
+                                                                tone="info"
+                                                                showComparison={false}
+                                                            />
+                                                            <TableBadgeCell
+                                                                value={row.books_courses_ganados}
+                                                                tone="success"
+                                                                showComparison={false}
+                                                            />
+                                                            <TableBadgeCell
+                                                                value={row.books_courses_perdidos}
+                                                                tone="danger"
+                                                                showComparison={false}
+                                                            />
+                                                            <TableBadgeCell
+                                                                value={row.books_courses_mantenidos}
                                                                 tone="info"
                                                                 showComparison={false}
                                                             />
@@ -261,6 +305,8 @@ export default function PorAsesor() {
                 </CardContent>
             </Card>
 
+            <AsesorGlossaryNote />
+
             <DetalleAsesor
                 open={selectedRow !== null}
                 onOpenChange={(open) => {
@@ -270,6 +316,20 @@ export default function PorAsesor() {
                 sellerName={selectedRow?.seller_name}
                 filters={normalizedFilters}
             />
+        </div>
+    )
+}
+
+function AsesorGlossaryNote() {
+    return (
+        <div className="rounded-xl border border-slate-200 bg-slate-50 px-5 py-4 text-xs text-slate-500 space-y-1">
+            <p className="font-semibold text-slate-600 mb-2">Notas</p>
+            <p>
+                <span className="font-medium text-slate-700">Sin categorizar:</span> Pagos del asesor registrados sin
+                ningún detalle de producto en el sistema — no existen líneas de venta asociadas. No es que el producto
+                sea desconocido: es que no hay registro de qué se vendió. Se suman al ingreso total pero no aparecen en
+                ningún desglose por tipo.
+            </p>
         </div>
     )
 }

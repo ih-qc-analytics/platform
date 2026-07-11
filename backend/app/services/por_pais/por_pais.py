@@ -34,8 +34,9 @@ from app.services.utils.date_utils import (
 )
 from app.services.por_pais.repository import (
     fetch_country_allocated_revenue_rows,
+    fetch_country_books_courses_presence_rows,
     fetch_country_exam_rows,
-    fetch_country_metric_rows,
+    fetch_country_product_metric_rows,
     fetch_country_payment_rows,
     fetch_country_presence_rows,
 )
@@ -46,12 +47,17 @@ POR_PAIS_SUMMARY_COLUMNS = [
     ExcelColumn("country", "Country"),
     ExcelColumn("total_schools", "Total Schools"),
     ExcelColumn("total_revenue", "Total Revenue"),
+    ExcelColumn("exam_revenue", "Ingreso Exámenes"),
+    ExcelColumn("book_revenue", "Ingreso Libros"),
+    ExcelColumn("course_revenue", "Ingreso Cursos"),
     ExcelColumn("uncategorized_revenue", "Uncategorized Revenue"),
     ExcelColumn("cambridge", "Cambridge"),
     ExcelColumn("ielts", "IELTS"),
     ExcelColumn("michigan", "Michigan"),
     ExcelColumn("tea", "TEA"),
     ExcelColumn("other", "Other"),
+    ExcelColumn("total_books", "Libros"),
+    ExcelColumn("total_courses", "Cursos"),
 ]
 POR_PAIS_STATUS_COLUMNS = [
     ExcelColumn("country", "Country"),
@@ -65,6 +71,10 @@ POR_PAIS_STATUS_COLUMNS = [
 POR_PAIS_DETAIL_COLUMNS = [
     ExcelColumn("country", "Country"),
     *[ExcelColumn(name, name) for name in DETALLE_EXAM_NAME_ORDER],
+    ExcelColumn("total_books", "Libros"),
+    ExcelColumn("total_courses", "Cursos"),
+    ExcelColumn("book_revenue", "Ingreso Libros"),
+    ExcelColumn("course_revenue", "Ingreso Cursos"),
 ]
 
 
@@ -86,9 +96,20 @@ def build_summary_rows(payment_rows, allocated_rows, exam_rows) -> list[PorPaisS
     payment_revenue_by_country = {
         row.country: float(row.total_revenue or 0) for row in payment_rows
     }
-    allocated_revenue_by_country = {
-        row.country: float(row.allocated_revenue or 0) for row in allocated_rows
-    }
+    allocated_rev_by_country: dict[str, float] = {}
+    exam_rev_by_country: dict[str, float] = {}
+    book_rev_by_country: dict[str, float] = {}
+    course_rev_by_country: dict[str, float] = {}
+    books_by_country: dict[str, int] = {}
+    courses_by_country: dict[str, int] = {}
+    for row in allocated_rows:
+        allocated_rev_by_country[row.country] = float(getattr(row, "allocated_revenue", 0) or 0)
+        exam_rev_by_country[row.country] = float(getattr(row, "exam_revenue", 0) or 0)
+        book_rev_by_country[row.country] = float(getattr(row, "book_revenue", 0) or 0)
+        course_rev_by_country[row.country] = float(getattr(row, "course_revenue", 0) or 0)
+        books_by_country[row.country] = int(getattr(row, "total_books", 0) or 0)
+        courses_by_country[row.country] = int(getattr(row, "total_courses", 0) or 0)
+
     counts: dict[str, dict[str, int]] = {
         country: {"cambridge": 0, "ielts": 0, "michigan": 0, "tea": 0, "other": 0}
         for country in schools_by_country
@@ -105,24 +126,36 @@ def build_summary_rows(payment_rows, allocated_rows, exam_rows) -> list[PorPaisS
             total_schools=schools_by_country.get(country, 0),
             total_revenue=payment_revenue_by_country.get(country, 0.0),
             uncategorized_revenue=payment_revenue_by_country.get(country, 0.0)
-            - allocated_revenue_by_country.get(country, 0.0),
+            - allocated_rev_by_country.get(country, 0.0),
             cambridge=counts.get(country, {}).get("cambridge", 0),
             ielts=counts.get(country, {}).get("ielts", 0),
             michigan=counts.get(country, {}).get("michigan", 0),
             tea=counts.get(country, {}).get("tea", 0),
             other=counts.get(country, {}).get("other", 0),
+            total_books=books_by_country.get(country, 0),
+            total_courses=courses_by_country.get(country, 0),
+            exam_revenue=exam_rev_by_country.get(country, 0.0),
+            book_revenue=book_rev_by_country.get(country, 0.0),
+            course_revenue=course_rev_by_country.get(country, 0.0),
         )
         for country in sorted(schools_by_country)
     ]
 
 
 def build_status_rows(
-    current_presence, prior_presence, current_metrics, prior_metrics
+    current_presence,
+    prior_presence,
+    current_metrics,
+    prior_metrics,
+    current_bc_presence=None,
+    prior_bc_presence=None,
 ) -> list[PorPaisStatusRow]:
     current_by_country: dict[str, set[int]] = defaultdict(set)
     prior_by_country: dict[str, set[int]] = defaultdict(set)
     current_metric_map: dict[tuple, int] = {}
     prior_metric_map: dict[tuple, int] = {}
+    current_bc_by_country: dict[str, set[int]] = defaultdict(set)
+    prior_bc_by_country: dict[str, set[int]] = defaultdict(set)
 
     for row in current_presence:
         current_by_country[row.country].add(int(row.lead_id))
@@ -132,6 +165,10 @@ def build_status_rows(
         current_metric_map[(row.country, int(row.lead_id))] = int(row.exams or 0)
     for row in prior_metrics:
         prior_metric_map[(row.country, int(row.lead_id))] = int(row.exams or 0)
+    for row in current_bc_presence or []:
+        current_bc_by_country[row.country].add(int(row.lead_id))
+    for row in prior_bc_presence or []:
+        prior_bc_by_country[row.country].add(int(row.lead_id))
 
     countries = sorted(set(current_by_country) | set(prior_by_country))
     rows: list[PorPaisStatusRow] = []
@@ -141,6 +178,8 @@ def build_status_rows(
         ganados = current - prior
         perdidos = prior - current
         mantenidos = current & prior
+        bc_current = current_bc_by_country.get(country, set())
+        bc_prior = prior_bc_by_country.get(country, set())
         rows.append(
             PorPaisStatusRow(
                 country=country,
@@ -152,6 +191,9 @@ def build_status_rows(
                 exams_mantenidos=sum(
                     current_metric_map.get((country, lid), 0) for lid in mantenidos
                 ),
+                books_courses_ganados=len(bc_current - bc_prior),
+                books_courses_perdidos=len(bc_prior - bc_current),
+                books_courses_mantenidos=len(bc_current & bc_prior),
             )
         )
     return rows
@@ -182,7 +224,7 @@ async def _get_por_pais_base(
         fetch_country_allocated_revenue_rows(filters, base_currency=base_currency),
         fetch_country_exam_rows(filters),
         fetch_country_presence_rows(filters),
-        fetch_country_metric_rows(filters),
+        fetch_country_product_metric_rows(filters),
     )
 
     return PorPaisReportBase(
@@ -222,9 +264,11 @@ async def getPorPaisReport(
         current_summary,
         current_presence,
         current_metrics,
+        current_bc_presence,
         comparison_summary,
         comparison_presence,
         comparison_metrics,
+        comparison_bc_presence,
     ) = await asyncio.gather(
         asyncio.gather(
             fetch_country_payment_rows(current_status_filters, base_currency=base_currency),
@@ -234,7 +278,8 @@ async def getPorPaisReport(
             fetch_country_exam_rows(current_status_filters),
         ),
         fetch_country_presence_rows(current_status_filters),
-        fetch_country_metric_rows(current_status_filters),
+        fetch_country_product_metric_rows(current_status_filters),
+        fetch_country_books_courses_presence_rows(current_status_filters),
         asyncio.gather(
             fetch_country_payment_rows(comparison_status_filters, base_currency=base_currency),
             fetch_country_allocated_revenue_rows(
@@ -243,19 +288,30 @@ async def getPorPaisReport(
             fetch_country_exam_rows(comparison_status_filters),
         ),
         fetch_country_presence_rows(comparison_status_filters),
-        fetch_country_metric_rows(comparison_status_filters),
+        fetch_country_product_metric_rows(comparison_status_filters),
+        fetch_country_books_courses_presence_rows(comparison_status_filters),
     )
 
     current = PorPaisReportBase(
         summary_rows=build_summary_rows(*current_summary),
         status_rows=build_status_rows(
-            current_presence, comparison_presence, current_metrics, comparison_metrics
+            current_presence,
+            comparison_presence,
+            current_metrics,
+            comparison_metrics,
+            current_bc_presence,
+            comparison_bc_presence,
         ),
     )
     comparison = PorPaisReportBase(
         summary_rows=build_summary_rows(*comparison_summary),
         status_rows=build_status_rows(
-            comparison_presence, current_presence, comparison_metrics, current_metrics
+            comparison_presence,
+            current_presence,
+            comparison_metrics,
+            current_metrics,
+            comparison_bc_presence,
+            current_bc_presence,
         ),
     )
 
@@ -270,6 +326,25 @@ async def getPorPaisReport(
     )
 
 
+def _extract_country_product_totals(allocated_rows, country: str) -> dict:
+    for row in allocated_rows:
+        if row.country == country:
+            return {
+                "total_books": int(getattr(row, "total_books", 0) or 0),
+                "total_courses": int(getattr(row, "total_courses", 0) or 0),
+                "book_revenue": float(getattr(row, "book_revenue", 0) or 0),
+                "course_revenue": float(getattr(row, "course_revenue", 0) or 0),
+                "exam_revenue": float(getattr(row, "exam_revenue", 0) or 0),
+            }
+    return {
+        "total_books": 0,
+        "total_courses": 0,
+        "book_revenue": 0.0,
+        "course_revenue": 0.0,
+        "exam_revenue": 0.0,
+    }
+
+
 async def getPorPaisDetail(country: str, filters: PorPaisFilters) -> PorPaisDetailResponse:
     comparison_meta = resolve_comparison_range(filters)
     current_filters = filters.model_copy(
@@ -277,23 +352,43 @@ async def getPorPaisDetail(country: str, filters: PorPaisFilters) -> PorPaisDeta
     )
 
     if comparison_meta is None:
-        exam_rows = await fetch_country_exam_rows(current_filters)
+        exam_rows, allocated_rows = await asyncio.gather(
+            fetch_country_exam_rows(current_filters),
+            fetch_country_allocated_revenue_rows(current_filters),
+        )
+        totals = _extract_country_product_totals(allocated_rows, country)
         return PorPaisDetailResponse(
             country=country,
             exam_counts=build_detail_counts(exam_rows, country),
+            **totals,
         )
 
     comparison_filters = current_filters.model_copy(
         update={"date_from": comparison_meta.date_from, "date_to": comparison_meta.date_to}
     )
-    current_exam_rows, comparison_exam_rows = await asyncio.gather(
+    (
+        current_exam_rows,
+        comparison_exam_rows,
+        current_allocated,
+        comparison_allocated,
+    ) = await asyncio.gather(
         fetch_country_exam_rows(current_filters),
         fetch_country_exam_rows(comparison_filters),
+        fetch_country_allocated_revenue_rows(current_filters),
+        fetch_country_allocated_revenue_rows(comparison_filters),
     )
+    totals = _extract_country_product_totals(current_allocated, country)
+    comp_totals = _extract_country_product_totals(comparison_allocated, country)
     return PorPaisDetailResponse(
         country=country,
         exam_counts=build_detail_counts(current_exam_rows, country),
         comparison_exam_counts=build_detail_counts(comparison_exam_rows, country),
+        **totals,
+        comparison_total_books=comp_totals["total_books"],
+        comparison_total_courses=comp_totals["total_courses"],
+        comparison_book_revenue=comp_totals["book_revenue"],
+        comparison_course_revenue=comp_totals["course_revenue"],
+        comparison_exam_revenue=comp_totals["exam_revenue"],
     )
 
 
@@ -323,6 +418,10 @@ def build_por_pais_export_worksheets(
         row = {"country": detail.country}
         for name in DETALLE_EXAM_NAME_ORDER:
             row[name] = int(detail.exam_counts.get(name, 0) or 0)
+        row["total_books"] = detail.total_books
+        row["total_courses"] = detail.total_courses
+        row["book_revenue"] = detail.book_revenue
+        row["course_revenue"] = detail.course_revenue
         detail_rows.append(row)
 
     specs = [
@@ -437,6 +536,8 @@ async def build_por_pais_pdf_payload(
     total_ielts = sum(r.ielts for r in current.summary_rows)
     total_met = sum(r.michigan for r in current.summary_rows)
     total_otros = sum(r.tea + r.other for r in current.summary_rows)
+    total_books = sum(r.total_books for r in current.summary_rows)
+    total_courses = sum(r.total_courses for r in current.summary_rows)
 
     comp_rows = report.comparison.data.summary_rows if has_comparison else []
     comp_by_country = {r.country: r for r in comp_rows}
@@ -449,6 +550,8 @@ async def build_por_pais_pdf_payload(
     comp_total_ielts = sum(r.ielts for r in comp_rows) if has_comparison else None
     comp_total_met = sum(r.michigan for r in comp_rows) if has_comparison else None
     comp_total_otros = sum(r.tea + r.other for r in comp_rows) if has_comparison else None
+    comp_total_books = sum(r.total_books for r in comp_rows) if has_comparison else None
+    comp_total_courses = sum(r.total_courses for r in comp_rows) if has_comparison else None
 
     def _kw(curr: float, prev: float | None) -> dict:
         if prev is None:
@@ -464,7 +567,8 @@ async def build_por_pais_pdf_payload(
         def fmt_cur(v):
             return format_currency(v, base_currency)
 
-        deltas: list = [None] * 9
+        # Columns: País(0) Colegios(1) Ingreso(2) Sin Cat(3) Cambridge(4) IELTS(5) MET(6) TEA(7) Otros(8) Libros(9) Cursos(10)
+        deltas: list = [None] * 11
         deltas[1] = format_delta(r.total_schools, comp.total_schools, format_integer)
         deltas[2] = format_delta(r.total_revenue, comp.total_revenue, fmt_cur)
         deltas[3] = format_delta(r.uncategorized_revenue, comp.uncategorized_revenue, fmt_cur)
@@ -473,6 +577,8 @@ async def build_por_pais_pdf_payload(
         deltas[6] = format_delta(r.michigan, comp.michigan, format_integer)
         deltas[7] = format_delta(r.tea, comp.tea, format_integer)
         deltas[8] = format_delta(r.other, comp.other, format_integer)
+        deltas[9] = format_delta(r.total_books, comp.total_books, format_integer)
+        deltas[10] = format_delta(r.total_courses, comp.total_courses, format_integer)
         return deltas
 
     status_table = (
@@ -554,6 +660,16 @@ async def build_por_pais_pdf_payload(
                 value=format_integer(total_otros),
                 **_kw(total_otros, comp_total_otros),
             ),
+            PDFKpiItem(
+                label="Libros",
+                value=format_integer(total_books),
+                **_kw(total_books, comp_total_books),
+            ),
+            PDFKpiItem(
+                label="Cursos",
+                value=format_integer(total_courses),
+                **_kw(total_courses, comp_total_courses),
+            ),
         ],
         summary_table=PDFTable(
             headers=[
@@ -566,6 +682,8 @@ async def build_por_pais_pdf_payload(
                 "MET",
                 "TEA",
                 "Otros",
+                "Libros",
+                "Cursos",
             ],
             rows=[
                 PDFTableRow(
@@ -579,12 +697,14 @@ async def build_por_pais_pdf_payload(
                         format_integer(r.michigan),
                         format_integer(r.tea),
                         format_integer(r.other),
+                        format_integer(r.total_books),
+                        format_integer(r.total_courses),
                     ],
                     deltas=_summary_row_deltas(r),
                 )
                 for r in current.summary_rows
             ],
-            column_widths=[3, 2, 2, 2, 2, 2, 2, 2, 2],
+            column_widths=[3, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
         ),
         status_table=status_table,
     )
@@ -639,6 +759,18 @@ async def build_por_pais_detail_pdf_payload(
         delta = format_delta(count, comp_count, format_integer) if comp_count is not None else None
         detail_rows.append(PDFTableRow(cells=[name, format_integer(count)], deltas=[None, delta]))
 
+    # Add Libros and Cursos rows
+    for product_label, count, comp_count in [
+        ("Libros", detail.total_books, detail.comparison_total_books),
+        ("Cursos", detail.total_courses, detail.comparison_total_courses),
+    ]:
+        if count == 0 and not comp_count:
+            continue
+        delta = format_delta(count, comp_count, format_integer) if comp_count is not None else None
+        detail_rows.append(
+            PDFTableRow(cells=[product_label, format_integer(count)], deltas=[None, delta])
+        )
+
     return PorPaisDetailPDFPayload(
         header=build_pdf_header(
             f"Detalle por País - {detail.country}",
@@ -668,9 +800,19 @@ async def build_por_pais_detail_pdf_payload(
                 value=format_integer(other_total),
                 **_kw(other_total, comp_other),
             ),
+            PDFKpiItem(
+                label="Libros",
+                value=format_integer(detail.total_books),
+                **_kw(detail.total_books, detail.comparison_total_books),
+            ),
+            PDFKpiItem(
+                label="Cursos",
+                value=format_integer(detail.total_courses),
+                **_kw(detail.total_courses, detail.comparison_total_courses),
+            ),
         ],
         detail_table=PDFTable(
-            headers=["Examen", "Cantidad"],
+            headers=["Examen / Producto", "Cantidad"],
             rows=detail_rows,
             column_widths=[4, 2],
         ),

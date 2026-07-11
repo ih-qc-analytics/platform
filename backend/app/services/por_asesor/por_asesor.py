@@ -38,10 +38,11 @@ from app.services.exports.pdf_helpers import (
 )
 from app.services.por_asesor.product_grouping import EXAM_CATEGORY_ORDER
 from app.services.por_asesor.repository import (
+    fetch_books_courses_presence_rows,
     fetch_detail_exam_breakdown_rows,
     fetch_paginated_summary_rows,
     fetch_school_allocated_revenue_metric_rows,
-    fetch_school_exam_metric_rows,
+    fetch_school_product_metric_rows,
     fetch_school_presence_rows,
     fetch_summary_allocated_revenue_rows_by_seller_ids,
     fetch_summary_exam_breakdown_rows_by_seller_ids,
@@ -58,9 +59,17 @@ from app.services.utils.report_currency import line_paid_total_column, payment_a
 ASESOR_SUMMARY_COLUMNS = [
     ExcelColumn("seller_name", "Seller"),
     *[ExcelColumn(category, category) for category in EXAM_CATEGORY_ORDER],
+    ExcelColumn("total_books", "Libros"),
+    ExcelColumn("total_courses", "Cursos"),
+    ExcelColumn("exam_revenue", "Ingreso Exámenes"),
+    ExcelColumn("book_revenue", "Ingreso Libros"),
+    ExcelColumn("course_revenue", "Ingreso Cursos"),
     ExcelColumn("ganados", "Ganados"),
     ExcelColumn("perdidos", "Perdidos"),
     ExcelColumn("mantenidos", "Mantenidos"),
+    ExcelColumn("books_courses_ganados", "L+C Ganados"),
+    ExcelColumn("books_courses_perdidos", "L+C Perdidos"),
+    ExcelColumn("books_courses_mantenidos", "L+C Mantenidos"),
     ExcelColumn("uncategorized_revenue", "Uncategorized Revenue"),
     ExcelColumn("total_revenue", "Total Revenue"),
 ]
@@ -110,8 +119,13 @@ async def fetch_detail_aggregate_row(
                 await session.execute(
                     text(f"""
                 SELECT
-                    COALESCE(SUM(CASE WHEN product_type = 'exam' THEN quantity ELSE 0 END), 0) AS total_exams,
-                    COALESCE(SUM({paid_total}), 0) AS allocated_revenue
+                    COALESCE(SUM(CASE WHEN product_type = 'exam'   THEN quantity    ELSE 0 END), 0) AS total_exams,
+                    COALESCE(SUM(CASE WHEN product_type = 'book'   THEN quantity    ELSE 0 END), 0) AS total_books,
+                    COALESCE(SUM(CASE WHEN product_type = 'course' THEN quantity    ELSE 0 END), 0) AS total_courses,
+                    COALESCE(SUM({paid_total}), 0)                                                   AS allocated_revenue,
+                    COALESCE(SUM(CASE WHEN product_type = 'exam'   THEN {paid_total} ELSE 0 END), 0) AS exam_revenue,
+                    COALESCE(SUM(CASE WHEN product_type = 'book'   THEN {paid_total} ELSE 0 END), 0) AS book_revenue,
+                    COALESCE(SUM(CASE WHEN product_type = 'course' THEN {paid_total} ELSE 0 END), 0) AS course_revenue
                 FROM report_line_items
                 WHERE {line_where}
             """),
@@ -120,12 +134,21 @@ async def fetch_detail_aggregate_row(
             ).fetchone()
 
     payment_row, line_row = await asyncio.gather(fetch_payment_row(), fetch_line_row())
+    total_revenue = float((payment_row.total_revenue or 0) if payment_row else 0)
+    allocated_revenue = float((line_row.allocated_revenue or 0) if line_row else 0)
+    exam_revenue = float((line_row.exam_revenue or 0) if line_row else 0)
+    book_revenue = float((line_row.book_revenue or 0) if line_row else 0)
+    course_revenue = float((line_row.course_revenue or 0) if line_row else 0)
     return SimpleNamespace(
         total_schools=int((payment_row.total_schools or 0) if payment_row else 0),
-        total_revenue=float((payment_row.total_revenue or 0) if payment_row else 0),
+        total_revenue=total_revenue,
         total_exams=int((line_row.total_exams or 0) if line_row else 0),
-        uncategorized_revenue=float((payment_row.total_revenue or 0) if payment_row else 0)
-        - float((line_row.allocated_revenue or 0) if line_row else 0),
+        total_books=int((line_row.total_books or 0) if line_row else 0),
+        total_courses=int((line_row.total_courses or 0) if line_row else 0),
+        exam_revenue=exam_revenue,
+        book_revenue=book_revenue,
+        course_revenue=course_revenue,
+        uncategorized_revenue=total_revenue - allocated_revenue,
     )
 
 
@@ -185,7 +208,7 @@ def unique_sorted_values(rows, field: str) -> list[str]:
 
 
 def empty_status() -> BusinessStatusDetail:
-    return BusinessStatusDetail(schools=0, exams=0, revenue=0.0)
+    return BusinessStatusDetail(schools=0, exams=0, books=0, courses=0, revenue=0.0)
 
 
 def build_status_map(
@@ -202,6 +225,10 @@ def build_status_map(
     comparison_allocated_metrics: dict[tuple[int, int], float] = {}
     current_exam_metrics: dict[tuple[int, int], int] = {}
     comparison_exam_metrics: dict[tuple[int, int], int] = {}
+    current_book_metrics: dict[tuple[int, int], int] = {}
+    comparison_book_metrics: dict[tuple[int, int], int] = {}
+    current_course_metrics: dict[tuple[int, int], int] = {}
+    comparison_course_metrics: dict[tuple[int, int], int] = {}
 
     for row in current_rows:
         current_by_seller[int(row.seller_id)].add(int(row.lead_id))
@@ -214,9 +241,15 @@ def build_status_map(
             row.revenue or 0
         )
     for row in current_exam_metric_rows:
-        current_exam_metrics[(int(row.seller_id), int(row.lead_id))] = int(row.exams or 0)
+        key = (int(row.seller_id), int(row.lead_id))
+        current_exam_metrics[key] = int(row.exams or 0)
+        current_book_metrics[key] = int(row.books or 0)
+        current_course_metrics[key] = int(row.courses or 0)
     for row in comparison_exam_metric_rows:
-        comparison_exam_metrics[(int(row.seller_id), int(row.lead_id))] = int(row.exams or 0)
+        key = (int(row.seller_id), int(row.lead_id))
+        comparison_exam_metrics[key] = int(row.exams or 0)
+        comparison_book_metrics[key] = int(row.books or 0)
+        comparison_course_metrics[key] = int(row.courses or 0)
 
     status_map: dict[int, dict[str, BusinessStatusDetail]] = {}
     for seller_id in set(current_by_seller) | set(comparison_by_seller):
@@ -229,13 +262,16 @@ def build_status_map(
         }
         seller_statuses: dict[str, BusinessStatusDetail] = {}
         for status, lead_ids in buckets.items():
-            exam_src = comparison_exam_metrics if status == "perdido" else current_exam_metrics
-            revenue_src = (
-                comparison_allocated_metrics if status == "perdido" else current_allocated_metrics
-            )
+            is_perdido = status == "perdido"
+            exam_src = comparison_exam_metrics if is_perdido else current_exam_metrics
+            book_src = comparison_book_metrics if is_perdido else current_book_metrics
+            course_src = comparison_course_metrics if is_perdido else current_course_metrics
+            revenue_src = comparison_allocated_metrics if is_perdido else current_allocated_metrics
             seller_statuses[status] = BusinessStatusDetail(
                 schools=len(lead_ids),
                 exams=sum(exam_src.get((seller_id, lead_id), 0) for lead_id in lead_ids),
+                books=sum(book_src.get((seller_id, lead_id), 0) for lead_id in lead_ids),
+                courses=sum(course_src.get((seller_id, lead_id), 0) for lead_id in lead_ids),
                 revenue=sum(revenue_src.get((seller_id, lead_id), 0.0) for lead_id in lead_ids),
             )
         status_map[seller_id] = seller_statuses
@@ -249,16 +285,29 @@ async def fetch_summary_status_counts(
 ) -> dict[int, dict[str, int]]:
     if not seller_ids:
         return {}
-    current_rows, comparison_rows = await asyncio.gather(
+    (
+        current_rows,
+        comparison_rows,
+        current_bc_rows,
+        comparison_bc_rows,
+    ) = await asyncio.gather(
         fetch_school_presence_rows(current_filters),
         fetch_school_presence_rows(comparison_filters),
+        fetch_books_courses_presence_rows(current_filters),
+        fetch_books_courses_presence_rows(comparison_filters),
     )
     current_by_seller: dict[int, set[int]] = defaultdict(set)
     comparison_by_seller: dict[int, set[int]] = defaultdict(set)
+    current_bc_by_seller: dict[int, set[int]] = defaultdict(set)
+    comparison_bc_by_seller: dict[int, set[int]] = defaultdict(set)
     for row in current_rows:
         current_by_seller[int(row.seller_id)].add(int(row.lead_id))
     for row in comparison_rows:
         comparison_by_seller[int(row.seller_id)].add(int(row.lead_id))
+    for row in current_bc_rows:
+        current_bc_by_seller[int(row.seller_id)].add(int(row.lead_id))
+    for row in comparison_bc_rows:
+        comparison_bc_by_seller[int(row.seller_id)].add(int(row.lead_id))
     return {
         seller_id: {
             "ganado": len(
@@ -270,6 +319,18 @@ async def fetch_summary_status_counts(
             "mantenido": len(
                 current_by_seller.get(seller_id, set()) & comparison_by_seller.get(seller_id, set())
             ),
+            "bc_ganado": len(
+                current_bc_by_seller.get(seller_id, set())
+                - comparison_bc_by_seller.get(seller_id, set())
+            ),
+            "bc_perdido": len(
+                comparison_bc_by_seller.get(seller_id, set())
+                - current_bc_by_seller.get(seller_id, set())
+            ),
+            "bc_mantenido": len(
+                current_bc_by_seller.get(seller_id, set())
+                & comparison_bc_by_seller.get(seller_id, set())
+            ),
         }
         for seller_id in seller_ids
     }
@@ -279,27 +340,53 @@ def build_asesor_report_base(
     summary_rows,
     exam_breakdowns: dict[int, dict[str, int]],
     status_counts: dict[int, dict[str, int]],
-    allocated_by_seller: dict[int, float],
+    allocated_rows,
     *,
     next_cursor: str | None,
     has_more: bool,
 ) -> AsesorReportBase:
-    rows = [
-        AsesorRow(
-            seller_id=int(row.seller_id),
-            seller_name=row.seller_name,
-            exam_breakdown=exam_breakdowns.get(
-                int(row.seller_id), fill_summary_exam_categories({})
-            ),
-            ganados=int(status_counts.get(int(row.seller_id), {}).get("ganado", 0)),
-            perdidos=int(status_counts.get(int(row.seller_id), {}).get("perdido", 0)),
-            mantenidos=int(status_counts.get(int(row.seller_id), {}).get("mantenido", 0)),
-            total_revenue=float(row.total_revenue or 0),
-            uncategorized_revenue=float(row.total_revenue or 0)
-            - allocated_by_seller.get(int(row.seller_id), 0.0),
+    allocated_rev_by_seller: dict[int, float] = {}
+    exam_rev_by_seller: dict[int, float] = {}
+    book_rev_by_seller: dict[int, float] = {}
+    course_rev_by_seller: dict[int, float] = {}
+    books_by_seller: dict[int, int] = {}
+    courses_by_seller: dict[int, int] = {}
+    for ar in allocated_rows:
+        sid = int(ar.seller_id)
+        allocated_rev_by_seller[sid] = float(getattr(ar, "allocated_revenue", 0) or 0)
+        exam_rev_by_seller[sid] = float(getattr(ar, "exam_revenue", 0) or 0)
+        book_rev_by_seller[sid] = float(getattr(ar, "book_revenue", 0) or 0)
+        course_rev_by_seller[sid] = float(getattr(ar, "course_revenue", 0) or 0)
+        books_by_seller[sid] = int(getattr(ar, "total_books", 0) or 0)
+        courses_by_seller[sid] = int(getattr(ar, "total_courses", 0) or 0)
+
+    rows = []
+    for row in summary_rows:
+        sid = int(row.seller_id)
+        total_revenue = float(row.total_revenue or 0)
+        exam_rev = exam_rev_by_seller.get(sid, 0.0)
+        book_rev = book_rev_by_seller.get(sid, 0.0)
+        course_rev = course_rev_by_seller.get(sid, 0.0)
+        rows.append(
+            AsesorRow(
+                seller_id=sid,
+                seller_name=row.seller_name,
+                exam_breakdown=exam_breakdowns.get(sid, fill_summary_exam_categories({})),
+                ganados=int(status_counts.get(sid, {}).get("ganado", 0)),
+                perdidos=int(status_counts.get(sid, {}).get("perdido", 0)),
+                mantenidos=int(status_counts.get(sid, {}).get("mantenido", 0)),
+                total_revenue=total_revenue,
+                uncategorized_revenue=total_revenue - allocated_rev_by_seller.get(sid, 0.0),
+                total_books=books_by_seller.get(sid, 0),
+                total_courses=courses_by_seller.get(sid, 0),
+                exam_revenue=exam_rev,
+                book_revenue=book_rev,
+                course_revenue=course_rev,
+                books_courses_ganados=int(status_counts.get(sid, {}).get("bc_ganado", 0)),
+                books_courses_perdidos=int(status_counts.get(sid, {}).get("bc_perdido", 0)),
+                books_courses_mantenidos=int(status_counts.get(sid, {}).get("bc_mantenido", 0)),
+            )
         )
-        for row in summary_rows
-    ]
     return AsesorReportBase(rows=rows, next_cursor=next_cursor, has_more=has_more)
 
 
@@ -326,6 +413,10 @@ def build_asesor_detail_base(
         ganados=status_map.get("ganado", empty_status()),
         perdidos=status_map.get("perdido", empty_status()),
         mantenidos=status_map.get("mantenido", empty_status()),
+        total_books=int((aggregate_row.total_books or 0) if aggregate_row else 0),
+        total_courses=int((aggregate_row.total_courses or 0) if aggregate_row else 0),
+        book_revenue=float((aggregate_row.book_revenue or 0) if aggregate_row else 0),
+        course_revenue=float((aggregate_row.course_revenue or 0) if aggregate_row else 0),
     )
 
 
@@ -405,7 +496,7 @@ async def _get_asesor_report_base(
         summary_rows,
         map_summary_exam_breakdowns(breakdown_rows),
         status_counts,
-        {int(row.seller_id): float(row.allocated_revenue or 0) for row in allocated_rows},
+        allocated_rows,
         next_cursor=next_cursor,
         has_more=has_more,
     )
@@ -466,10 +557,7 @@ async def getAsesorReport(
         comparison_summary_rows,
         map_summary_exam_breakdowns(comparison_breakdown_rows),
         comparison_status_counts,
-        {
-            int(row.seller_id): float(row.allocated_revenue or 0)
-            for row in comparison_allocated_rows
-        },
+        comparison_allocated_rows,
         next_cursor=None,
         has_more=False,
     )
@@ -514,8 +602,8 @@ async def _get_asesor_detail_base(
         fetch_school_allocated_revenue_metric_rows(
             comparison_filters, seller_id=seller_id, base_currency=base_currency
         ),
-        fetch_school_exam_metric_rows(filters, seller_id=seller_id),
-        fetch_school_exam_metric_rows(comparison_filters, seller_id=seller_id),
+        fetch_school_product_metric_rows(filters, seller_id=seller_id),
+        fetch_school_product_metric_rows(comparison_filters, seller_id=seller_id),
     )
     status_map = build_status_map(
         current_presence,
@@ -634,7 +722,7 @@ async def getAllAsesorReportRows(
         comp_summary_rows,
         map_summary_exam_breakdowns(comp_breakdown_rows),
         comp_status_counts,
-        {int(r.seller_id): float(r.allocated_revenue or 0) for r in comp_allocated_rows},
+        comp_allocated_rows,
         next_cursor=None,
         has_more=False,
     )
@@ -695,6 +783,11 @@ def build_asesor_export_worksheets(
             "ganados": row.ganados,
             "perdidos": row.perdidos,
             "mantenidos": row.mantenidos,
+            "total_books": row.total_books,
+            "total_courses": row.total_courses,
+            "exam_revenue": row.exam_revenue,
+            "book_revenue": row.book_revenue,
+            "course_revenue": row.course_revenue,
             "uncategorized_revenue": row.uncategorized_revenue,
             "total_revenue": row.total_revenue,
         }
@@ -712,6 +805,10 @@ def build_asesor_export_worksheets(
             "cities": ", ".join(detail.cities),
             "total_schools": detail.total_schools,
             "total_exams": detail.total_exams,
+            "total_books": detail.total_books,
+            "total_courses": detail.total_courses,
+            "book_revenue": detail.book_revenue,
+            "course_revenue": detail.course_revenue,
             "uncategorized_revenue": detail.uncategorized_revenue,
             "total_revenue": detail.total_revenue,
             "ganados_schools": detail.ganados.schools,
@@ -734,19 +831,9 @@ def build_asesor_export_worksheets(
         detail_rows.append(detail_row)
 
     summary_columns = [
-        ExcelColumn("seller_name", "Seller"),
-        *[ExcelColumn(category, category) for category in EXAM_CATEGORY_ORDER],
-        *(
-            [
-                ExcelColumn("ganados", "Ganados"),
-                ExcelColumn("perdidos", "Perdidos"),
-                ExcelColumn("mantenidos", "Mantenidos"),
-            ]
-            if report.comparison
-            else []
-        ),
-        ExcelColumn("uncategorized_revenue", "Uncategorized Revenue"),
-        ExcelColumn("total_revenue", "Total Revenue"),
+        c
+        for c in ASESOR_SUMMARY_COLUMNS
+        if c.header not in ("Ganados", "Perdidos", "Mantenidos") or report.comparison
     ]
 
     detail_columns = [
@@ -757,6 +844,10 @@ def build_asesor_export_worksheets(
         ExcelColumn("cities", "Cities"),
         ExcelColumn("total_schools", "Total Schools"),
         ExcelColumn("total_exams", "Total Exams"),
+        ExcelColumn("total_books", "Total Libros"),
+        ExcelColumn("total_courses", "Total Cursos"),
+        ExcelColumn("book_revenue", "Ingreso Libros"),
+        ExcelColumn("course_revenue", "Ingreso Cursos"),
         ExcelColumn("uncategorized_revenue", "Uncategorized Revenue"),
         ExcelColumn("total_revenue", "Total Revenue"),
     ]
@@ -864,10 +955,11 @@ async def build_por_asesor_pdf_payload(
     )
 
     has_comparison = report.comparison is not None
-    # Column count: 7 without ganados/perdidos/mantenidos, 10 with
-    n_cols = 10 if has_comparison else 7
-    uncategorized_idx = 8 if has_comparison else 5
-    revenue_idx = 9 if has_comparison else 6
+    # Columns: Asesor(0) Cambridge(1) IELTS(2) MET(3) Otros(4) Libros(5) Cursos(6)
+    #           [+Ganados(7) Perdidos(8) Mantenidos(9)] Sin Cat(?) Valor Total(?)
+    n_cols = 12 if has_comparison else 9
+    uncategorized_idx = 10 if has_comparison else 7
+    revenue_idx = 11 if has_comparison else 8
 
     # Comparison totals for KPI growth
     comp_rows = report.comparison.data.rows if has_comparison else []
@@ -914,6 +1006,8 @@ async def build_por_asesor_pdf_payload(
             deltas[2] = format_delta(ielts, comp_ielts, format_integer)
             deltas[3] = format_delta(met, comp_met, format_integer)
             deltas[4] = format_delta(otros, comp_otros, format_integer)
+            deltas[5] = format_delta(row.total_books, comp.total_books, format_integer)
+            deltas[6] = format_delta(row.total_courses, comp.total_courses, format_integer)
             deltas[uncategorized_idx] = format_delta(
                 row.uncategorized_revenue,
                 comp.uncategorized_revenue,
@@ -930,6 +1024,8 @@ async def build_por_asesor_pdf_payload(
             format_integer(ielts),
             format_integer(met),
             format_integer(otros),
+            format_integer(row.total_books),
+            format_integer(row.total_courses),
         ]
         if has_comparison:
             cells += [
@@ -953,8 +1049,8 @@ async def build_por_asesor_pdf_payload(
         else []
     )
 
-    table_headers = ["Asesor", "Cambridge", "IELTS", "MET", "Otros"]
-    table_widths = [4, 2, 2, 2, 2]
+    table_headers = ["Asesor", "Cambridge", "IELTS", "MET", "Otros", "Libros", "Cursos"]
+    table_widths = [4, 2, 2, 2, 2, 2, 2]
     if has_comparison:
         table_headers += ["Ganados", "Perdidos", "Mantenidos"]
         table_widths += [2, 2, 2]
@@ -1046,6 +1142,43 @@ async def build_asesor_detail_pdf_payload(
             )
         )
 
+    # Add Libros and Cursos as rows after exam categories
+    for product_label, count, revenue, comp_count, comp_revenue in [
+        (
+            "Libros",
+            detail.total_books,
+            detail.book_revenue,
+            comp_detail.total_books if comp_detail else None,
+            comp_detail.book_revenue if comp_detail else None,
+        ),
+        (
+            "Cursos",
+            detail.total_courses,
+            detail.course_revenue,
+            comp_detail.total_courses if comp_detail else None,
+            comp_detail.course_revenue if comp_detail else None,
+        ),
+    ]:
+        deltas: list = [
+            None,
+            format_delta(count, comp_count, format_integer) if comp_count is not None else None,
+            None,
+            format_delta(revenue, comp_revenue, lambda v: format_currency(v, base_currency))
+            if comp_revenue is not None
+            else None,
+        ]
+        category_rows.append(
+            PDFTableRow(
+                cells=[
+                    product_label,
+                    format_integer(count),
+                    "-",
+                    format_currency(revenue, base_currency),
+                ],
+                deltas=deltas,
+            )
+        )
+
     status_rows = []
     for label, curr_status in [
         ("Ganados", detail.ganados),
@@ -1080,6 +1213,16 @@ async def build_asesor_detail_pdf_payload(
                 label="Total Exámenes",
                 value=format_integer(detail.total_exams),
                 **_kw(detail.total_exams, comp_detail.total_exams if comp_detail else None),
+            ),
+            PDFKpiItem(
+                label="Libros",
+                value=format_integer(detail.total_books),
+                **_kw(detail.total_books, comp_detail.total_books if comp_detail else None),
+            ),
+            PDFKpiItem(
+                label="Cursos",
+                value=format_integer(detail.total_courses),
+                **_kw(detail.total_courses, comp_detail.total_courses if comp_detail else None),
             ),
             PDFKpiItem(
                 label="Sin Categorizar",

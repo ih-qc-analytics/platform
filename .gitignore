@@ -19,5 +19,6 @@ frontend/.env
 
 # misc
 .DS_Store
+backend/tools/output/
 
 .claude/

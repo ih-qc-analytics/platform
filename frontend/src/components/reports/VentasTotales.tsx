@@ -259,10 +259,38 @@ export default function VentasTotales() {
                                     comparisonData={data.comparison?.data.geo_points}
                                 />
                             </div>
+                            <GlossaryNote />
                         </>
                     ) : null}
                 </CardContent>
             </Card>
+        </div>
+    )
+}
+
+function GlossaryNote() {
+    return (
+        <div className="rounded-xl border border-slate-200 bg-slate-50 px-5 py-4 text-xs text-slate-500 space-y-1">
+            <p className="font-semibold text-slate-600 mb-2">Notas</p>
+            <p>
+                <span className="font-medium text-slate-700">Sin categorizar:</span> Pagos registrados sin ningún
+                detalle de producto en el sistema — no existen líneas de venta asociadas. A diferencia de "Otros", aquí
+                no hay información de qué se vendió. Se incluyen en el ingreso total pero no pueden aparecer en ningún
+                desglose por tipo.
+            </p>
+            <p>
+                <span className="font-medium text-slate-700">Ingreso sitio desconocido:</span> Pagos registrados sin un
+                sitio/país asignado. Se excluyen de los reportes por país y asesor, pero sí se incluyen en el total
+                global.
+            </p>
+            <p>
+                <span className="font-medium text-slate-700">Ingreso esperado:</span> Suma de los montos facturados
+                (independientemente de si se han cobrado). Refleja el valor contractual acordado con los colegios.
+            </p>
+            <p>
+                <span className="font-medium text-slate-700">Costo esperado:</span> Costo estimado asociado a los
+                exámenes registrados, calculado a partir de las tarifas de costo por tipo de examen.
+            </p>
         </div>
     )
 }

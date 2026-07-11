@@ -118,6 +118,14 @@ class AsesorRow(BaseModel):
     mantenidos: int
     total_revenue: float
     uncategorized_revenue: float
+    total_books: int = 0
+    total_courses: int = 0
+    exam_revenue: float = 0.0
+    book_revenue: float = 0.0
+    course_revenue: float = 0.0
+    books_courses_ganados: int = 0
+    books_courses_perdidos: int = 0
+    books_courses_mantenidos: int = 0
 
 
 class AsesorReportBase(BaseModel):
@@ -147,6 +155,8 @@ class ExamBrandDetail(BaseModel):
 class BusinessStatusDetail(BaseModel):
     schools: int
     exams: int
+    books: int = 0
+    courses: int = 0
     revenue: float
 
 
@@ -164,6 +174,10 @@ class AsesorDetailBase(BaseModel):
     ganados: BusinessStatusDetail
     perdidos: BusinessStatusDetail
     mantenidos: BusinessStatusDetail
+    total_books: int = 0
+    total_courses: int = 0
+    book_revenue: float = 0.0
+    course_revenue: float = 0.0
 
 
 class AsesorDetailComparison(BaseModel):
@@ -219,6 +233,11 @@ class PorPaisSummaryRow(BaseModel):
     michigan: int
     tea: int
     other: int
+    total_books: int = 0
+    total_courses: int = 0
+    exam_revenue: float = 0.0
+    book_revenue: float = 0.0
+    course_revenue: float = 0.0
 
 
 class PorPaisStatusRow(BaseModel):
@@ -229,6 +248,9 @@ class PorPaisStatusRow(BaseModel):
     exams_ganados: int
     exams_perdidos: int
     exams_mantenidos: int
+    books_courses_ganados: int = 0
+    books_courses_perdidos: int = 0
+    books_courses_mantenidos: int = 0
 
 
 class PorPaisReportBase(BaseModel):
@@ -252,3 +274,13 @@ class PorPaisDetailResponse(BaseModel):
     country: str
     exam_counts: dict[str, int]
     comparison_exam_counts: dict[str, int] | None = None
+    total_books: int = 0
+    total_courses: int = 0
+    book_revenue: float = 0.0
+    course_revenue: float = 0.0
+    comparison_total_books: int | None = None
+    comparison_total_courses: int | None = None
+    comparison_book_revenue: float | None = None
+    comparison_course_revenue: float | None = None
+    exam_revenue: float = 0.0
+    comparison_exam_revenue: float | None = None
