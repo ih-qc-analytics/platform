@@ -143,7 +143,10 @@ export default function DetallePorAsesor() {
                         <p className="text-sm font-medium text-slate-500">{rows.length} registros encontrados</p>
                     </div>
                     <div className="max-w-xl">
-                        <label htmlFor="detalle-asesor-search" className="mb-2 block text-sm font-medium text-slate-700">
+                        <label
+                            htmlFor="detalle-asesor-search"
+                            className="mb-2 block text-sm font-medium text-slate-700"
+                        >
                             Buscar asesor o escuela
                         </label>
                         <div className="relative">

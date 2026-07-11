@@ -126,7 +126,9 @@ export default function AppTopBar() {
                                 onClick={() => setDraftCurrency(currency)}
                             >
                                 <p className="text-sm font-semibold">{currency}</p>
-                                <p className={`mt-1 text-xs ${draftCurrency === currency ? "text-white/75" : "text-slate-500"}`}>
+                                <p
+                                    className={`mt-1 text-xs ${draftCurrency === currency ? "text-white/75" : "text-slate-500"}`}
+                                >
                                     {currency === "MXN" ? "Pesos mexicanos" : "Dólares estadounidenses"}
                                 </p>
                             </button>
