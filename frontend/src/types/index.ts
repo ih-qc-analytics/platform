@@ -191,6 +191,10 @@ export type AsesorRow = {
     books_courses_ganados: number
     books_courses_perdidos: number
     books_courses_mantenidos: number
+    allocated_revenue: number
+    expected_revenue: number
+    expected_cost: number
+    profit_margin: number
 }
 
 export type AsesorReportBase = {
@@ -233,6 +237,10 @@ export type AsesorDetailBase = {
     total_courses: number
     book_revenue: number
     course_revenue: number
+    allocated_revenue: number
+    expected_revenue: number
+    expected_cost: number
+    profit_margin: number
 }
 
 export type AsesorDetailResponse = ComparedResponse<AsesorDetailBase>

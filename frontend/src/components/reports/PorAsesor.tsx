@@ -174,6 +174,18 @@ export default function PorAsesor() {
                                             <TableHeadCell className="min-w-36 whitespace-nowrap text-right">
                                                 Valor Total
                                             </TableHeadCell>
+                                            <TableHeadCell className="min-w-36 whitespace-nowrap text-right">
+                                                Ing. Asignado
+                                            </TableHeadCell>
+                                            <TableHeadCell className="min-w-36 whitespace-nowrap text-right">
+                                                Ing. Esperado
+                                            </TableHeadCell>
+                                            <TableHeadCell className="min-w-32 whitespace-nowrap text-right">
+                                                Costo Esperado
+                                            </TableHeadCell>
+                                            <TableHeadCell className="min-w-24 whitespace-nowrap text-right">
+                                                Margen
+                                            </TableHeadCell>
                                             <TableHeadCell className="w-10" />
                                         </TableRow>
                                     </TableHeader>
@@ -283,6 +295,34 @@ export default function PorAsesor() {
                                                         emphasize
                                                         showComparison={showComparisonValues}
                                                     />
+                                                    <TableMetricCell
+                                                        value={row.allocated_revenue}
+                                                        previousValue={previousRow?.allocated_revenue}
+                                                        format={formatCurrency}
+                                                        align="right"
+                                                        showComparison={showComparisonValues}
+                                                    />
+                                                    <TableMetricCell
+                                                        value={row.expected_revenue}
+                                                        previousValue={previousRow?.expected_revenue}
+                                                        format={formatCurrency}
+                                                        align="right"
+                                                        showComparison={showComparisonValues}
+                                                    />
+                                                    <TableMetricCell
+                                                        value={row.expected_cost}
+                                                        previousValue={previousRow?.expected_cost}
+                                                        format={formatCurrency}
+                                                        align="right"
+                                                        showComparison={showComparisonValues}
+                                                    />
+                                                    <TableMetricCell
+                                                        value={row.profit_margin}
+                                                        previousValue={previousRow?.profit_margin}
+                                                        format={(v) => `${v.toFixed(1)}%`}
+                                                        align="right"
+                                                        showComparison={showComparisonValues}
+                                                    />
                                                     <TableBodyCell className="w-12 text-right text-slate-400">
                                                         <ChevronRight className="ml-auto size-5" />
                                                     </TableBodyCell>
@@ -329,6 +369,21 @@ function AsesorGlossaryNote() {
                 ningún detalle de producto en el sistema — no existen líneas de venta asociadas. No es que el producto
                 sea desconocido: es que no hay registro de qué se vendió. Se suman al ingreso total pero no aparecen en
                 ningún desglose por tipo.
+            </p>
+            <p>
+                <span className="font-medium text-slate-700">Ingreso Asignado:</span> Suma de los pagos recibidos que
+                tienen detalle de producto en el sistema. Es un subconjunto del Valor Total — la diferencia entre ambos
+                es el ingreso sin categorizar.
+            </p>
+            <p>
+                <span className="font-medium text-slate-700">Ingreso Esperado:</span> Suma de los montos facturados
+                (independientemente de si se han cobrado). Refleja el valor contractual acordado con los colegios. La
+                diferencia entre el Ingreso Esperado y el Ingreso Asignado representa pagos pendientes de cobro.
+            </p>
+            <p>
+                <span className="font-medium text-slate-700">Margen de Utilidad:</span> Calculado como (Ingreso Asignado
+                − Costo Esperado) / Ingreso Asignado × 100. Se calcula sobre el ingreso asignado (no el total) porque el
+                costo esperado solo cubre los productos con detalle de línea.
             </p>
         </div>
     )

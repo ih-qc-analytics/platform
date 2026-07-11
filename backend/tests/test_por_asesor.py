@@ -50,6 +50,10 @@ async def test_por_asesor_2025_summary_uses_allocated_exam_breakdowns_and_paymen
         "books_courses_ganados": 1,
         "books_courses_perdidos": 0,
         "books_courses_mantenidos": 0,
+        "allocated_revenue": 7100.0,
+        "expected_revenue": 7100.0,
+        "expected_cost": 3450.0,
+        "profit_margin": pytest.approx(51.408, abs=0.01),
     }
     assert by_name["Ana Garcia"].model_dump() == {
         "seller_id": 1,
@@ -75,6 +79,10 @@ async def test_por_asesor_2025_summary_uses_allocated_exam_breakdowns_and_paymen
         "books_courses_ganados": 1,
         "books_courses_perdidos": 0,
         "books_courses_mantenidos": 0,
+        "allocated_revenue": 4400.0,
+        "expected_revenue": 4400.0,
+        "expected_cost": 2150.0,
+        "profit_margin": pytest.approx(51.136, abs=0.01),
     }
 
 
@@ -169,6 +177,10 @@ async def test_por_asesor_detail_for_ana_matches_expected_paid_geo_breakdown_and
         "total_courses": 0,
         "book_revenue": 300.0,
         "course_revenue": 0.0,
+        "allocated_revenue": 4400.0,
+        "expected_revenue": 4400.0,
+        "expected_cost": 2150.0,
+        "profit_margin": pytest.approx(51.136, abs=0.01),
     }
 
 
@@ -205,6 +217,10 @@ async def test_por_asesor_detail_for_carlos_matches_expected_paid_geo_breakdown_
         "total_courses": 1,
         "book_revenue": 0.0,
         "course_revenue": 600.0,
+        "allocated_revenue": 7100.0,
+        "expected_revenue": 7100.0,
+        "expected_cost": 3450.0,
+        "profit_margin": pytest.approx(51.408, abs=0.01),
     }
 
 
@@ -329,3 +345,49 @@ async def test_por_asesor_detail_status_tiles_include_books_and_courses_counts(u
     )
     assert total_books_ana == ana.current.total_books  # 1
     assert total_courses_ana == ana.current.total_courses  # 0
+
+
+@pytest.mark.asyncio(loop_scope="session")
+async def test_por_asesor_summary_profit_margin_matches_formula(ui_dev_reporting_db):
+    result = await getAsesorReport(AsesorFilters(date_from="2025-01-01", date_to="2025-12-31"))
+    by_name = {row.seller_name: row for row in result.current.rows}
+
+    # Margin = (allocated_revenue - cost) / allocated_revenue * 100
+    for row in result.current.rows:
+        if row.allocated_revenue > 0:
+            expected = (row.allocated_revenue - row.expected_cost) / row.allocated_revenue * 100
+            assert row.profit_margin == pytest.approx(expected, abs=0.001)
+        else:
+            assert row.profit_margin == 0.0
+
+    # Concrete values from seed data
+    assert by_name["Carlos Rodriguez"].expected_cost == 3450.0
+    assert by_name["Carlos Rodriguez"].profit_margin == pytest.approx(
+        (7100.0 - 3450.0) / 7100.0 * 100, abs=0.01
+    )
+    assert by_name["Ana Garcia"].expected_cost == 2150.0
+    assert by_name["Ana Garcia"].profit_margin == pytest.approx(
+        (4400.0 - 2150.0) / 4400.0 * 100, abs=0.01
+    )
+
+
+@pytest.mark.asyncio(loop_scope="session")
+async def test_por_asesor_detail_profit_margin_matches_formula(ui_dev_reporting_db):
+    result = await getAsesorDetail(1, AsesorFilters(date_from="2025-01-01", date_to="2025-12-31"))
+    detail = result.current
+
+    assert detail.expected_cost == 2150.0
+    assert detail.profit_margin == pytest.approx(
+        (detail.allocated_revenue - detail.expected_cost) / detail.allocated_revenue * 100,
+        abs=0.001,
+    )
+
+
+@pytest.mark.asyncio(loop_scope="session")
+async def test_por_asesor_detail_zero_revenue_yields_zero_margin(ui_dev_reporting_db):
+    # Miguel Torres has no activity in 2024 — total_revenue is 0
+    result = await getAsesorDetail(4, AsesorFilters(date_from="2024-01-01", date_to="2024-12-31"))
+
+    assert result.current.total_revenue == 0.0
+    assert result.current.expected_cost == 0.0
+    assert result.current.profit_margin == 0.0

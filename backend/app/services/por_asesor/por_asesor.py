@@ -35,6 +35,7 @@ from app.services.exports.pdf_helpers import (
     format_delta,
     format_growth,
     format_integer,
+    format_percent,
 )
 from app.services.por_asesor.product_grouping import EXAM_CATEGORY_ORDER
 from app.services.por_asesor.repository import (
@@ -54,7 +55,12 @@ from app.services.utils.date_utils import (
     percent_change,
     resolve_comparison_range,
 )
-from app.services.utils.report_currency import line_paid_total_column, payment_amount_column
+from app.services.utils.report_currency import (
+    line_expected_cost_column,
+    line_expected_total_column,
+    line_paid_total_column,
+    payment_amount_column,
+)
 
 ASESOR_SUMMARY_COLUMNS = [
     ExcelColumn("seller_name", "Seller"),
@@ -72,6 +78,10 @@ ASESOR_SUMMARY_COLUMNS = [
     ExcelColumn("books_courses_mantenidos", "L+C Mantenidos"),
     ExcelColumn("uncategorized_revenue", "Uncategorized Revenue"),
     ExcelColumn("total_revenue", "Total Revenue"),
+    ExcelColumn("allocated_revenue", "Ingreso Asignado"),
+    ExcelColumn("expected_revenue", "Ingreso Esperado"),
+    ExcelColumn("expected_cost", "Costo Esperado"),
+    ExcelColumn("profit_margin", "Margen (%)"),
 ]
 
 
@@ -97,6 +107,8 @@ async def fetch_detail_aggregate_row(
     )
     payment_amount = payment_amount_column(base_currency)
     paid_total = line_paid_total_column(base_currency)
+    expected_cost_col = line_expected_cost_column(base_currency)
+    expected_total_col = line_expected_total_column(base_currency)
 
     async def fetch_payment_row():
         async with ReportingSessionLocal() as session:
@@ -122,10 +134,12 @@ async def fetch_detail_aggregate_row(
                     COALESCE(SUM(CASE WHEN product_type = 'exam'   THEN quantity    ELSE 0 END), 0) AS total_exams,
                     COALESCE(SUM(CASE WHEN product_type = 'book'   THEN quantity    ELSE 0 END), 0) AS total_books,
                     COALESCE(SUM(CASE WHEN product_type = 'course' THEN quantity    ELSE 0 END), 0) AS total_courses,
-                    COALESCE(SUM({paid_total}), 0)                                                   AS allocated_revenue,
-                    COALESCE(SUM(CASE WHEN product_type = 'exam'   THEN {paid_total} ELSE 0 END), 0) AS exam_revenue,
-                    COALESCE(SUM(CASE WHEN product_type = 'book'   THEN {paid_total} ELSE 0 END), 0) AS book_revenue,
-                    COALESCE(SUM(CASE WHEN product_type = 'course' THEN {paid_total} ELSE 0 END), 0) AS course_revenue
+                    COALESCE(SUM({paid_total}), 0)                                                        AS allocated_revenue,
+                    COALESCE(SUM(CASE WHEN product_type = 'exam'   THEN {paid_total} ELSE 0 END), 0)      AS exam_revenue,
+                    COALESCE(SUM(CASE WHEN product_type = 'book'   THEN {paid_total} ELSE 0 END), 0)      AS book_revenue,
+                    COALESCE(SUM(CASE WHEN product_type = 'course' THEN {paid_total} ELSE 0 END), 0)      AS course_revenue,
+                    COALESCE(SUM({expected_cost_col}), 0)                                                 AS expected_cost,
+                    COALESCE(SUM({expected_total_col}), 0)                                                AS expected_revenue
                 FROM report_line_items
                 WHERE {line_where}
             """),
@@ -139,6 +153,8 @@ async def fetch_detail_aggregate_row(
     exam_revenue = float((line_row.exam_revenue or 0) if line_row else 0)
     book_revenue = float((line_row.book_revenue or 0) if line_row else 0)
     course_revenue = float((line_row.course_revenue or 0) if line_row else 0)
+    expected_cost = float((line_row.expected_cost or 0) if line_row else 0)
+    expected_revenue = float((line_row.expected_revenue or 0) if line_row else 0)
     return SimpleNamespace(
         total_schools=int((payment_row.total_schools or 0) if payment_row else 0),
         total_revenue=total_revenue,
@@ -149,6 +165,12 @@ async def fetch_detail_aggregate_row(
         book_revenue=book_revenue,
         course_revenue=course_revenue,
         uncategorized_revenue=total_revenue - allocated_revenue,
+        allocated_revenue=allocated_revenue,
+        expected_revenue=expected_revenue,
+        expected_cost=expected_cost,
+        profit_margin=((allocated_revenue - expected_cost) / allocated_revenue * 100)
+        if allocated_revenue > 0
+        else 0.0,
     )
 
 
@@ -351,6 +373,8 @@ def build_asesor_report_base(
     course_rev_by_seller: dict[int, float] = {}
     books_by_seller: dict[int, int] = {}
     courses_by_seller: dict[int, int] = {}
+    expected_cost_by_seller: dict[int, float] = {}
+    expected_rev_by_seller: dict[int, float] = {}
     for ar in allocated_rows:
         sid = int(ar.seller_id)
         allocated_rev_by_seller[sid] = float(getattr(ar, "allocated_revenue", 0) or 0)
@@ -359,6 +383,8 @@ def build_asesor_report_base(
         course_rev_by_seller[sid] = float(getattr(ar, "course_revenue", 0) or 0)
         books_by_seller[sid] = int(getattr(ar, "total_books", 0) or 0)
         courses_by_seller[sid] = int(getattr(ar, "total_courses", 0) or 0)
+        expected_cost_by_seller[sid] = float(getattr(ar, "expected_cost", 0) or 0)
+        expected_rev_by_seller[sid] = float(getattr(ar, "expected_revenue", 0) or 0)
 
     rows = []
     for row in summary_rows:
@@ -367,6 +393,8 @@ def build_asesor_report_base(
         exam_rev = exam_rev_by_seller.get(sid, 0.0)
         book_rev = book_rev_by_seller.get(sid, 0.0)
         course_rev = course_rev_by_seller.get(sid, 0.0)
+        allocated_rev = allocated_rev_by_seller.get(sid, 0.0)
+        expected_cost = expected_cost_by_seller.get(sid, 0.0)
         rows.append(
             AsesorRow(
                 seller_id=sid,
@@ -376,7 +404,9 @@ def build_asesor_report_base(
                 perdidos=int(status_counts.get(sid, {}).get("perdido", 0)),
                 mantenidos=int(status_counts.get(sid, {}).get("mantenido", 0)),
                 total_revenue=total_revenue,
-                uncategorized_revenue=total_revenue - allocated_rev_by_seller.get(sid, 0.0),
+                uncategorized_revenue=total_revenue - allocated_rev,
+                allocated_revenue=allocated_rev,
+                expected_revenue=expected_rev_by_seller.get(sid, 0.0),
                 total_books=books_by_seller.get(sid, 0),
                 total_courses=courses_by_seller.get(sid, 0),
                 exam_revenue=exam_rev,
@@ -385,6 +415,10 @@ def build_asesor_report_base(
                 books_courses_ganados=int(status_counts.get(sid, {}).get("bc_ganado", 0)),
                 books_courses_perdidos=int(status_counts.get(sid, {}).get("bc_perdido", 0)),
                 books_courses_mantenidos=int(status_counts.get(sid, {}).get("bc_mantenido", 0)),
+                expected_cost=expected_cost,
+                profit_margin=((allocated_rev - expected_cost) / allocated_rev * 100)
+                if allocated_rev > 0
+                else 0.0,
             )
         )
     return AsesorReportBase(rows=rows, next_cursor=next_cursor, has_more=has_more)
@@ -417,6 +451,10 @@ def build_asesor_detail_base(
         total_courses=int((aggregate_row.total_courses or 0) if aggregate_row else 0),
         book_revenue=float((aggregate_row.book_revenue or 0) if aggregate_row else 0),
         course_revenue=float((aggregate_row.course_revenue or 0) if aggregate_row else 0),
+        allocated_revenue=float((aggregate_row.allocated_revenue or 0) if aggregate_row else 0),
+        expected_revenue=float((aggregate_row.expected_revenue or 0) if aggregate_row else 0),
+        expected_cost=float((aggregate_row.expected_cost or 0) if aggregate_row else 0),
+        profit_margin=float((aggregate_row.profit_margin or 0) if aggregate_row else 0),
     )
 
 
@@ -790,6 +828,10 @@ def build_asesor_export_worksheets(
             "course_revenue": row.course_revenue,
             "uncategorized_revenue": row.uncategorized_revenue,
             "total_revenue": row.total_revenue,
+            "allocated_revenue": row.allocated_revenue,
+            "expected_revenue": row.expected_revenue,
+            "expected_cost": row.expected_cost,
+            "profit_margin": row.profit_margin,
         }
         for cat in EXAM_CATEGORY_ORDER:
             summary_row[cat] = int(row.exam_breakdown.get(cat, 0) or 0)
@@ -811,6 +853,10 @@ def build_asesor_export_worksheets(
             "course_revenue": detail.course_revenue,
             "uncategorized_revenue": detail.uncategorized_revenue,
             "total_revenue": detail.total_revenue,
+            "allocated_revenue": detail.allocated_revenue,
+            "expected_revenue": detail.expected_revenue,
+            "expected_cost": detail.expected_cost,
+            "profit_margin": detail.profit_margin,
             "ganados_schools": detail.ganados.schools,
             "ganados_exams": detail.ganados.exams,
             "ganados_revenue": detail.ganados.revenue,
@@ -850,6 +896,10 @@ def build_asesor_export_worksheets(
         ExcelColumn("course_revenue", "Ingreso Cursos"),
         ExcelColumn("uncategorized_revenue", "Uncategorized Revenue"),
         ExcelColumn("total_revenue", "Total Revenue"),
+        ExcelColumn("allocated_revenue", "Ingreso Asignado"),
+        ExcelColumn("expected_revenue", "Ingreso Esperado"),
+        ExcelColumn("expected_cost", "Costo Esperado"),
+        ExcelColumn("profit_margin", "Margen (%)"),
     ]
     for _cat in EXAM_CATEGORY_ORDER:
         detail_columns.extend(
@@ -949,6 +999,12 @@ async def build_por_asesor_pdf_payload(
     total_ganados = sum(row.ganados for row in report.current.rows)
     total_perdidos = sum(row.perdidos for row in report.current.rows)
     total_mantenidos = sum(row.mantenidos for row in report.current.rows)
+    total_allocated = sum(row.allocated_revenue for row in report.current.rows)
+    total_expected = sum(row.expected_revenue for row in report.current.rows)
+    total_cost = sum(row.expected_cost for row in report.current.rows)
+    total_margin = (
+        ((total_allocated - total_cost) / total_allocated * 100) if total_allocated > 0 else 0.0
+    )
 
     comp_by_seller = (
         {r.seller_name: r for r in report.comparison.data.rows} if report.comparison else {}
@@ -956,10 +1012,14 @@ async def build_por_asesor_pdf_payload(
 
     has_comparison = report.comparison is not None
     # Columns: Asesor(0) Cambridge(1) IELTS(2) MET(3) Otros(4) Libros(5) Cursos(6)
-    #           [+Ganados(7) Perdidos(8) Mantenidos(9)] Sin Cat(?) Valor Total(?)
-    n_cols = 12 if has_comparison else 9
+    #           [+Ganados(7) Perdidos(8) Mantenidos(9)] Sin Cat(?) Valor Total(?) Costo Esp.(?) Margen(?)
+    n_cols = 16 if has_comparison else 13
     uncategorized_idx = 10 if has_comparison else 7
     revenue_idx = 11 if has_comparison else 8
+    allocated_idx = 12 if has_comparison else 9
+    expected_idx = 13 if has_comparison else 10
+    cost_idx = 14 if has_comparison else 11
+    # margin idx not needed for deltas (not computing percent-of-percent)
 
     # Comparison totals for KPI growth
     comp_rows = report.comparison.data.rows if has_comparison else []
@@ -971,6 +1031,9 @@ async def build_por_asesor_pdf_payload(
         sum(r.uncategorized_revenue for r in comp_rows) if has_comparison else None
     )
     comp_asesores = len(comp_rows) if has_comparison else None
+    comp_total_allocated = sum(r.allocated_revenue for r in comp_rows) if has_comparison else None
+    comp_total_expected = sum(r.expected_revenue for r in comp_rows) if has_comparison else None
+    comp_total_cost = sum(r.expected_cost for r in comp_rows) if has_comparison else None
 
     def _kw(curr: float, prev: float | None) -> dict:
         if prev is None:
@@ -1018,6 +1081,21 @@ async def build_por_asesor_pdf_payload(
                 comp.total_revenue,
                 lambda v: format_currency(v, base_currency),
             )
+            deltas[allocated_idx] = format_delta(
+                row.allocated_revenue,
+                comp.allocated_revenue,
+                lambda v: format_currency(v, base_currency),
+            )
+            deltas[expected_idx] = format_delta(
+                row.expected_revenue,
+                comp.expected_revenue,
+                lambda v: format_currency(v, base_currency),
+            )
+            deltas[cost_idx] = format_delta(
+                row.expected_cost,
+                comp.expected_cost,
+                lambda v: format_currency(v, base_currency),
+            )
         cells = [
             row.seller_name,
             format_integer(cambridge),
@@ -1036,6 +1114,10 @@ async def build_por_asesor_pdf_payload(
         cells += [
             format_currency(row.uncategorized_revenue, base_currency),
             format_currency(row.total_revenue, base_currency),
+            format_currency(row.allocated_revenue, base_currency),
+            format_currency(row.expected_revenue, base_currency),
+            format_currency(row.expected_cost, base_currency),
+            format_percent(row.profit_margin),
         ]
         table_rows.append(PDFTableRow(cells=cells, deltas=deltas))
 
@@ -1054,8 +1136,15 @@ async def build_por_asesor_pdf_payload(
     if has_comparison:
         table_headers += ["Ganados", "Perdidos", "Mantenidos"]
         table_widths += [2, 2, 2]
-    table_headers += ["Sin Categorizar", "Valor Total"]
-    table_widths += [3, 3]
+    table_headers += [
+        "Sin Categorizar",
+        "Valor Total",
+        "Ing. Asignado",
+        "Ing. Esperado",
+        "Costo Esp.",
+        "Margen",
+    ]
+    table_widths += [3, 3, 3, 3, 3, 2]
 
     return PorAsesorPDFPayload(
         header=build_pdf_header(
@@ -1085,6 +1174,25 @@ async def build_por_asesor_pdf_payload(
                 label="Valor Total",
                 value=format_currency(total_revenue, base_currency),
                 **_kw(total_revenue, comp_total_revenue),
+            ),
+            PDFKpiItem(
+                label="Ing. Asignado",
+                value=format_currency(total_allocated, base_currency),
+                **_kw(total_allocated, comp_total_allocated),
+            ),
+            PDFKpiItem(
+                label="Ing. Esperado",
+                value=format_currency(total_expected, base_currency),
+                **_kw(total_expected, comp_total_expected),
+            ),
+            PDFKpiItem(
+                label="Costo Esperado",
+                value=format_currency(total_cost, base_currency),
+                **_kw(total_cost, comp_total_cost),
+            ),
+            PDFKpiItem(
+                label="Margen de Utilidad",
+                value=format_percent(total_margin),
             ),
         ],
         table=PDFTable(
@@ -1236,6 +1344,29 @@ async def build_asesor_detail_pdf_payload(
                 label="Valor Total",
                 value=format_currency(detail.total_revenue, base_currency),
                 **_kw(detail.total_revenue, comp_detail.total_revenue if comp_detail else None),
+            ),
+            PDFKpiItem(
+                label="Ing. Asignado",
+                value=format_currency(detail.allocated_revenue, base_currency),
+                **_kw(
+                    detail.allocated_revenue, comp_detail.allocated_revenue if comp_detail else None
+                ),
+            ),
+            PDFKpiItem(
+                label="Ing. Esperado",
+                value=format_currency(detail.expected_revenue, base_currency),
+                **_kw(
+                    detail.expected_revenue, comp_detail.expected_revenue if comp_detail else None
+                ),
+            ),
+            PDFKpiItem(
+                label="Costo Esperado",
+                value=format_currency(detail.expected_cost, base_currency),
+                **_kw(detail.expected_cost, comp_detail.expected_cost if comp_detail else None),
+            ),
+            PDFKpiItem(
+                label="Margen de Utilidad",
+                value=format_percent(detail.profit_margin),
             ),
         ],
         geo_table=PDFTable(

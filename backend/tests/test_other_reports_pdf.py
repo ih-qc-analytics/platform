@@ -75,7 +75,10 @@ async def test_build_por_asesor_pdf_payload_formats_summary():
         )
 
     assert payload.kpis[0].value == "1"
-    assert payload.kpis[-1].value == "$19,200"
+    assert (
+        payload.kpis[-5].value == "$19,200"
+    )  # Valor Total (followed by Ing. Asignado, Ing. Esperado, Costo Esperado, Margen)
+    assert payload.kpis[-1].label == "Margen de Utilidad"
     assert payload.table.rows[0].cells[1:5] == ["12", "1", "3", "5"]
 
 
