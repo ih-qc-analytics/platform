@@ -119,7 +119,7 @@ export default function PorAsesor() {
             />
 
             <Card className="rounded-[2rem] shadow-sm">
-                <CardHeader className="pb-2">
+                <CardHeader className="pb-6">
                     <CardTitle className="text-4xl font-semibold tracking-tight text-slate-900">
                         Resultados por Asesor
                     </CardTitle>

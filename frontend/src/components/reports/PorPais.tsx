@@ -88,11 +88,10 @@ export default function PorPais() {
             />
 
             <Card className="rounded-[2rem] shadow-sm">
-                <CardHeader className="pb-2">
+                <CardHeader className="pb-6">
                     <CardTitle className="text-4xl font-semibold tracking-tight text-slate-900">
                         Resultado por País
                     </CardTitle>
-                    <p className="text-sm text-muted-foreground">Resumen por país y detalle por familia de exámenes.</p>
                 </CardHeader>
                 <CardContent className="px-0 pb-4">
                     {isError && (
