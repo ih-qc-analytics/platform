@@ -89,11 +89,10 @@ export default function VentasTotales() {
                 exportError={exportError}
             />
             <Card className="rounded-[2rem] shadow-sm">
-                <CardHeader className="pb-2">
+                <CardHeader className="pb-6">
                     <CardTitle className="text-4xl font-semibold tracking-tight text-slate-900">
                         Ventas Totales
                     </CardTitle>
-                    <p className="text-sm text-muted-foreground">Resumen general de ventas por período y región</p>
                 </CardHeader>
                 <CardContent className="space-y-6">
                     {isError && (

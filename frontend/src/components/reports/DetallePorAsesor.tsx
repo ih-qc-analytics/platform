@@ -132,31 +132,31 @@ export default function DetallePorAsesor() {
                 exportError={exportError}
             />
 
-            <div className="max-w-xl">
-                <label htmlFor="detalle-asesor-search" className="mb-2 block text-sm font-medium text-slate-700">
-                    Buscar asesor o escuela
-                </label>
-                <div className="relative">
-                    <Search className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                    <Input
-                        id="detalle-asesor-search"
-                        value={searchInput}
-                        onChange={(event) => setSearchInput(event.target.value)}
-                        placeholder="Escribe un nombre de asesor o escuela"
-                        className="h-14 rounded-2xl border-border bg-card pl-11 pr-4 text-sm shadow-sm"
-                    />
-                </div>
-            </div>
-
             <Card className="rounded-[2rem] shadow-sm">
-                <CardHeader className="flex flex-col gap-3 pb-2 sm:flex-row sm:items-start sm:justify-between">
-                    <div className="space-y-1">
-                        <CardTitle className="text-4xl font-semibold tracking-tight text-slate-900">
-                            Detalle por Asesor
-                        </CardTitle>
-                        <p className="text-sm text-muted-foreground">Desglose por asesor, escuela y fecha de examen.</p>
+                <CardHeader className="flex flex-col gap-4 pb-6">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                        <div className="space-y-1">
+                            <CardTitle className="text-4xl font-semibold tracking-tight text-slate-900">
+                                Detalle por Asesor
+                            </CardTitle>
+                        </div>
+                        <p className="text-sm font-medium text-slate-500">{rows.length} registros encontrados</p>
                     </div>
-                    <p className="text-sm font-medium text-slate-500">{rows.length} registros encontrados</p>
+                    <div className="max-w-xl">
+                        <label htmlFor="detalle-asesor-search" className="mb-2 block text-sm font-medium text-slate-700">
+                            Buscar asesor o escuela
+                        </label>
+                        <div className="relative">
+                            <Search className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                            <Input
+                                id="detalle-asesor-search"
+                                value={searchInput}
+                                onChange={(event) => setSearchInput(event.target.value)}
+                                placeholder="Escribe un nombre de asesor o escuela"
+                                className="h-14 rounded-2xl border-border bg-card pl-11 pr-4 text-sm shadow-sm"
+                            />
+                        </div>
+                    </div>
                 </CardHeader>
                 <CardContent className="p-0">
                     {isError && (
