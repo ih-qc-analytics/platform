@@ -192,36 +192,22 @@ export default function PorPaisDetail({ country, open, onOpenChange, filters }: 
                                             </span>
                                             {showComparison &&
                                                 data.comparison_exam_revenue !== null &&
-                                                data.comparison_exam_revenue !== undefined && (
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="text-xs text-muted-foreground">
-                                                            {formatCurrency(data.comparison_exam_revenue)}
-                                                        </span>
-                                                        {getPercentChange(
-                                                            data.exam_revenue,
-                                                            data.comparison_exam_revenue,
-                                                        ) !== null && (
-                                                            <span
-                                                                className={cn(
-                                                                    "text-xs font-medium",
-                                                                    getPercentChange(
-                                                                        data.exam_revenue,
-                                                                        data.comparison_exam_revenue,
-                                                                    )! >= 0
-                                                                        ? "text-emerald-600"
-                                                                        : "text-rose-600",
-                                                                )}
-                                                            >
-                                                                {formatPercentChange(
-                                                                    getPercentChange(
-                                                                        data.exam_revenue,
-                                                                        data.comparison_exam_revenue,
-                                                                    )!,
-                                                                )}
+                                                data.comparison_exam_revenue !== undefined &&
+                                                (() => {
+                                                    const pct = getPercentChange(data.exam_revenue, data.comparison_exam_revenue)
+                                                    return (
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="text-xs text-muted-foreground">
+                                                                {formatCurrency(data.comparison_exam_revenue)}
                                                             </span>
-                                                        )}
-                                                    </div>
-                                                )}
+                                                            {pct !== null && (
+                                                                <span className={cn("text-xs font-medium", pct >= 0 ? "text-emerald-600" : "text-rose-600")}>
+                                                                    {formatPercentChange(pct)}
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    )
+                                                })()}
                                         </CardContent>
                                     </Card>
                                     <Card className="rounded-2xl shadow-none">
@@ -232,36 +218,22 @@ export default function PorPaisDetail({ country, open, onOpenChange, filters }: 
                                             </span>
                                             {showComparison &&
                                                 data.comparison_total_books !== null &&
-                                                data.comparison_total_books !== undefined && (
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="text-xs text-muted-foreground">
-                                                            {formatInteger(data.comparison_total_books)}
-                                                        </span>
-                                                        {getPercentChange(
-                                                            data.total_books,
-                                                            data.comparison_total_books,
-                                                        ) !== null && (
-                                                            <span
-                                                                className={cn(
-                                                                    "text-xs font-medium",
-                                                                    getPercentChange(
-                                                                        data.total_books,
-                                                                        data.comparison_total_books,
-                                                                    )! >= 0
-                                                                        ? "text-emerald-600"
-                                                                        : "text-rose-600",
-                                                                )}
-                                                            >
-                                                                {formatPercentChange(
-                                                                    getPercentChange(
-                                                                        data.total_books,
-                                                                        data.comparison_total_books,
-                                                                    )!,
-                                                                )}
+                                                data.comparison_total_books !== undefined &&
+                                                (() => {
+                                                    const pct = getPercentChange(data.total_books, data.comparison_total_books)
+                                                    return (
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="text-xs text-muted-foreground">
+                                                                {formatInteger(data.comparison_total_books)}
                                                             </span>
-                                                        )}
-                                                    </div>
-                                                )}
+                                                            {pct !== null && (
+                                                                <span className={cn("text-xs font-medium", pct >= 0 ? "text-emerald-600" : "text-rose-600")}>
+                                                                    {formatPercentChange(pct)}
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    )
+                                                })()}
                                         </CardContent>
                                     </Card>
                                     <Card className="rounded-2xl shadow-none">
@@ -272,36 +244,22 @@ export default function PorPaisDetail({ country, open, onOpenChange, filters }: 
                                             </span>
                                             {showComparison &&
                                                 data.comparison_book_revenue !== null &&
-                                                data.comparison_book_revenue !== undefined && (
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="text-xs text-muted-foreground">
-                                                            {formatCurrency(data.comparison_book_revenue)}
-                                                        </span>
-                                                        {getPercentChange(
-                                                            data.book_revenue,
-                                                            data.comparison_book_revenue,
-                                                        ) !== null && (
-                                                            <span
-                                                                className={cn(
-                                                                    "text-xs font-medium",
-                                                                    getPercentChange(
-                                                                        data.book_revenue,
-                                                                        data.comparison_book_revenue,
-                                                                    )! >= 0
-                                                                        ? "text-emerald-600"
-                                                                        : "text-rose-600",
-                                                                )}
-                                                            >
-                                                                {formatPercentChange(
-                                                                    getPercentChange(
-                                                                        data.book_revenue,
-                                                                        data.comparison_book_revenue,
-                                                                    )!,
-                                                                )}
+                                                data.comparison_book_revenue !== undefined &&
+                                                (() => {
+                                                    const pct = getPercentChange(data.book_revenue, data.comparison_book_revenue)
+                                                    return (
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="text-xs text-muted-foreground">
+                                                                {formatCurrency(data.comparison_book_revenue)}
                                                             </span>
-                                                        )}
-                                                    </div>
-                                                )}
+                                                            {pct !== null && (
+                                                                <span className={cn("text-xs font-medium", pct >= 0 ? "text-emerald-600" : "text-rose-600")}>
+                                                                    {formatPercentChange(pct)}
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    )
+                                                })()}
                                         </CardContent>
                                     </Card>
                                     <Card className="rounded-2xl shadow-none">
@@ -312,36 +270,22 @@ export default function PorPaisDetail({ country, open, onOpenChange, filters }: 
                                             </span>
                                             {showComparison &&
                                                 data.comparison_total_courses !== null &&
-                                                data.comparison_total_courses !== undefined && (
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="text-xs text-muted-foreground">
-                                                            {formatInteger(data.comparison_total_courses)}
-                                                        </span>
-                                                        {getPercentChange(
-                                                            data.total_courses,
-                                                            data.comparison_total_courses,
-                                                        ) !== null && (
-                                                            <span
-                                                                className={cn(
-                                                                    "text-xs font-medium",
-                                                                    getPercentChange(
-                                                                        data.total_courses,
-                                                                        data.comparison_total_courses,
-                                                                    )! >= 0
-                                                                        ? "text-emerald-600"
-                                                                        : "text-rose-600",
-                                                                )}
-                                                            >
-                                                                {formatPercentChange(
-                                                                    getPercentChange(
-                                                                        data.total_courses,
-                                                                        data.comparison_total_courses,
-                                                                    )!,
-                                                                )}
+                                                data.comparison_total_courses !== undefined &&
+                                                (() => {
+                                                    const pct = getPercentChange(data.total_courses, data.comparison_total_courses)
+                                                    return (
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="text-xs text-muted-foreground">
+                                                                {formatInteger(data.comparison_total_courses)}
                                                             </span>
-                                                        )}
-                                                    </div>
-                                                )}
+                                                            {pct !== null && (
+                                                                <span className={cn("text-xs font-medium", pct >= 0 ? "text-emerald-600" : "text-rose-600")}>
+                                                                    {formatPercentChange(pct)}
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    )
+                                                })()}
                                         </CardContent>
                                     </Card>
                                     <Card className="rounded-2xl shadow-none">
@@ -352,36 +296,22 @@ export default function PorPaisDetail({ country, open, onOpenChange, filters }: 
                                             </span>
                                             {showComparison &&
                                                 data.comparison_course_revenue !== null &&
-                                                data.comparison_course_revenue !== undefined && (
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="text-xs text-muted-foreground">
-                                                            {formatCurrency(data.comparison_course_revenue)}
-                                                        </span>
-                                                        {getPercentChange(
-                                                            data.course_revenue,
-                                                            data.comparison_course_revenue,
-                                                        ) !== null && (
-                                                            <span
-                                                                className={cn(
-                                                                    "text-xs font-medium",
-                                                                    getPercentChange(
-                                                                        data.course_revenue,
-                                                                        data.comparison_course_revenue,
-                                                                    )! >= 0
-                                                                        ? "text-emerald-600"
-                                                                        : "text-rose-600",
-                                                                )}
-                                                            >
-                                                                {formatPercentChange(
-                                                                    getPercentChange(
-                                                                        data.course_revenue,
-                                                                        data.comparison_course_revenue,
-                                                                    )!,
-                                                                )}
+                                                data.comparison_course_revenue !== undefined &&
+                                                (() => {
+                                                    const pct = getPercentChange(data.course_revenue, data.comparison_course_revenue)
+                                                    return (
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="text-xs text-muted-foreground">
+                                                                {formatCurrency(data.comparison_course_revenue)}
                                                             </span>
-                                                        )}
-                                                    </div>
-                                                )}
+                                                            {pct !== null && (
+                                                                <span className={cn("text-xs font-medium", pct >= 0 ? "text-emerald-600" : "text-rose-600")}>
+                                                                    {formatPercentChange(pct)}
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    )
+                                                })()}
                                         </CardContent>
                                     </Card>
                                 </div>
@@ -415,9 +345,7 @@ export default function PorPaisDetail({ country, open, onOpenChange, filters }: 
                                                                     <span
                                                                         className={cn(
                                                                             "text-xs font-medium",
-                                                                            pct >= 0
-                                                                                ? "text-emerald-600"
-                                                                                : "text-rose-600",
+                                                                            pct >= 0 ? "text-emerald-600" : "text-rose-600",
                                                                         )}
                                                                     >
                                                                         {formatPercentChange(pct)}

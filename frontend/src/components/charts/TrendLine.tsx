@@ -33,11 +33,10 @@ const chartConfig = {
 
 export default function TrendLine({ data, comparisonData }: TrendLineProps) {
     const chartData = useMemo(() => {
-        const comparisonByMonth = new Map((comparisonData ?? []).map((point) => [point.month, point.revenue]))
-        return data.map((point) => ({
+        return data.map((point, i) => ({
             month: point.month,
             revenue: point.revenue,
-            comparison_revenue: comparisonByMonth.get(point.month) ?? null,
+            comparison_revenue: comparisonData?.[i]?.revenue ?? null,
         }))
     }, [comparisonData, data])
 

@@ -509,8 +509,13 @@ function TableMetricCell({
 
     return (
         <TableBodyCell>
-            <div className={cn("flex flex-col gap-1", alignmentClassName)}>
-                <span className={cn("text-sm", emphasize && "font-semibold text-slate-900")}>{format(value)}</span>
+            <div className={cn("flex flex-col gap-0.5", alignmentClassName)}>
+                <span className={cn("text-sm tabular-nums", emphasize && "font-semibold text-slate-900")}>
+                    {format(value)}
+                </span>
+                {showComparison && previousValue !== undefined && (
+                    <span className="text-[10px] text-muted-foreground tabular-nums">{format(previousValue)}</span>
+                )}
                 {showComparison && <ComparisonText value={comparison} />}
             </div>
         </TableBodyCell>
