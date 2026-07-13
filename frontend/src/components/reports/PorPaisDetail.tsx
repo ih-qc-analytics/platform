@@ -194,14 +194,22 @@ export default function PorPaisDetail({ country, open, onOpenChange, filters }: 
                                                 data.comparison_exam_revenue !== null &&
                                                 data.comparison_exam_revenue !== undefined &&
                                                 (() => {
-                                                    const pct = getPercentChange(data.exam_revenue, data.comparison_exam_revenue)
+                                                    const pct = getPercentChange(
+                                                        data.exam_revenue,
+                                                        data.comparison_exam_revenue,
+                                                    )
                                                     return (
                                                         <div className="flex items-center gap-2">
                                                             <span className="text-xs text-muted-foreground">
                                                                 {formatCurrency(data.comparison_exam_revenue)}
                                                             </span>
                                                             {pct !== null && (
-                                                                <span className={cn("text-xs font-medium", pct >= 0 ? "text-emerald-600" : "text-rose-600")}>
+                                                                <span
+                                                                    className={cn(
+                                                                        "text-xs font-medium",
+                                                                        pct >= 0 ? "text-emerald-600" : "text-rose-600",
+                                                                    )}
+                                                                >
                                                                     {formatPercentChange(pct)}
                                                                 </span>
                                                             )}
@@ -220,14 +228,22 @@ export default function PorPaisDetail({ country, open, onOpenChange, filters }: 
                                                 data.comparison_total_books !== null &&
                                                 data.comparison_total_books !== undefined &&
                                                 (() => {
-                                                    const pct = getPercentChange(data.total_books, data.comparison_total_books)
+                                                    const pct = getPercentChange(
+                                                        data.total_books,
+                                                        data.comparison_total_books,
+                                                    )
                                                     return (
                                                         <div className="flex items-center gap-2">
                                                             <span className="text-xs text-muted-foreground">
                                                                 {formatInteger(data.comparison_total_books)}
                                                             </span>
                                                             {pct !== null && (
-                                                                <span className={cn("text-xs font-medium", pct >= 0 ? "text-emerald-600" : "text-rose-600")}>
+                                                                <span
+                                                                    className={cn(
+                                                                        "text-xs font-medium",
+                                                                        pct >= 0 ? "text-emerald-600" : "text-rose-600",
+                                                                    )}
+                                                                >
                                                                     {formatPercentChange(pct)}
                                                                 </span>
                                                             )}
@@ -246,14 +262,22 @@ export default function PorPaisDetail({ country, open, onOpenChange, filters }: 
                                                 data.comparison_book_revenue !== null &&
                                                 data.comparison_book_revenue !== undefined &&
                                                 (() => {
-                                                    const pct = getPercentChange(data.book_revenue, data.comparison_book_revenue)
+                                                    const pct = getPercentChange(
+                                                        data.book_revenue,
+                                                        data.comparison_book_revenue,
+                                                    )
                                                     return (
                                                         <div className="flex items-center gap-2">
                                                             <span className="text-xs text-muted-foreground">
                                                                 {formatCurrency(data.comparison_book_revenue)}
                                                             </span>
                                                             {pct !== null && (
-                                                                <span className={cn("text-xs font-medium", pct >= 0 ? "text-emerald-600" : "text-rose-600")}>
+                                                                <span
+                                                                    className={cn(
+                                                                        "text-xs font-medium",
+                                                                        pct >= 0 ? "text-emerald-600" : "text-rose-600",
+                                                                    )}
+                                                                >
                                                                     {formatPercentChange(pct)}
                                                                 </span>
                                                             )}
@@ -272,14 +296,22 @@ export default function PorPaisDetail({ country, open, onOpenChange, filters }: 
                                                 data.comparison_total_courses !== null &&
                                                 data.comparison_total_courses !== undefined &&
                                                 (() => {
-                                                    const pct = getPercentChange(data.total_courses, data.comparison_total_courses)
+                                                    const pct = getPercentChange(
+                                                        data.total_courses,
+                                                        data.comparison_total_courses,
+                                                    )
                                                     return (
                                                         <div className="flex items-center gap-2">
                                                             <span className="text-xs text-muted-foreground">
                                                                 {formatInteger(data.comparison_total_courses)}
                                                             </span>
                                                             {pct !== null && (
-                                                                <span className={cn("text-xs font-medium", pct >= 0 ? "text-emerald-600" : "text-rose-600")}>
+                                                                <span
+                                                                    className={cn(
+                                                                        "text-xs font-medium",
+                                                                        pct >= 0 ? "text-emerald-600" : "text-rose-600",
+                                                                    )}
+                                                                >
                                                                     {formatPercentChange(pct)}
                                                                 </span>
                                                             )}
@@ -298,14 +330,22 @@ export default function PorPaisDetail({ country, open, onOpenChange, filters }: 
                                                 data.comparison_course_revenue !== null &&
                                                 data.comparison_course_revenue !== undefined &&
                                                 (() => {
-                                                    const pct = getPercentChange(data.course_revenue, data.comparison_course_revenue)
+                                                    const pct = getPercentChange(
+                                                        data.course_revenue,
+                                                        data.comparison_course_revenue,
+                                                    )
                                                     return (
                                                         <div className="flex items-center gap-2">
                                                             <span className="text-xs text-muted-foreground">
                                                                 {formatCurrency(data.comparison_course_revenue)}
                                                             </span>
                                                             {pct !== null && (
-                                                                <span className={cn("text-xs font-medium", pct >= 0 ? "text-emerald-600" : "text-rose-600")}>
+                                                                <span
+                                                                    className={cn(
+                                                                        "text-xs font-medium",
+                                                                        pct >= 0 ? "text-emerald-600" : "text-rose-600",
+                                                                    )}
+                                                                >
                                                                     {formatPercentChange(pct)}
                                                                 </span>
                                                             )}
@@ -345,7 +385,9 @@ export default function PorPaisDetail({ country, open, onOpenChange, filters }: 
                                                                     <span
                                                                         className={cn(
                                                                             "text-xs font-medium",
-                                                                            pct >= 0 ? "text-emerald-600" : "text-rose-600",
+                                                                            pct >= 0
+                                                                                ? "text-emerald-600"
+                                                                                : "text-rose-600",
                                                                         )}
                                                                     >
                                                                         {formatPercentChange(pct)}

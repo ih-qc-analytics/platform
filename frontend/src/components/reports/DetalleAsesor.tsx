@@ -449,33 +449,51 @@ function BreakdownTile({
                 <h3 className="text-base font-semibold text-slate-900">{title}</h3>
                 <div className="flex flex-col gap-2">
                     <MetricRow label={firstLabel} value={formatInteger(firstValue)} />
-                    {showComparison && comparisonFirstValue !== undefined && (() => {
-                        const pct = getPercentChange(firstValue, comparisonFirstValue)
-                        return (
-                            <div className="flex items-center justify-end gap-2">
-                                <span className="text-xs text-muted-foreground">{formatInteger(comparisonFirstValue)}</span>
-                                {pct !== null && (
-                                    <span className={cn("text-xs font-medium", pct >= 0 ? "text-emerald-600" : "text-rose-600")}>
-                                        {formatPercentChange(pct)}
+                    {showComparison &&
+                        comparisonFirstValue !== undefined &&
+                        (() => {
+                            const pct = getPercentChange(firstValue, comparisonFirstValue)
+                            return (
+                                <div className="flex items-center justify-end gap-2">
+                                    <span className="text-xs text-muted-foreground">
+                                        {formatInteger(comparisonFirstValue)}
                                     </span>
-                                )}
-                            </div>
-                        )
-                    })()}
+                                    {pct !== null && (
+                                        <span
+                                            className={cn(
+                                                "text-xs font-medium",
+                                                pct >= 0 ? "text-emerald-600" : "text-rose-600",
+                                            )}
+                                        >
+                                            {formatPercentChange(pct)}
+                                        </span>
+                                    )}
+                                </div>
+                            )
+                        })()}
                     <MetricRow label={secondLabel} value={formatInteger(secondValue)} />
-                    {showComparison && comparisonSecondValue !== undefined && (() => {
-                        const pct = getPercentChange(secondValue, comparisonSecondValue)
-                        return (
-                            <div className="flex items-center justify-end gap-2">
-                                <span className="text-xs text-muted-foreground">{formatInteger(comparisonSecondValue)}</span>
-                                {pct !== null && (
-                                    <span className={cn("text-xs font-medium", pct >= 0 ? "text-emerald-600" : "text-rose-600")}>
-                                        {formatPercentChange(pct)}
+                    {showComparison &&
+                        comparisonSecondValue !== undefined &&
+                        (() => {
+                            const pct = getPercentChange(secondValue, comparisonSecondValue)
+                            return (
+                                <div className="flex items-center justify-end gap-2">
+                                    <span className="text-xs text-muted-foreground">
+                                        {formatInteger(comparisonSecondValue)}
                                     </span>
-                                )}
-                            </div>
-                        )
-                    })()}
+                                    {pct !== null && (
+                                        <span
+                                            className={cn(
+                                                "text-xs font-medium",
+                                                pct >= 0 ? "text-emerald-600" : "text-rose-600",
+                                            )}
+                                        >
+                                            {formatPercentChange(pct)}
+                                        </span>
+                                    )}
+                                </div>
+                            )
+                        })()}
                     {thirdLabel !== undefined && thirdValue !== undefined && (
                         <MetricRow label={thirdLabel} value={formatInteger(thirdValue)} />
                     )}
@@ -485,19 +503,28 @@ function BreakdownTile({
                 </div>
                 <div className="border-t border-current/15 pt-4">
                     <MetricRow label={totalLabel} value={formatCurrency(totalValue)} />
-                    {showComparison && comparisonTotalValue !== undefined && (() => {
-                        const pct = getPercentChange(totalValue, comparisonTotalValue)
-                        return (
-                            <div className="flex items-center justify-end gap-2">
-                                <span className="text-xs text-muted-foreground">{formatCurrency(comparisonTotalValue)}</span>
-                                {pct !== null && (
-                                    <span className={cn("text-xs font-medium", pct >= 0 ? "text-emerald-600" : "text-rose-600")}>
-                                        {formatPercentChange(pct)}
+                    {showComparison &&
+                        comparisonTotalValue !== undefined &&
+                        (() => {
+                            const pct = getPercentChange(totalValue, comparisonTotalValue)
+                            return (
+                                <div className="flex items-center justify-end gap-2">
+                                    <span className="text-xs text-muted-foreground">
+                                        {formatCurrency(comparisonTotalValue)}
                                     </span>
-                                )}
-                            </div>
-                        )
-                    })()}
+                                    {pct !== null && (
+                                        <span
+                                            className={cn(
+                                                "text-xs font-medium",
+                                                pct >= 0 ? "text-emerald-600" : "text-rose-600",
+                                            )}
+                                        >
+                                            {formatPercentChange(pct)}
+                                        </span>
+                                    )}
+                                </div>
+                            )
+                        })()}
                 </div>
             </CardContent>
         </Card>
