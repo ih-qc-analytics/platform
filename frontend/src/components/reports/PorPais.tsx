@@ -108,7 +108,7 @@ export default function PorPais() {
                         </div>
                     ) : (
                         <div className="overflow-x-auto">
-                            <Table className="min-w-max">
+                            <Table className="min-w-max [&_tr:last-child>td]:border-b-0 [&_tr:last-child>th]:border-b-0">
                                 <TableHeader>
                                     <TableRow className="hover:bg-transparent">
                                         <TableHeadCell className="sticky left-0 z-10 min-w-36 bg-card text-left">
