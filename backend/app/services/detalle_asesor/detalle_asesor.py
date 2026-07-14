@@ -17,7 +17,7 @@ from app.reporting.database import ReportingSessionLocal
 from app.enums import PaymentStatus
 from sqlalchemy import text
 
-DETALLE_EXAM_NAME_ORDER = [*EXAM_NAME_ORDER, "Other"]
+DETALLE_EXAM_NAME_ORDER = [*EXAM_NAME_ORDER, "Otros"]
 
 DETALLE_EXPORT_COLUMNS = [
     ExcelColumn("seller_name", "Asesor"),
@@ -85,7 +85,7 @@ def _build_where(filters: DetalleFilters) -> tuple[str, dict]:
 
 
 def _row_from_record(row) -> DetalleRow:
-    exam_type = row.exam_name if row.exam_name in DETALLE_EXAM_NAME_ORDER else "Other"
+    exam_type = row.exam_name if row.exam_name in DETALLE_EXAM_NAME_ORDER else "Otros"
     exam_counts = {name: 0 for name in DETALLE_EXAM_NAME_ORDER}
     exam_counts[exam_type] = int(row.quantity or 0)
     return DetalleRow(

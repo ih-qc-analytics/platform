@@ -18,7 +18,6 @@ from app.etl.scheduler import start_scheduler
 from app.etl.startup_backfill import run_startup_backfill_if_needed
 from app.etl.upsert import run_upsert
 from app.routers import detalle_asesor, filters, por_asesor, por_pais, total_sales
-from app.validator import validate_schema
 
 
 def verify_admin_key(x_admin_key: str = Header()) -> None:
@@ -39,10 +38,6 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    if settings.source_db_url or settings.host:
-        logger.info("Starting app in %s mode", settings.env_mode)
-        await validate_schema()
-
     if settings.reporting_db_url:
         try:
             await run_startup_backfill_if_needed()

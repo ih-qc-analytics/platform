@@ -19,11 +19,11 @@ type PorPaisDetailProps = {
 }
 
 const FAMILY_EXAM_TYPES = {
-    Cambridge: DETALLE_ASESOR_EXAM_TYPES.filter((name) => !["IELTS", "MET", "MET Go!", "TEA", "Other"].includes(name)),
+    Cambridge: DETALLE_ASESOR_EXAM_TYPES.filter((name) => !["IELTS", "MET", "MET Go!", "TEA", "Otros"].includes(name)),
     IELTS: ["IELTS"],
     MET: ["MET", "MET Go!"],
     TEA: ["TEA"],
-    Otros: ["Other"],
+    Otros: ["Otros"],
     Total: DETALLE_ASESOR_EXAM_TYPES,
 } as const
 

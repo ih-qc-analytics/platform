@@ -18,5 +18,5 @@ export const DETALLE_ASESOR_EXAM_TYPES = [
     "MET",
     "MET Go!",
     "TEA",
-    "Other",
+    "Otros",
 ] as const

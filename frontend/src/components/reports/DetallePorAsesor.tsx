@@ -259,6 +259,17 @@ export default function DetallePorAsesor() {
                     )}
                 </CardContent>
             </Card>
+            <div className="rounded-xl border border-slate-200 bg-slate-50 px-5 py-4 text-xs text-slate-500 space-y-1">
+                <p className="font-semibold text-slate-600 mb-2">Notas</p>
+                <p>
+                    <span className="font-medium text-slate-700">Solo exámenes:</span> Este reporte contempla únicamente
+                    productos de tipo examen. Libros y cursos no aparecen en este desglose.
+                </p>
+                <p>
+                    <span className="font-medium text-slate-700">Otros:</span> Exámenes cuyo nombre no corresponde a
+                    ninguna categoría canónica reconocida por el sistema.
+                </p>
+            </div>
         </div>
     )
 }
