@@ -32,17 +32,17 @@ async def test_por_pais_full_year_summary_and_status_rows_match_payment_based_mo
         {
             "country": "mexico",
             "total_schools": 3,
-            "total_revenue": 5400.0,
-            "uncategorized_revenue": 500.0,
-            "cambridge": 4,
+            "total_revenue": 6700.0,
+            "uncategorized_revenue": 0.0,
+            "cambridge": 5,
             "ielts": 0,
             "michigan": 0,
             "tea": 0,
             "other": 1,
-            "total_books": 1,
+            "total_books": 2,
             "total_courses": 0,
-            "exam_revenue": 4600.0,
-            "book_revenue": 300.0,
+            "exam_revenue": 5600.0,
+            "book_revenue": 600.0,
             "course_revenue": 0.0,
         },
         {
@@ -82,8 +82,8 @@ async def test_por_pais_full_year_summary_and_status_rows_match_payment_based_mo
             "schools_mantenidos": 1,
             "exams_ganados": 2,
             "exams_perdidos": 0,
-            "exams_mantenidos": 3,
-            "books_courses_ganados": 1,
+            "exams_mantenidos": 4,
+            "books_courses_ganados": 2,
             "books_courses_perdidos": 0,
             "books_courses_mantenidos": 0,
         },
@@ -114,7 +114,7 @@ async def test_por_pais_detail_returns_canonical_exam_counts_per_country(ui_dev_
     )
 
     assert mexico.exam_counts["A2 Key"] == 2
-    assert mexico.exam_counts["B1 Preliminary"] == 1
+    assert mexico.exam_counts["B1 Preliminary"] == 2
     assert mexico.exam_counts["TKT"] == 1
     assert mexico.exam_counts["Other"] == 1
 
@@ -134,11 +134,11 @@ async def test_por_pais_detail_returns_product_revenue_breakdown(ui_dev_reportin
         PorPaisFilters(date_from="2025-01-01", date_to="2025-12-31"),
     )
 
-    # Mexico: exam revenue excludes the book (300) → 4600, and has 1 book
-    assert mexico.exam_revenue == 4600.0
-    assert mexico.book_revenue == 300.0
+    # Mexico: exam revenue excludes the books (600) → 5600, and has 2 books
+    assert mexico.exam_revenue == 5600.0
+    assert mexico.book_revenue == 600.0
     assert mexico.course_revenue == 0.0
-    assert mexico.total_books == 1
+    assert mexico.total_books == 2
     assert mexico.total_courses == 0
 
     # Colombia: has 1 course (600) → exam_revenue = total - course = 6500
@@ -198,7 +198,7 @@ async def test_por_pais_midyear_range_status_rows_use_comparison_period(ui_dev_r
             "country": "mexico",
             "total_schools": 1,
             "total_revenue": 1000.0,
-            "uncategorized_revenue": 500.0,
+            "uncategorized_revenue": 0.0,
             "cambridge": 0,
             "ielts": 0,
             "michigan": 0,
@@ -289,8 +289,8 @@ async def test_por_pais_full_year_status_rows_include_books_courses_gpm(ui_dev_r
     assert status_by_country["colombia"].books_courses_perdidos == 0
     assert status_by_country["colombia"].books_courses_mantenidos == 0
 
-    # Mexico has 1 book school in 2025 (none in 2024) → bc_ganado=1
-    assert status_by_country["mexico"].books_courses_ganados == 1
+    # Mexico has 2 book schools in 2025 (leadId=1 and leadId=2, neither in 2024) → bc_ganado=2
+    assert status_by_country["mexico"].books_courses_ganados == 2
     assert status_by_country["mexico"].books_courses_perdidos == 0
     assert status_by_country["mexico"].books_courses_mantenidos == 0
 

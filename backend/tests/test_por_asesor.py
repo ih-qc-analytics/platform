@@ -14,7 +14,7 @@ async def test_por_asesor_2025_summary_orders_sellers_by_payment_revenue(ui_dev_
         "Lucia Rios",
         "Miguel Torres",
     ]
-    assert [row.total_revenue for row in result.current.rows] == [7100.0, 4400.0, 1700.0, 1000.0]
+    assert [row.total_revenue for row in result.current.rows] == [7100.0, 5700.0, 1700.0, 1000.0]
 
 
 @pytest.mark.asyncio(loop_scope="session")
@@ -59,7 +59,7 @@ async def test_por_asesor_2025_summary_uses_allocated_exam_breakdowns_and_paymen
         "seller_id": 1,
         "seller_name": "Ana Garcia",
         "exam_breakdown": {
-            "Cambridge English (Main Suite)": 3,
+            "Cambridge English (Main Suite)": 4,
             "Cambridge Teaching & Skills": 1,
             "IELTS": 0,
             "Michigan (MET)": 0,
@@ -70,19 +70,19 @@ async def test_por_asesor_2025_summary_uses_allocated_exam_breakdowns_and_paymen
         "perdidos": 0,
         "mantenidos": 1,
         "uncategorized_revenue": 0.0,
-        "total_revenue": 4400.0,
-        "total_books": 1,
+        "total_revenue": 5700.0,
+        "total_books": 2,
         "total_courses": 0,
-        "exam_revenue": 4100.0,
-        "book_revenue": 300.0,
+        "exam_revenue": 5100.0,
+        "book_revenue": 600.0,
         "course_revenue": 0.0,
-        "books_courses_ganados": 1,
+        "books_courses_ganados": 2,
         "books_courses_perdidos": 0,
         "books_courses_mantenidos": 0,
-        "allocated_revenue": 4400.0,
-        "expected_revenue": 4400.0,
-        "expected_cost": 2150.0,
-        "profit_margin": pytest.approx(51.136, abs=0.01),
+        "allocated_revenue": 5700.0,
+        "expected_revenue": 5700.0,
+        "expected_cost": 2850.0,
+        "profit_margin": 50.0,
     }
 
 
@@ -159,11 +159,11 @@ async def test_por_asesor_detail_for_ana_matches_expected_paid_geo_breakdown_and
         "states": ["CDMX", "Jalisco"],
         "cities": ["Guadalajara", "Mexico City"],
         "total_schools": 2,
-        "total_exams": 4,
+        "total_exams": 5,
         "uncategorized_revenue": 0.0,
-        "total_revenue": 4400.0,
+        "total_revenue": 5700.0,
         "exam_breakdown": {
-            "Cambridge English (Main Suite)": {"exams": 3, "schools": 2, "revenue": 3200.0},
+            "Cambridge English (Main Suite)": {"exams": 4, "schools": 2, "revenue": 4200.0},
             "Cambridge Teaching & Skills": {"exams": 1, "schools": 1, "revenue": 900.0},
             "IELTS": {"exams": 0, "schools": 0, "revenue": 0.0},
             "Michigan (MET)": {"exams": 0, "schools": 0, "revenue": 0.0},
@@ -172,15 +172,15 @@ async def test_por_asesor_detail_for_ana_matches_expected_paid_geo_breakdown_and
         },
         "ganados": {"schools": 1, "exams": 1, "books": 1, "courses": 0, "revenue": 1500.0},
         "perdidos": {"schools": 0, "exams": 0, "books": 0, "courses": 0, "revenue": 0.0},
-        "mantenidos": {"schools": 1, "exams": 3, "books": 0, "courses": 0, "revenue": 2900.0},
-        "total_books": 1,
+        "mantenidos": {"schools": 1, "exams": 4, "books": 1, "courses": 0, "revenue": 4200.0},
+        "total_books": 2,
         "total_courses": 0,
-        "book_revenue": 300.0,
+        "book_revenue": 600.0,
         "course_revenue": 0.0,
-        "allocated_revenue": 4400.0,
-        "expected_revenue": 4400.0,
-        "expected_cost": 2150.0,
-        "profit_margin": pytest.approx(51.136, abs=0.01),
+        "allocated_revenue": 5700.0,
+        "expected_revenue": 5700.0,
+        "expected_cost": 2850.0,
+        "profit_margin": 50.0,
     }
 
 
@@ -240,17 +240,22 @@ async def test_por_asesor_detail_for_fully_allocated_sellers_reconciles_total_to
 
 
 @pytest.mark.asyncio(loop_scope="session")
-async def test_por_asesor_detail_for_miguel_keeps_unallocated_payment_gap_visible(
+async def test_por_asesor_detail_for_miguel_admin_fee_allocated_closes_revenue_gap(
     ui_dev_reporting_db,
 ):
+    # Cart 10: Placement Test (exam, paid_total=500 via student_payments)
+    # Cart 11: Admin Fee (no product_type, sole product, paid_total=500 via allocation fallback)
+    # Before the allocation fix, uncategorized_revenue was 500 (Admin Fee had paid_total=0).
+    # After the fix, the Admin Fee's paid_total is backfilled from proportional cart allocation,
+    # so the full 1000 is attributed and uncategorized_revenue drops to 0.
     result = await get_asesor_detail(
         4, AsesorFilters(date_from="2025-01-01", date_to="2025-12-31", show_comparison=True)
     )
 
     assert result.current.total_revenue == 1000.0
-    assert result.current.uncategorized_revenue == 500.0
-    assert result.current.ganados.revenue == 500.0
-    assert result.current.total_revenue - result.current.ganados.revenue == 500.0
+    assert result.current.uncategorized_revenue == 0.0
+    assert result.current.allocated_revenue == 1000.0
+    assert result.current.ganados.revenue == 1000.0
     assert result.current.exam_breakdown["Placement & Otros"].model_dump() == {
         "exams": 1,
         "schools": 1,
@@ -307,8 +312,8 @@ async def test_por_asesor_summary_books_courses_gpm_counts(ui_dev_reporting_db):
     assert by_name["Carlos Rodriguez"].books_courses_perdidos == 0
     assert by_name["Carlos Rodriguez"].books_courses_mantenidos == 0
 
-    # Ana has 1 book school in 2025 — not in 2024
-    assert by_name["Ana Garcia"].books_courses_ganados == 1
+    # Ana has 2 book schools in 2025 (cart 5 / leadId=2 and cart 14 / leadId=1) — neither in 2024
+    assert by_name["Ana Garcia"].books_courses_ganados == 2
     assert by_name["Ana Garcia"].books_courses_perdidos == 0
     assert by_name["Ana Garcia"].books_courses_mantenidos == 0
 
@@ -365,9 +370,9 @@ async def test_por_asesor_summary_profit_margin_matches_formula(ui_dev_reporting
     assert by_name["Carlos Rodriguez"].profit_margin == pytest.approx(
         (7100.0 - 3450.0) / 7100.0 * 100, abs=0.01
     )
-    assert by_name["Ana Garcia"].expected_cost == 2150.0
+    assert by_name["Ana Garcia"].expected_cost == 2850.0
     assert by_name["Ana Garcia"].profit_margin == pytest.approx(
-        (4400.0 - 2150.0) / 4400.0 * 100, abs=0.01
+        (5700.0 - 2850.0) / 5700.0 * 100, abs=0.01
     )
 
 
@@ -376,7 +381,7 @@ async def test_por_asesor_detail_profit_margin_matches_formula(ui_dev_reporting_
     result = await get_asesor_detail(1, AsesorFilters(date_from="2025-01-01", date_to="2025-12-31"))
     detail = result.current
 
-    assert detail.expected_cost == 2150.0
+    assert detail.expected_cost == 2850.0
     assert detail.profit_margin == pytest.approx(
         (detail.allocated_revenue - detail.expected_cost) / detail.allocated_revenue * 100,
         abs=0.001,
