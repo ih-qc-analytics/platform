@@ -18,7 +18,7 @@ export const DETALLE_ASESOR_EXAM_TYPES = [
     "MET",
     "MET Go!",
     "TEA",
-    "Other",
+    "Otros",
 ] as const
 
 export const EXAM_TYPE_LABELS = [
@@ -41,5 +41,5 @@ export const EXAM_TYPE_LABELS = [
     "MET",
     "MET Go!",
     "TEA",
-    "Other",
+    "Otros",
 ] as const
