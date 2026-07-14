@@ -161,6 +161,34 @@ PAID_TOTAL_BY_DATE_QUERY = """
     GROUP BY st.cartProductId, pay.paymentDate, l.site
 """
 
+# Returns one row per (cart_product_id, payment_date) for ALL approved historical
+# payments on carts containing the given cart_products, regardless of the ETL
+# since-window.  Used to compute paid_total for products not tracked via
+# student_payments (books, courses) using the same proportional allocation logic
+# as _build_allocation_rows, but with complete history so incremental re-upserts
+# never overwrite a previously correct paid_total with a partial value.
+ALLOCATION_PAID_TOTAL_BY_DATE_QUERY = """
+    SELECT
+        cp.id                                                           AS cart_product_id,
+        pay.paymentDate                                                 AS payment_date,
+        l.site                                                          AS site,
+        ROUND(pay.quantity * cp.total / NULLIF(ct.cart_total, 0), 2)   AS allocated_amount
+    FROM payment pay
+    JOIN cart c ON c.id = pay.cartId
+    JOIN cart_product cp ON cp.cartId = c.id AND cp.deletedAt IS NULL
+    JOIN seller_lead sl ON sl.id = c.sellerLeadId
+    JOIN `lead` l ON l.id = sl.leadId
+    JOIN (
+        SELECT cartId, SUM(total) AS cart_total
+        FROM cart_product
+        WHERE deletedAt IS NULL
+        GROUP BY cartId
+    ) ct ON ct.cartId = c.id
+    WHERE pay.status = :payment_status
+      AND cp.id IN :cart_product_ids
+      AND c.deletedAt IS NULL
+"""
+
 DELETED_CART_PRODUCTS_QUERY = """
     SELECT cp.id
     FROM cart_product cp
@@ -254,6 +282,50 @@ async def _build_paid_total_converted(
     return {cp_id: (accum_mxn[cp_id], accum_usd[cp_id]) for cp_id in accum_mxn}
 
 
+async def _build_allocation_paid_total_converted(
+    allocation_date_rows: list[dict],
+    rates: dict,
+) -> dict[int, tuple[float, float | None, float | None]]:
+    """
+    For each cart_product, sum the proportional allocation amount across all
+    approved payment dates, converting each slice at its own exchange rate.
+    Returns {cart_product_id: (native_total, mxn_total, usd_total)}.
+
+    Used as the paid_total source for products not tracked via student_payments
+    (books, courses without students).  Mirrors _build_paid_total_converted but
+    consumes ALLOCATION_PAID_TOTAL_BY_DATE_QUERY rows instead of student_payments.
+
+    If any date-slice for a cart_product has an unknown site (unconvertible),
+    the whole product is marked (native_total, None, None) — same convention
+    as _build_paid_total_converted.
+    """
+    accum_native: dict[int, float] = {}
+    accum_mxn: dict[int, float | None] = {}
+    accum_usd: dict[int, float | None] = {}
+
+    for row in allocation_date_rows:
+        cp_id = int(row["cart_product_id"])
+        amount = float(row.get("allocated_amount") or 0)
+        accum_native[cp_id] = accum_native.get(cp_id, 0.0) + amount
+        if cp_id in accum_mxn and accum_mxn[cp_id] is None:
+            # Already marked unconvertible — keep accumulating native total only
+            continue
+        site = row.get("site", "")
+        rate_date = coerce_to_date(row.get("payment_date"), date.today())
+        mxn, usd = await convert_currency(amount, site, rate_date, rates)
+        if mxn is None or usd is None:
+            accum_mxn[cp_id] = None
+            accum_usd[cp_id] = None
+        else:
+            accum_mxn[cp_id] = (accum_mxn.get(cp_id) or 0.0) + mxn
+            accum_usd[cp_id] = (accum_usd.get(cp_id) or 0.0) + usd
+
+    return {
+        cp_id: (accum_native[cp_id], accum_mxn.get(cp_id), accum_usd.get(cp_id))
+        for cp_id in accum_native
+    }
+
+
 async def _transform_payment(
     row: dict, ganados: set[int], perdidos: set[int], mantenidos: set[int], rates: dict
 ) -> dict:
@@ -283,6 +355,7 @@ async def _transform_line_item(
     mantenidos: set[int],
     rates: dict,
     paid_total_converted: dict[int, tuple[float | None, float | None]],
+    allocation_paid_total_converted: dict[int, tuple[float, float | None, float | None]],
 ) -> dict:
     dims = extract_dimensions(row)
     product_type = row.get("product_type") or ""
@@ -305,6 +378,14 @@ async def _transform_line_item(
         paid_total_mxn, paid_total_usd = paid_total_converted[cp_id]
     else:
         paid_total_mxn, paid_total_usd = await convert_currency(paid_total, site, rate_date, rates)
+    # For products not tracked via student_payments (books, courses without students),
+    # fall back to the proportional historical allocation total so they appear in
+    # product breakdown reports with correct revenue.  The guard ensures exams
+    # (which are always in paid_total_converted) are never touched.
+    if paid_total == 0 and cp_id not in paid_total_converted:
+        alloc = allocation_paid_total_converted.get(cp_id)
+        if alloc:
+            paid_total, paid_total_mxn, paid_total_usd = alloc
     payment_date = dims["payment_date"]  # already coerced via extract_dimensions
     return {
         **dims,
@@ -584,32 +665,63 @@ async def run_upsert(
         all_dates |= {d for row in all_rows if (d := coerce_to_date(dict(row).get("payment_date")))}
         ganados, perdidos, mantenidos = await calculate_business_status(all_lead_ids)
 
-        # Fetch per-payment-date paid_total breakdown for all affected cart_products.
-        # This lets us convert each payment slice at its own exchange rate so that
-        # paid_total_mxn/usd on line items matches the per-rate conversion done on
-        # report_payments, eliminating spurious negative uncategorized_revenue values.
+        # Fetch per-payment-date paid_total breakdowns for all affected cart_products.
+        # Both queries target the same affected_cp_ids and run in parallel:
+        #   - PAID_TOTAL_BY_DATE_QUERY: student_payments path (exams)
+        #   - ALLOCATION_PAID_TOTAL_BY_DATE_QUERY: proportional allocation path (books/courses)
+        # Neither query is windowed by :since so incremental re-upserts always
+        # write the complete historical paid_total, not a partial window slice.
         affected_cp_ids = [int(row["cart_product_id"]) for row in line_item_rows_raw]
         paid_total_date_rows: list[dict] = []
+        allocation_paid_total_date_rows: list[dict] = []
         if affected_cp_ids:
-            async with SessionLocal() as source:
-                result = await source.execute(
-                    text(PAID_TOTAL_BY_DATE_QUERY).bindparams(
-                        bindparam("cart_product_ids", expanding=True)
-                    ),
-                    {
-                        "payment_status": PaymentStatus.APROBADO.value,
-                        "cart_product_ids": affected_cp_ids,
-                    },
-                )
-                paid_total_date_rows = [dict(row) for row in result.mappings().fetchall()]
 
-        # Include any new payment dates from the breakdown rows in the prefetch set.
+            async def _fetch_student_paid_totals() -> list[dict]:
+                async with SessionLocal() as source:
+                    result = await source.execute(
+                        text(PAID_TOTAL_BY_DATE_QUERY).bindparams(
+                            bindparam("cart_product_ids", expanding=True)
+                        ),
+                        {
+                            "payment_status": PaymentStatus.APROBADO.value,
+                            "cart_product_ids": affected_cp_ids,
+                        },
+                    )
+                    return [dict(row) for row in result.mappings().fetchall()]
+
+            async def _fetch_allocation_paid_totals() -> list[dict]:
+                async with SessionLocal() as source:
+                    result = await source.execute(
+                        text(ALLOCATION_PAID_TOTAL_BY_DATE_QUERY).bindparams(
+                            bindparam("cart_product_ids", expanding=True)
+                        ),
+                        {
+                            "payment_status": PaymentStatus.APROBADO.value,
+                            "cart_product_ids": affected_cp_ids,
+                        },
+                    )
+                    return [dict(row) for row in result.mappings().fetchall()]
+
+            paid_total_date_rows, allocation_paid_total_date_rows = await asyncio.gather(
+                _fetch_student_paid_totals(),
+                _fetch_allocation_paid_totals(),
+            )
+
+        # Include payment dates from both breakdown queries in the FX rate prefetch.
         all_dates |= {
             d for row in paid_total_date_rows if (d := coerce_to_date(row.get("payment_date")))
+        }
+        all_dates |= {
+            d
+            for row in allocation_paid_total_date_rows
+            if (d := coerce_to_date(row.get("payment_date")))
         }
         rates = await prefetch_rates(all_dates)
 
         paid_total_converted = await _build_paid_total_converted(paid_total_date_rows, rates)
+        allocation_paid_total_converted = await _build_allocation_paid_total_converted(
+            allocation_paid_total_date_rows, rates
+        )
 
         payment_rows = [
             await _transform_payment(dict(row), ganados, perdidos, mantenidos, rates)
@@ -617,7 +729,13 @@ async def run_upsert(
         ]
         line_item_rows = [
             await _transform_line_item(
-                dict(row), ganados, perdidos, mantenidos, rates, paid_total_converted
+                dict(row),
+                ganados,
+                perdidos,
+                mantenidos,
+                rates,
+                paid_total_converted,
+                allocation_paid_total_converted,
             )
             for row in line_item_rows_raw
         ]

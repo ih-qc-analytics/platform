@@ -83,7 +83,10 @@ INSERT INTO cart (id, sellerLeadId, total, cost, createdAt, deletedAt) VALUES
   (10, 6, 500, 200, '2025-06-28 10:00:00', NULL),
   (11, 6, 500, 0, '2025-07-31 10:00:00', NULL),
   (12, 3, 1500, 700, '2025-09-10 10:00:00', NULL),
-  (13, 4, 888, 444, '2025-10-01 10:00:00', '2025-10-02 10:00:00');
+  (13, 4, 888, 444, '2025-10-01 10:00:00', '2025-10-02 10:00:00'),
+  -- Cart 14: mixed cart (exam + book) where the book has no student — tests the
+  -- allocation-based paid_total fallback for products without student_payments.
+  (14, 1, 1300, 600, '2025-03-01 10:00:00', NULL);
 
 INSERT INTO payment (
   id, quantity, status, createdAt, updatedAt, cartId, `use`, comments, billingStatus,
@@ -102,7 +105,9 @@ INSERT INTO payment (
   (11, 300, 'Aprobado', '2025-08-01 10:00:00', '2025-08-01 10:00:00', 11, '', '', '', 0, '2025-08-04'),
   (12, 200, 'Aprobado', '2025-08-02 10:00:00', '2025-08-02 10:00:00', 11, '', '', '', 0, '2025-08-05'),
   (13, 1500, 'Pendiente', '2025-09-10 10:00:00', '2025-09-10 10:00:00', 12, '', '', '', 0, '2025-09-11'),
-  (14, 888, 'Aprobado', '2025-10-01 10:00:00', '2025-10-01 10:00:00', 13, '', '', '', 0, '2025-10-02');
+  (14, 888, 'Aprobado', '2025-10-01 10:00:00', '2025-10-01 10:00:00', 13, '', '', '', 0, '2025-10-02'),
+  -- Payment for cart 14 (exam + book, no student for book)
+  (15, 1300, 'Aprobado', '2025-03-01 10:00:00', '2025-03-01 10:00:00', 14, '', '', '', 0, '2025-03-05');
 
 INSERT INTO cart_product (id, cartId, productId, quantity, total, cost, testDate, deletedAt) VALUES
   (1, 1, 1, 1, 1000, 500, '2024-06-25', NULL),
@@ -121,7 +126,12 @@ INSERT INTO cart_product (id, cartId, productId, quantity, total, cost, testDate
   (14, 11, 10, 1, 500, 0, '2025-08-10', NULL),
   (15, 12, 3, 1, 1500, 700, '2025-09-20', NULL),
   (16, 13, 1, 1, 888, 444, '2025-10-10', NULL),
-  (17, 5, 2, 1, 1200, 600, '2025-02-16', '2025-02-16 10:00:00');
+  (17, 5, 2, 1, 1200, 600, '2025-02-16', '2025-02-16 10:00:00'),
+  -- Cart 14: PET Exam (cp_id=18, total=1000) + Prep Book (cp_id=19, total=300, no student)
+  -- Book allocation from payment 15: round(1300 * 300/1300, 2) = 300.00
+  -- Exam allocation from payment 15: round(1300 * 1000/1300, 2) = 1000.00
+  (18, 14, 2, 1, 1000, 600, '2025-03-15', NULL),
+  (19, 14, 8, 1, 300, 100, '2025-03-15', NULL);
 
 INSERT INTO student (id, cartProductId) VALUES
   (1, 1),
@@ -138,7 +148,9 @@ INSERT INTO student (id, cartProductId) VALUES
   (12, 10),
   (13, 11),
   (14, 12),
-  (15, 13);
+  (15, 13),
+  -- Student for the exam on cart 14 only — no student for the book (cp_id=19)
+  (16, 18);
 
 INSERT INTO student_payments (student_id, payment_id, amount) VALUES
   (1, 1, 1000.00),
@@ -155,4 +167,6 @@ INSERT INTO student_payments (student_id, payment_id, amount) VALUES
   (12, 8, 2200.00),
   (13, 8, 1300.00),
   (14, 9, 1700.00),
-  (15, 10, 500.00);
+  (15, 10, 500.00),
+  -- Student 16 (exam on cart 14) paid via payment 15 — no entry for the book
+  (16, 15, 1000.00);

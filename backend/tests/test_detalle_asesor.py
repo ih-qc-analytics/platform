@@ -17,7 +17,7 @@ async def test_detalle_asesor_2025_returns_only_paid_exam_cart_products(ui_dev_r
         )
     )
 
-    assert set(row.id for row in result.current.rows) == {4, 5, 7, 8, 10, 11, 12, 13}
+    assert set(row.id for row in result.current.rows) == {4, 5, 7, 8, 10, 11, 12, 13, 18}
     assert result.current.has_more is False
     assert result.current.next_cursor is None
 
@@ -46,7 +46,7 @@ async def test_detalle_asesor_excludes_non_exam_pending_and_deleted_rows(ui_dev_
     ids = [row.id for row in result.current.rows]
     assert 6 not in ids  # book
     assert 9 not in ids  # course
-    assert 14 not in ids  # other fee with no allocation
+    assert 14 not in ids  # other fee (not an exam product)
     assert 15 not in ids  # pending payment
     assert 16 not in ids  # deleted cart
     assert 17 not in ids  # deleted cart_product
@@ -63,7 +63,7 @@ async def test_detalle_asesor_supports_search_by_seller_name(ui_dev_reporting_db
         )
     )
 
-    assert set(row.id for row in result.current.rows) == {4, 5, 7}
+    assert set(row.id for row in result.current.rows) == {4, 5, 7, 18}
     assert {row.seller_name for row in result.current.rows} == {"Ana Garcia"}
 
 
@@ -106,7 +106,7 @@ async def test_detalle_asesor_cursor_pagination_stable(ui_dev_reporting_db):
         cursor = page.current.next_cursor
 
     assert len(all_ids) == len(set(all_ids)), "Duplicate row IDs across pages"
-    assert set(all_ids) == {4, 5, 7, 8, 10, 11, 12, 13}
+    assert set(all_ids) == {4, 5, 7, 8, 10, 11, 12, 13, 18}
 
 
 @pytest.mark.asyncio(loop_scope="session")
@@ -168,4 +168,4 @@ async def test_detalle_asesor_sort_pagination_stable(ui_dev_reporting_db):
         cursor = page.current.next_cursor
 
     assert len(all_ids) == len(set(all_ids)), "Duplicate row IDs across pages"
-    assert set(all_ids) == {4, 5, 7, 8, 10, 11, 12, 13}
+    assert set(all_ids) == {4, 5, 7, 8, 10, 11, 12, 13, 18}
