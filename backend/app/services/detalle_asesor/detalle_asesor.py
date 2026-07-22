@@ -12,7 +12,7 @@ from app.schemas.reports import (
 from app.services.exports.excel import ExcelColumn, ExcelWorksheetSpec
 from app.services.exports.pdf_helpers import build_pdf_header, format_date, format_integer
 from app.services.por_asesor.product_grouping import EXAM_NAME_ORDER
-from app.services.shared import coerce_iso_date_param, report_date_expr
+from app.services.shared import coerce_iso_date_param, line_item_date_expr
 from app.reporting.database import ReportingSessionLocal
 from app.enums import PaymentStatus
 from sqlalchemy import text
@@ -31,7 +31,7 @@ DETALLE_EXPORT_COLUMNS = [
 SORTABLE_COLUMNS: dict[str, str] = {
     "seller_name": "seller_name",
     "school_name": "school_name",
-    "exam_date": "payment_day",
+    "exam_date": "first_payment_date",
     "total": "quantity",
 }
 
@@ -73,10 +73,10 @@ def _build_where(filters: DetalleFilters) -> tuple[str, dict]:
         conditions.append("COALESCE(all_cities, ARRAY[]::text[]) && CAST(:cities AS text[])")
         params["cities"] = list(filters.cities)
     if getattr(filters, "date_from", None):
-        conditions.append(f"{report_date_expr()} >= :date_from")
+        conditions.append(f"{line_item_date_expr()} >= :date_from")
         params["date_from"] = coerce_iso_date_param(filters.date_from)
     if getattr(filters, "date_to", None):
-        conditions.append(f"{report_date_expr()} <= :date_to")
+        conditions.append(f"{line_item_date_expr()} <= :date_to")
         params["date_to"] = coerce_iso_date_param(filters.date_to)
     if filters.search:
         conditions.append("(seller_name ILIKE :search OR school_name ILIKE :search)")
@@ -130,7 +130,7 @@ async def _fetch_current_base(filters: DetalleFilters) -> DetalleReportBase:
             cart_product_id AS id,
             seller_name,
             school_name,
-            payment_day::text AS exam_date,
+            first_payment_date::text AS exam_date,
             exam_canonical_name AS exam_name,
             quantity,
             {sort_col} AS sort_val

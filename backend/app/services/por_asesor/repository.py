@@ -7,12 +7,12 @@ from app.enums import BaseCurrency
 from app.reporting.database import ReportingSessionLocal
 from app.schemas.reports import AsesorFilters
 from app.services.utils.report_currency import (
+    alloc_amount_column,
     line_expected_cost_column,
     line_expected_total_column,
-    line_paid_total_column,
     payment_amount_column,
 )
-from app.services.shared import build_line_item_where_clause, build_payment_where_clause
+from app.services.shared import build_alloc_where_clause, build_line_item_where_clause, build_payment_where_clause
 
 # Whitelist — only these strings ever reach SQL interpolation
 SORTABLE_COLUMNS: dict[str, str] = {
@@ -68,25 +68,44 @@ def _line_where(
     *,
     seller_id: int | None = None,
     require_product_breakdown: bool = False,
+    alias: str = "",
 ) -> tuple[str, dict]:
+    prefix = f"{alias}." if alias else ""
     where, params = build_line_item_where_clause(
         filters,
+        alias=alias,
         require_product_breakdown=require_product_breakdown,
     )
     if getattr(filters, "sellers", None):
-        where += " AND seller_name = ANY(:sellers)"
+        where += f" AND {prefix}seller_name = ANY(:sellers)"
         params["sellers"] = list(filters.sellers)
     if seller_id is not None:
-        where += " AND seller_id = :seller_id"
+        where += f" AND {prefix}seller_id = :seller_id"
+        params["seller_id"] = seller_id
+    return where, params
+
+
+def _alloc_where(
+    filters: AsesorFilters,
+    *,
+    seller_id: int | None = None,
+) -> tuple[str, dict]:
+    where, params = build_alloc_where_clause(filters)
+    if getattr(filters, "sellers", None):
+        where += " AND rpa.seller_name = ANY(:sellers)"
+        params["sellers"] = list(filters.sellers)
+    if seller_id is not None:
+        where += " AND rpa.seller_id = :seller_id"
         params["seller_id"] = seller_id
     return where, params
 
 
 def _build_cte_query(
     payment_where: str,
+    alloc_where: str,
     line_where: str,
     payment_amount: str,
-    paid_total: str,
+    alloc_amount: str,
     expected_cost: str,
     expected_total: str,
     *,
@@ -107,13 +126,27 @@ def _build_cte_query(
             {seller_ids_clause}
             GROUP BY seller_id
         ),
+        alloc_agg AS (
+            -- Revenue per seller from allocation table (one row per payment × product).
+            -- Filtering by payment_date ensures each payment's portion lands in the
+            -- correct period. By construction (remainder approach), SUM(allocated_amount)
+            -- for a payment = payment.quantity, so sin_categorizar → 0.
+            SELECT
+                rpa.seller_id,
+                COALESCE(SUM({alloc_amount}), 0)                                                              AS allocated_revenue,
+                COALESCE(SUM(CASE WHEN rpa.product_type = 'exam'   THEN {alloc_amount} ELSE 0 END), 0)       AS exam_revenue,
+                COALESCE(SUM(CASE WHEN rpa.product_type = 'book'   THEN {alloc_amount} ELSE 0 END), 0)       AS book_revenue,
+                COALESCE(SUM(CASE WHEN rpa.product_type = 'course' THEN {alloc_amount} ELSE 0 END), 0)       AS course_revenue
+            FROM report_payment_allocations rpa
+            WHERE {alloc_where}
+            {"AND rpa.seller_id = ANY(:seller_ids)" if seller_ids_clause else ""}
+            GROUP BY rpa.seller_id
+        ),
         line_agg AS (
+            -- Quantities and expected amounts from line_items, filtered by first_payment_date.
+            -- Revenue is NOT sourced here — only counts and expected values.
             SELECT
                 seller_id,
-                COALESCE(SUM({paid_total}), 0)                                                    AS allocated_revenue,
-                COALESCE(SUM(CASE WHEN product_type = 'exam'   THEN {paid_total} ELSE 0 END), 0)  AS exam_revenue,
-                COALESCE(SUM(CASE WHEN product_type = 'book'   THEN {paid_total} ELSE 0 END), 0)  AS book_revenue,
-                COALESCE(SUM(CASE WHEN product_type = 'course' THEN {paid_total} ELSE 0 END), 0)  AS course_revenue,
                 COALESCE(SUM(CASE WHEN product_type = 'book'   THEN quantity     ELSE 0 END), 0)  AS total_books,
                 COALESCE(SUM(CASE WHEN product_type = 'course' THEN quantity     ELSE 0 END), 0)  AS total_courses,
                 COALESCE(SUM({expected_cost}), 0)                                                 AS expected_cost,
@@ -129,22 +162,23 @@ def _build_cte_query(
                 p.seller_id,
                 p.seller_name,
                 p.total_revenue,
-                COALESCE(li.allocated_revenue, 0) AS allocated_revenue,
-                COALESCE(li.exam_revenue,      0) AS exam_revenue,
-                COALESCE(li.book_revenue,      0) AS book_revenue,
-                COALESCE(li.course_revenue,    0) AS course_revenue,
-                COALESCE(li.total_books,       0) AS total_books,
-                COALESCE(li.total_courses,     0) AS total_courses,
-                COALESCE(li.expected_cost,     0) AS expected_cost,
-                COALESCE(li.expected_revenue,  0) AS expected_revenue,
+                COALESCE(a.allocated_revenue, 0) AS allocated_revenue,
+                COALESCE(a.exam_revenue,      0) AS exam_revenue,
+                COALESCE(a.book_revenue,      0) AS book_revenue,
+                COALESCE(a.course_revenue,    0) AS course_revenue,
+                COALESCE(li.total_books,      0) AS total_books,
+                COALESCE(li.total_courses,    0) AS total_courses,
+                COALESCE(li.expected_cost,    0) AS expected_cost,
+                COALESCE(li.expected_revenue, 0) AS expected_revenue,
                 CASE
-                    WHEN COALESCE(li.allocated_revenue, 0) > 0
-                    THEN (COALESCE(li.allocated_revenue, 0) - COALESCE(li.expected_cost, 0))
-                         / li.allocated_revenue * 100
+                    WHEN COALESCE(a.allocated_revenue, 0) > 0
+                    THEN (COALESCE(a.allocated_revenue, 0) - COALESCE(li.expected_cost, 0))
+                         / a.allocated_revenue * 100
                     ELSE 0
                 END AS profit_margin
             FROM payment_agg p
-            LEFT JOIN line_agg li ON li.seller_id = p.seller_id
+            LEFT JOIN alloc_agg a  ON a.seller_id  = p.seller_id
+            LEFT JOIN line_agg  li ON li.seller_id = p.seller_id
         )
         SELECT * FROM combined
         {cursor_clause}
@@ -160,12 +194,13 @@ async def fetch_paginated_summary_rows(
     base_currency: BaseCurrency = BaseCurrency.MXN,
 ) -> tuple[list, bool, str | None]:
     payment_where, params = _payment_where(filters)
+    alloc_where, alloc_params = _alloc_where(filters)
     line_where, line_params = _line_where(filters, require_product_breakdown=True)
-    # Merge params — both WHERE clauses use identical filter keys/values
+    params.update(alloc_params)
     params.update(line_params)
 
     payment_amount = payment_amount_column(base_currency)
-    paid_total = line_paid_total_column(base_currency)
+    alloc_amount = alloc_amount_column(base_currency)
     expected_cost_col = line_expected_cost_column(base_currency)
     expected_total_col = line_expected_total_column(base_currency)
 
@@ -194,9 +229,10 @@ async def fetch_paginated_summary_rows(
     params["page_size"] = limit + 1
     query = _build_cte_query(
         payment_where,
+        alloc_where,
         line_where,
         payment_amount,
-        paid_total,
+        alloc_amount,
         expected_cost_col,
         expected_total_col,
         cursor_clause=cursor_clause,
@@ -240,20 +276,23 @@ async def fetch_comparison_rows_by_seller_ids(
     if not seller_ids:
         return []
     payment_where, params = _payment_where(filters)
+    alloc_where, alloc_params = _alloc_where(filters)
     line_where, line_params = _line_where(filters, require_product_breakdown=True)
+    params.update(alloc_params)
     params.update(line_params)
     params["seller_ids"] = seller_ids
 
     payment_amount = payment_amount_column(base_currency)
-    paid_total = line_paid_total_column(base_currency)
+    alloc_amount = alloc_amount_column(base_currency)
     expected_cost_col = line_expected_cost_column(base_currency)
     expected_total_col = line_expected_total_column(base_currency)
 
     query = _build_cte_query(
         payment_where,
+        alloc_where,
         line_where,
         payment_amount,
-        paid_total,
+        alloc_amount,
         expected_cost_col,
         expected_total_col,
         seller_ids_clause="AND seller_id = ANY(:seller_ids)",
@@ -325,16 +364,16 @@ async def fetch_school_allocated_revenue_metric_rows(
     seller_id: int | None = None,
     base_currency: BaseCurrency = BaseCurrency.MXN,
 ) -> list:
-    where, params = _line_where(filters, seller_id=seller_id, require_product_breakdown=True)
-    paid_total = line_paid_total_column(base_currency)
+    where, params = _alloc_where(filters, seller_id=seller_id)
+    alloc_amount = alloc_amount_column(base_currency)
     query = f"""
         SELECT
-            seller_id,
-            lead_id,
-            COALESCE(SUM({paid_total}), 0) AS revenue
-        FROM report_line_items
+            rpa.seller_id,
+            rpa.lead_id,
+            COALESCE(SUM({alloc_amount}), 0) AS revenue
+        FROM report_payment_allocations rpa
         WHERE {where}
-        GROUP BY seller_id, lead_id
+        GROUP BY rpa.seller_id, rpa.lead_id
     """
     async with ReportingSessionLocal() as session:
         return (await session.execute(text(query), params)).fetchall()
@@ -366,18 +405,28 @@ async def fetch_detail_exam_breakdown_rows(
     filters: AsesorFilters,
     base_currency: BaseCurrency = BaseCurrency.MXN,
 ) -> list:
-    where, params = _line_where(filters, seller_id=seller_id, require_product_breakdown=True)
-    paid_total = line_paid_total_column(base_currency)
+    # Quantities from line_items (filtered by first_payment_date);
+    # revenue from allocations (filtered by payment_date).
+    # Use alias="rli" so WHERE conditions are fully qualified — avoids ambiguity in the JOIN.
+    line_where, line_params = _line_where(
+        filters, seller_id=seller_id, require_product_breakdown=True, alias="rli"
+    )
+    alloc_where, alloc_params = _alloc_where(filters, seller_id=seller_id)
+    alloc_amount = alloc_amount_column(base_currency)
     query = f"""
         SELECT
-            exam_category,
-            SUM(quantity) AS exams,
-            COUNT(DISTINCT lead_id) AS schools,
-            SUM({paid_total}) AS revenue
-        FROM report_line_items
-        WHERE {where}
-          AND product_type = 'exam'
-        GROUP BY exam_category
+            rli.exam_category,
+            SUM(rli.quantity) AS exams,
+            COUNT(DISTINCT rli.lead_id) AS schools,
+            COALESCE(SUM(rpa.{alloc_amount}), 0) AS revenue
+        FROM report_line_items rli
+        LEFT JOIN report_payment_allocations rpa
+               ON rpa.cart_product_id = rli.cart_product_id
+              AND {alloc_where}
+        WHERE {line_where}
+          AND rli.product_type = 'exam'
+        GROUP BY rli.exam_category
     """
+    params = {**line_params, **alloc_params}
     async with ReportingSessionLocal() as session:
         return (await session.execute(text(query), params)).fetchall()

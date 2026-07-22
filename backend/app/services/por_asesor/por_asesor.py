@@ -47,6 +47,7 @@ from app.services.por_asesor.repository import (
     fetch_school_product_metric_rows,
     fetch_school_presence_rows,
     fetch_summary_exam_breakdown_rows_by_seller_ids,
+    _alloc_where,
     _line_where,
     _payment_where,
 )
@@ -55,9 +56,9 @@ from app.services.utils.date_utils import (
     resolve_comparison_range,
 )
 from app.services.utils.report_currency import (
+    alloc_amount_column,
     line_expected_cost_column,
     line_expected_total_column,
-    line_paid_total_column,
     payment_amount_column,
 )
 
@@ -101,11 +102,12 @@ async def fetch_detail_aggregate_row(
     base_currency: BaseCurrency = BaseCurrency.MXN,
 ):
     payment_where, payment_params = _payment_where(filters, seller_id=seller_id)
+    alloc_where, alloc_params = _alloc_where(filters, seller_id=seller_id)
     line_where, line_params = _line_where(
         filters, seller_id=seller_id, require_product_breakdown=True
     )
     payment_amount = payment_amount_column(base_currency)
-    paid_total = line_paid_total_column(base_currency)
+    alloc_amount = alloc_amount_column(base_currency)
     expected_cost_col = line_expected_cost_column(base_currency)
     expected_total_col = line_expected_total_column(base_currency)
 
@@ -124,21 +126,34 @@ async def fetch_detail_aggregate_row(
                 )
             ).fetchone()
 
+    async def fetch_alloc_row():
+        async with ReportingSessionLocal() as session:
+            return (
+                await session.execute(
+                    text(f"""
+                SELECT
+                    COALESCE(SUM({alloc_amount}), 0)                                                               AS allocated_revenue,
+                    COALESCE(SUM(CASE WHEN rpa.product_type = 'exam'   THEN {alloc_amount} ELSE 0 END), 0)        AS exam_revenue,
+                    COALESCE(SUM(CASE WHEN rpa.product_type = 'book'   THEN {alloc_amount} ELSE 0 END), 0)        AS book_revenue,
+                    COALESCE(SUM(CASE WHEN rpa.product_type = 'course' THEN {alloc_amount} ELSE 0 END), 0)        AS course_revenue
+                FROM report_payment_allocations rpa
+                WHERE {alloc_where}
+            """),
+                    alloc_params,
+                )
+            ).fetchone()
+
     async def fetch_line_row():
         async with ReportingSessionLocal() as session:
             return (
                 await session.execute(
                     text(f"""
                 SELECT
-                    COALESCE(SUM(CASE WHEN product_type = 'exam'   THEN quantity    ELSE 0 END), 0) AS total_exams,
-                    COALESCE(SUM(CASE WHEN product_type = 'book'   THEN quantity    ELSE 0 END), 0) AS total_books,
-                    COALESCE(SUM(CASE WHEN product_type = 'course' THEN quantity    ELSE 0 END), 0) AS total_courses,
-                    COALESCE(SUM({paid_total}), 0)                                                        AS allocated_revenue,
-                    COALESCE(SUM(CASE WHEN product_type = 'exam'   THEN {paid_total} ELSE 0 END), 0)      AS exam_revenue,
-                    COALESCE(SUM(CASE WHEN product_type = 'book'   THEN {paid_total} ELSE 0 END), 0)      AS book_revenue,
-                    COALESCE(SUM(CASE WHEN product_type = 'course' THEN {paid_total} ELSE 0 END), 0)      AS course_revenue,
-                    COALESCE(SUM({expected_cost_col}), 0)                                                 AS expected_cost,
-                    COALESCE(SUM({expected_total_col}), 0)                                                AS expected_revenue
+                    COALESCE(SUM(CASE WHEN product_type = 'exam'   THEN quantity ELSE 0 END), 0) AS total_exams,
+                    COALESCE(SUM(CASE WHEN product_type = 'book'   THEN quantity ELSE 0 END), 0) AS total_books,
+                    COALESCE(SUM(CASE WHEN product_type = 'course' THEN quantity ELSE 0 END), 0) AS total_courses,
+                    COALESCE(SUM({expected_cost_col}), 0)                                        AS expected_cost,
+                    COALESCE(SUM({expected_total_col}), 0)                                       AS expected_revenue
                 FROM report_line_items
                 WHERE {line_where}
             """),
@@ -146,12 +161,14 @@ async def fetch_detail_aggregate_row(
                 )
             ).fetchone()
 
-    payment_row, line_row = await asyncio.gather(fetch_payment_row(), fetch_line_row())
+    payment_row, alloc_row, line_row = await asyncio.gather(
+        fetch_payment_row(), fetch_alloc_row(), fetch_line_row()
+    )
     total_revenue = float((payment_row.total_revenue or 0) if payment_row else 0)
-    allocated_revenue = float((line_row.allocated_revenue or 0) if line_row else 0)
-    exam_revenue = float((line_row.exam_revenue or 0) if line_row else 0)
-    book_revenue = float((line_row.book_revenue or 0) if line_row else 0)
-    course_revenue = float((line_row.course_revenue or 0) if line_row else 0)
+    allocated_revenue = float((alloc_row.allocated_revenue or 0) if alloc_row else 0)
+    exam_revenue = float((alloc_row.exam_revenue or 0) if alloc_row else 0)
+    book_revenue = float((alloc_row.book_revenue or 0) if alloc_row else 0)
+    course_revenue = float((alloc_row.course_revenue or 0) if alloc_row else 0)
     expected_cost = float((line_row.expected_cost or 0) if line_row else 0)
     expected_revenue = float((line_row.expected_revenue or 0) if line_row else 0)
     return SimpleNamespace(

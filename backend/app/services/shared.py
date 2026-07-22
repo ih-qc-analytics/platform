@@ -11,19 +11,25 @@ def coerce_iso_date_param(value: str | date | datetime) -> date:
     return date.fromisoformat(value)
 
 
-def report_date_expr(alias: str = "") -> str:
-    prefix = f"{alias}." if alias else ""
-    return f"COALESCE({prefix}payment_day, {prefix}payment_date, DATE({prefix}created_at))"
-
-
 def payment_date_expr(alias: str = "") -> str:
     prefix = f"{alias}." if alias else ""
     return f"COALESCE({prefix}payment_date, DATE({prefix}created_at))"
 
 
 def line_item_date_expr(alias: str = "") -> str:
+    """
+    The single date column for report_line_items.
+
+    first_payment_date = MIN(allocation.payment_date) across all
+    report_payment_allocations rows for this cart_product_id. It represents
+    the earliest date on which any payment was applied to this product —
+    i.e. the date the product's quantity enters a reporting period.
+
+    A product contracted in Nov 2025 but first paid Jan 2026 will have
+    first_payment_date = 2026-01-xx and correctly appear only in 2026 filters.
+    """
     prefix = f"{alias}." if alias else ""
-    return f"COALESCE({prefix}payment_day, {prefix}payment_date, DATE({prefix}created_at))"
+    return f"{prefix}first_payment_date"
 
 
 def build_geo_where_clause(filters) -> tuple[str, dict]:
@@ -53,10 +59,10 @@ def build_geo_where_clause(filters) -> tuple[str, dict]:
         conditions.append("COALESCE(city_names, ARRAY[]::text[]) && CAST(:cities AS text[])")
         params["cities"] = list(filters.cities)
     if getattr(filters, "date_from", None):
-        conditions.append(f"{report_date_expr()} >= :date_from")
+        conditions.append(f"{line_item_date_expr()} >= :date_from")
         params["date_from"] = coerce_iso_date_param(filters.date_from)
     if getattr(filters, "date_to", None):
-        conditions.append(f"{report_date_expr()} <= :date_to")
+        conditions.append(f"{line_item_date_expr()} <= :date_to")
         params["date_to"] = coerce_iso_date_param(filters.date_to)
     if getattr(filters, "year", None):
         conditions.append("year = :year")
@@ -142,5 +148,27 @@ def build_line_item_where_clause(
     if getattr(filters, "year", None):
         conditions.append(f"{prefix}year = :year")
         params["year"] = filters.year
+
+    return " AND ".join(conditions), params
+
+
+def build_alloc_where_clause(filters, *, alias: str = "rpa") -> tuple[str, dict]:
+    """
+    Build a WHERE clause for report_payment_allocations.
+    Always filters: is_active = TRUE.
+    """
+    prefix = f"{alias}." if alias else ""
+    conditions = [f"{prefix}is_active = TRUE"]
+    params: dict = {}
+
+    if getattr(filters, "countries", None):
+        conditions.append(f"{prefix}site = ANY(:countries)")
+        params["countries"] = list(filters.countries)
+    if getattr(filters, "date_from", None):
+        conditions.append(f"{prefix}payment_date >= :date_from")
+        params["date_from"] = coerce_iso_date_param(filters.date_from)
+    if getattr(filters, "date_to", None):
+        conditions.append(f"{prefix}payment_date <= :date_to")
+        params["date_to"] = coerce_iso_date_param(filters.date_to)
 
     return " AND ".join(conditions), params

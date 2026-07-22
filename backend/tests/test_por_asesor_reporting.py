@@ -20,6 +20,9 @@ from tests.conftest_reporting import bind_test_reporting_database
 # ─────────────────────────────────────────────────────────────
 
 
+_LINE_ITEMS_EXCLUDED = frozenset({"payment_day", "payment_date", "paid_total", "paid_total_mxn", "paid_total_usd"})
+
+
 def make_row(**overrides) -> dict:
     created_at = overrides.get("created_at", datetime(2025, 1, 15))
     payment_date = overrides.get("payment_date", created_at.date())
@@ -42,8 +45,10 @@ def make_row(**overrides) -> dict:
         "year": 2025,
         "month": 1,
         "payment_status": "Aprobado",
+        # payment_date kept for report_payments insert; not inserted into report_line_items
         "payment_date": payment_date,
-        "payment_day": payment_date,
+        # first_payment_date replaces payment_day for line_items date filtering
+        "first_payment_date": payment_date,
         "billing_status": "Aprobado",
         "product_id": 1,
         "product_type": "exam",
@@ -65,9 +70,6 @@ def make_row(**overrides) -> dict:
         "expected_total_usd": None,
         "expected_cost_mxn": 2000.00,
         "expected_cost_usd": None,
-        "paid_total": 5000.00,
-        "paid_total_mxn": 5000.00,
-        "paid_total_usd": None,
         "student_count": 1,
         "payment_count": 1,
         "total_mxn": 5000.00,
@@ -85,22 +87,17 @@ def make_row(**overrides) -> dict:
         row["expected_total_mxn"] = row["total_mxn"]
     if "expected_cost_mxn" not in overrides:
         row["expected_cost_mxn"] = row["cost_mxn"]
-    if "paid_total" not in overrides:
-        row["paid_total"] = row["total"]
-    if "paid_total_mxn" not in overrides:
-        row["paid_total_mxn"] = row["total_mxn"]
     row["state_names"] = overrides.get(
         "state_names", [row["state_name"]] if row.get("state_name") else []
     )
     row["city_names"] = overrides.get("city_names", [row["city"]] if row.get("city") else [])
-    row["payment_day"] = overrides.get("payment_day", row["payment_date"])
     return row
 
 
 async def _insert(session_factory, *rows):
-    cols = list(rows[0].keys())
-    col_str = ", ".join(cols)
-    val_str = ", ".join(f":{c}" for c in cols)
+    li_cols = [c for c in rows[0].keys() if c not in _LINE_ITEMS_EXCLUDED]
+    col_str = ", ".join(li_cols)
+    val_str = ", ".join(f":{c}" for c in li_cols)
     sql = text(f"INSERT INTO report_line_items ({col_str}) VALUES ({val_str})")
     async with session_factory() as session:
         async with session.begin():
@@ -144,8 +141,8 @@ async def _insert(session_factory, *rows):
                         "payment_status": row["payment_status"],
                         "business_status": row["business_status"],
                         "is_active": row["is_active"],
-                        "amount": row["paid_total"],
-                        "amount_mxn": row["paid_total_mxn"],
+                        "amount": row["total"],
+                        "amount_mxn": row["total_mxn"],
                         "amount_usd": None,
                     },
                 )
