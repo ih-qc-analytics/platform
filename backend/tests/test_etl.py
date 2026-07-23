@@ -293,40 +293,49 @@ async def test_upsert_populates_all_three_reporting_tables(ui_dev_reporting_db, 
 
 
 @pytest.mark.asyncio(loop_scope="session")
-async def test_products_without_students_get_paid_total_from_allocation(
+async def test_products_without_students_get_allocated_from_remainder(
     ui_dev_reporting_db, reporting_engine
 ):
     # cart_product_id=14 is an Admin Fee (UNCATEGORIZED, no students) on cart 11.
-    # Cart 11 has two payments (ids 11+12) totalling 500, and cp14 is the sole
-    # cart_product on that cart (total=500), so it receives 100% of the allocation.
-    # After the fix it should have paid_total=500 and be included in breakdown.
+    # Cart 11 has two payments totalling 500, and cp14 is the sole cart_product,
+    # so it receives 100% of each payment's remainder.
+    # Verify: first_payment_date is set, include_in_product_breakdown = True,
+    # and allocations sum to 500.
     async with reporting_engine.connect() as conn:
         row = (
             await conn.execute(
                 text("""
-                    SELECT expected_total, paid_total, include_in_product_breakdown, payment_status
+                    SELECT expected_total, first_payment_date, include_in_product_breakdown, payment_status
                     FROM report_line_items
                     WHERE cart_product_id = 14
                 """)
             )
         ).fetchone()
+        alloc_total = (
+            await conn.execute(
+                text("""
+                    SELECT COALESCE(SUM(allocated_amount), 0)
+                    FROM report_payment_allocations
+                    WHERE cart_product_id = 14
+                """)
+            )
+        ).scalar()
 
     assert row is not None
     assert float(row.expected_total) == 500.0
-    assert float(row.paid_total) == pytest.approx(500.0)
+    assert row.first_payment_date is not None
     assert row.include_in_product_breakdown is True
     assert row.payment_status == "Aprobado"
+    assert float(alloc_total) == pytest.approx(500.0)
 
 
 @pytest.mark.asyncio(loop_scope="session")
-async def test_line_items_aggregate_paid_totals_without_duplication(
-    ui_dev_reporting_db, reporting_engine
-):
+async def test_line_items_student_counts_without_duplication(ui_dev_reporting_db, reporting_engine):
     async with reporting_engine.connect() as conn:
         row = (
             await conn.execute(
                 text("""
-                    SELECT paid_total, student_count, payment_count
+                    SELECT student_count, payment_count
                     FROM report_line_items
                     WHERE cart_product_id = 4
                 """)
@@ -334,7 +343,6 @@ async def test_line_items_aggregate_paid_totals_without_duplication(
         ).fetchone()
 
     assert row is not None
-    assert float(row.paid_total) == 2000.0
     assert row.student_count == 2
     assert row.payment_count == 1
 
@@ -362,21 +370,30 @@ async def test_payment_allocations_sum_back_to_payment_amount(
 
 
 @pytest.mark.asyncio(loop_scope="session")
-async def test_book_without_students_gets_paid_total_from_allocation(
+async def test_book_without_students_gets_remainder_allocation(
     ui_dev_reporting_db, reporting_engine
 ):
     # cart_product_id=19 is a Prep Book on cart 14 with no student entry.
     # Payment 15 (quantity=1300, Aprobado) covers cart 14 which has two cart_products:
     #   cp18 PET Exam total=1000, cp19 Prep Book total=300  →  cart_total=1300
-    # Book allocation: round(1300 * 300/1300, 2) = 300.00
-    # The book should receive paid_total from the allocation fallback and be
-    # included in the product breakdown.
+    # student_amount for cp18 = 1000; remainder = 1300 - 1000 = 300
+    # cp19 (no-student) gets 100% of remainder = 300.
+    # first_payment_date should be set; include_in_product_breakdown = True.
     async with reporting_engine.connect() as conn:
         row = (
             await conn.execute(
                 text("""
-                    SELECT product_type, paid_total, include_in_product_breakdown, payment_status
+                    SELECT product_type, first_payment_date, include_in_product_breakdown, payment_status
                     FROM report_line_items
+                    WHERE cart_product_id = 19
+                """)
+            )
+        ).fetchone()
+        alloc_row = (
+            await conn.execute(
+                text("""
+                    SELECT COALESCE(SUM(allocated_amount), 0) AS total
+                    FROM report_payment_allocations
                     WHERE cart_product_id = 19
                 """)
             )
@@ -384,52 +401,58 @@ async def test_book_without_students_gets_paid_total_from_allocation(
 
     assert row is not None
     assert row.product_type == "book"
-    assert float(row.paid_total) == pytest.approx(300.0)
+    assert row.first_payment_date is not None
     assert row.include_in_product_breakdown is True
     assert row.payment_status == "Aprobado"
+    assert float(alloc_row.total) == pytest.approx(300.0)
 
 
 @pytest.mark.asyncio(loop_scope="session")
-async def test_exam_on_same_cart_as_book_uses_student_payments_not_allocation(
-    ui_dev_reporting_db, reporting_engine
-):
+async def test_exam_on_same_cart_as_book_uses_student_amount(ui_dev_reporting_db, reporting_engine):
     # cart_product_id=18 is a PET Exam on cart 14 with student 16 (student_payment=1000).
-    # Even though the allocation for this exam would be 1000 (1300 * 1000/1300),
-    # paid_total must come from student_payments (the primary path), not allocation.
-    # This confirms the fallback guard (cp_id not in paid_total_converted) is correct.
+    # The allocation must use the exact student_payment amount (1000), not a
+    # proportional share of the cart total.
     async with reporting_engine.connect() as conn:
         row = (
             await conn.execute(
                 text("""
-                    SELECT product_type, paid_total, student_count, payment_count,
-                           include_in_product_breakdown
+                    SELECT product_type, student_count, payment_count, include_in_product_breakdown
                     FROM report_line_items
                     WHERE cart_product_id = 18
                 """)
             )
         ).fetchone()
+        alloc_total = (
+            await conn.execute(
+                text("""
+                    SELECT COALESCE(SUM(allocated_amount), 0)
+                    FROM report_payment_allocations
+                    WHERE cart_product_id = 18
+                """)
+            )
+        ).scalar()
 
     assert row is not None
     assert row.product_type == "exam"
-    assert float(row.paid_total) == pytest.approx(1000.0)
+    assert float(alloc_total) == pytest.approx(1000.0)
     assert row.student_count == 1
     assert row.payment_count == 1
     assert row.include_in_product_breakdown is True
 
 
 @pytest.mark.asyncio(loop_scope="session")
-async def test_paid_totals_on_mixed_cart_sum_to_payment_amount(
+async def test_allocations_on_mixed_cart_sum_to_payment_amount(
     ui_dev_reporting_db, reporting_engine
 ):
-    # On cart 14, the exam (cp18, paid via student_payments=1000) and book
-    # (cp19, paid via allocation=300) together must equal payment 15 (quantity=1300).
-    # This verifies no money is created or lost across the two paid_total sources.
+    # On cart 14, the exam (cp18, student_amount=1000) and book (cp19, remainder=300)
+    # allocations together must equal payment 15 quantity (1300).
+    # Verifies remainder approach: no money created or lost.
     async with reporting_engine.connect() as conn:
         total = (
             await conn.execute(
                 text("""
-                    SELECT COALESCE(SUM(paid_total), 0)
-                    FROM report_line_items
+                    SELECT COALESCE(SUM(allocated_amount), 0)
+                    FROM report_payment_allocations
                     WHERE cart_product_id IN (18, 19)
                 """)
             )
@@ -439,30 +462,84 @@ async def test_paid_totals_on_mixed_cart_sum_to_payment_amount(
 
 
 @pytest.mark.asyncio(loop_scope="session")
-async def test_book_with_existing_student_is_unaffected_by_allocation_fallback(
+async def test_book_with_existing_student_uses_student_amount_not_remainder(
     ui_dev_reporting_db, reporting_engine
 ):
-    # cart_product_id=6 is a Prep Book on cart 5 that already has student 7
-    # with student_payment (7, 5, 300). The allocation fallback must NOT fire
-    # because this book IS in paid_total_converted (via student_payments).
-    # paid_total must remain 300.0 from student_payments, not from allocation.
+    # cart_product_id=6 is a Prep Book on cart 5 with student 7 (student_payment=300).
+    # Since it has a student_payments entry, it uses the exact student amount (300),
+    # not a proportional remainder share.
     async with reporting_engine.connect() as conn:
         row = (
             await conn.execute(
                 text("""
-                    SELECT product_type, paid_total, student_count,
-                           include_in_product_breakdown
+                    SELECT product_type, student_count, include_in_product_breakdown
                     FROM report_line_items
                     WHERE cart_product_id = 6
                 """)
             )
         ).fetchone()
+        alloc_total = (
+            await conn.execute(
+                text("""
+                    SELECT COALESCE(SUM(allocated_amount), 0)
+                    FROM report_payment_allocations
+                    WHERE cart_product_id = 6
+                """)
+            )
+        ).scalar()
 
     assert row is not None
     assert row.product_type == "book"
-    assert float(row.paid_total) == pytest.approx(300.0)
+    assert float(alloc_total) == pytest.approx(300.0)
     assert row.student_count == 1
     assert row.include_in_product_breakdown is True
+
+
+@pytest.mark.asyncio(loop_scope="session")
+async def test_first_payment_date_set_on_line_items(ui_dev_reporting_db, reporting_engine):
+    # cp19 is the Prep Book on cart 14. Payment 15 has paymentDate='2025-03-05'.
+    # first_payment_date must equal that sanitised payment date.
+    async with reporting_engine.connect() as conn:
+        fpd = (
+            await conn.execute(
+                text("""
+                    SELECT first_payment_date
+                    FROM report_line_items
+                    WHERE cart_product_id = 19
+                """)
+            )
+        ).scalar()
+
+    from datetime import date as date_type
+
+    assert fpd is not None
+    assert isinstance(fpd, date_type)
+    # Payment 15 paymentDate = '2025-03-05' → first_payment_date must be 2025-03-05
+    assert fpd == date_type(2025, 3, 5)
+
+
+@pytest.mark.asyncio(loop_scope="session")
+async def test_allocation_payment_date_is_payments_actual_date(
+    ui_dev_reporting_db, reporting_engine
+):
+    # Allocation row for payment 15 / cp18 must carry payment_date = 2025-03-05
+    # (the actual paymentDate of payment 15), not cart.createdAt.
+    # cart 14 createdAt = '2025-03-01', payment 15 paymentDate = '2025-03-05'.
+    async with reporting_engine.connect() as conn:
+        payment_date = (
+            await conn.execute(
+                text("""
+                    SELECT payment_date
+                    FROM report_payment_allocations
+                    WHERE payment_id = 15 AND cart_product_id = 18
+                """)
+            )
+        ).scalar()
+
+    from datetime import date as date_type
+
+    assert payment_date is not None
+    assert payment_date == date_type(2025, 3, 5)
 
 
 @pytest.mark.asyncio

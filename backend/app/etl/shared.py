@@ -107,8 +107,6 @@ def extract_dimensions(row: dict) -> dict:
         "year": created_at.year,
         "month": created_at.month,
         "created_at": created_at,
-        "payment_date": coerce_to_date(row.get("payment_date")),
-        "payment_day": coerce_to_date(row.get("payment_date")) or created_at.date(),
         "etl_date": datetime.now().date(),
         "base_currency": SITE_CURRENCY.get(row.get("site", ""), UNKNOWN_CURRENCY),
     }

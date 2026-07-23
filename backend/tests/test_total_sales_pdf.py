@@ -98,15 +98,34 @@ async def test_build_ventas_totales_pdf_payload_formats_kpis_and_scales_series()
     }
     # With comparison active, KPIs without explicit deltas show "N/A"
     assert [item.model_dump() for item in payload.kpis[:4]] == [
-        {"label": "Total Clientes", "value": "3", "growth": "N/A", "growth_positive": None},
-        {"label": "Total Exámenes", "value": "6", "growth": "N/A", "growth_positive": None},
+        {
+            "label": "Total Clientes",
+            "value": "3",
+            "growth": "N/A",
+            "growth_positive": None,
+            "comparison_value": None,
+        },
+        {
+            "label": "Total Exámenes",
+            "value": "6",
+            "growth": "N/A",
+            "growth_positive": None,
+            "comparison_value": None,
+        },
         {
             "label": "Ingreso Exámenes",
             "value": "$6,000",
             "growth": "N/A",
             "growth_positive": None,
+            "comparison_value": None,
         },
-        {"label": "Total Libros", "value": "3", "growth": "N/A", "growth_positive": None},
+        {
+            "label": "Total Libros",
+            "value": "3",
+            "growth": "N/A",
+            "growth_positive": None,
+            "comparison_value": None,
+        },
     ]
     assert any(item.label == "Otros" and item.value == "2" for item in payload.kpis)
     assert any(item.label == "Ingreso Otros" and item.value == "$400" for item in payload.kpis)

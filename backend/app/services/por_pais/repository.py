@@ -3,8 +3,12 @@ from sqlalchemy import text
 
 from app.reporting.database import ReportingSessionLocal
 from app.schemas.reports import PorPaisFilters
-from app.services.utils.report_currency import line_paid_total_column, payment_amount_column
-from app.services.shared import build_line_item_where_clause, build_payment_where_clause
+from app.services.utils.report_currency import alloc_amount_column, payment_amount_column
+from app.services.shared import (
+    build_alloc_where_clause,
+    build_line_item_where_clause,
+    build_payment_where_clause,
+)
 
 
 def _payment_where(filters: PorPaisFilters) -> tuple[str, dict]:
@@ -17,6 +21,10 @@ def _line_where(
     return build_line_item_where_clause(
         filters, require_product_breakdown=require_product_breakdown
     )
+
+
+def _alloc_where(filters: PorPaisFilters) -> tuple[str, dict]:
+    return build_alloc_where_clause(filters)
 
 
 async def fetch_country_payment_rows(
@@ -47,24 +55,46 @@ async def fetch_country_allocated_revenue_rows(
     filters: PorPaisFilters,
     base_currency: BaseCurrency = BaseCurrency.MXN,
 ) -> list:
-    where, params = _line_where(filters, require_product_breakdown=True)
-    paid_total = line_paid_total_column(base_currency)
+    alloc_where, params = _alloc_where(filters)
+    line_where, line_params = _line_where(filters, require_product_breakdown=True)
+    # Both where clauses use the same parameter names and values — merge safely.
+    params.update(line_params)
+    alloc_amount = alloc_amount_column(base_currency)
     async with ReportingSessionLocal() as session:
         return (
             await session.execute(
                 text(f"""
+            WITH alloc_agg AS (
+                SELECT
+                    rpa.site,
+                    COALESCE(SUM({alloc_amount}), 0)                                                              AS allocated_revenue,
+                    COALESCE(SUM(CASE WHEN rpa.product_type = 'exam'   THEN {alloc_amount} ELSE 0 END), 0)       AS exam_revenue,
+                    COALESCE(SUM(CASE WHEN rpa.product_type = 'book'   THEN {alloc_amount} ELSE 0 END), 0)       AS book_revenue,
+                    COALESCE(SUM(CASE WHEN rpa.product_type = 'course' THEN {alloc_amount} ELSE 0 END), 0)       AS course_revenue
+                FROM report_payment_allocations rpa
+                WHERE {alloc_where} AND rpa.site IS NOT NULL
+                GROUP BY rpa.site
+            ),
+            qty_agg AS (
+                SELECT
+                    site,
+                    COALESCE(SUM(CASE WHEN product_type = 'book'   THEN quantity ELSE 0 END), 0) AS total_books,
+                    COALESCE(SUM(CASE WHEN product_type = 'course' THEN quantity ELSE 0 END), 0) AS total_courses
+                FROM report_line_items
+                WHERE {line_where} AND site IS NOT NULL
+                GROUP BY site
+            )
             SELECT
-                site AS country,
-                COALESCE(SUM({paid_total}), 0)                                                    AS allocated_revenue,
-                COALESCE(SUM(CASE WHEN product_type = 'exam'   THEN {paid_total} ELSE 0 END), 0)  AS exam_revenue,
-                COALESCE(SUM(CASE WHEN product_type = 'book'   THEN {paid_total} ELSE 0 END), 0)  AS book_revenue,
-                COALESCE(SUM(CASE WHEN product_type = 'course' THEN {paid_total} ELSE 0 END), 0)  AS course_revenue,
-                COALESCE(SUM(CASE WHEN product_type = 'book'   THEN quantity     ELSE 0 END), 0)  AS total_books,
-                COALESCE(SUM(CASE WHEN product_type = 'course' THEN quantity     ELSE 0 END), 0)  AS total_courses
-            FROM report_line_items
-            WHERE {where} AND site IS NOT NULL
-            GROUP BY site
-            ORDER BY site ASC
+                a.site AS country,
+                a.allocated_revenue,
+                a.exam_revenue,
+                a.book_revenue,
+                a.course_revenue,
+                COALESCE(q.total_books,   0) AS total_books,
+                COALESCE(q.total_courses, 0) AS total_courses
+            FROM alloc_agg a
+            LEFT JOIN qty_agg q ON q.site = a.site
+            ORDER BY a.site ASC
         """),
                 params,
             )

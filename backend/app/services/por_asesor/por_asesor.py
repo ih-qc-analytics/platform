@@ -47,6 +47,7 @@ from app.services.por_asesor.repository import (
     fetch_school_product_metric_rows,
     fetch_school_presence_rows,
     fetch_summary_exam_breakdown_rows_by_seller_ids,
+    _alloc_where,
     _line_where,
     _payment_where,
 )
@@ -55,9 +56,9 @@ from app.services.utils.date_utils import (
     resolve_comparison_range,
 )
 from app.services.utils.report_currency import (
+    alloc_amount_column,
     line_expected_cost_column,
     line_expected_total_column,
-    line_paid_total_column,
     payment_amount_column,
 )
 
@@ -101,57 +102,62 @@ async def fetch_detail_aggregate_row(
     base_currency: BaseCurrency = BaseCurrency.MXN,
 ):
     payment_where, payment_params = _payment_where(filters, seller_id=seller_id)
+    alloc_where, alloc_params = _alloc_where(filters, seller_id=seller_id)
     line_where, line_params = _line_where(
         filters, seller_id=seller_id, require_product_breakdown=True
     )
     payment_amount = payment_amount_column(base_currency)
-    paid_total = line_paid_total_column(base_currency)
+    alloc_amount = alloc_amount_column(base_currency)
     expected_cost_col = line_expected_cost_column(base_currency)
     expected_total_col = line_expected_total_column(base_currency)
 
-    async def fetch_payment_row():
-        async with ReportingSessionLocal() as session:
-            return (
-                await session.execute(
-                    text(f"""
-                SELECT
-                    COUNT(DISTINCT lead_id) AS total_schools,
-                    COALESCE(SUM({payment_amount}), 0) AS total_revenue
-                FROM report_payments
-                WHERE {payment_where}
-            """),
-                    payment_params,
-                )
-            ).fetchone()
-
-    async def fetch_line_row():
-        async with ReportingSessionLocal() as session:
-            return (
-                await session.execute(
-                    text(f"""
-                SELECT
-                    COALESCE(SUM(CASE WHEN product_type = 'exam'   THEN quantity    ELSE 0 END), 0) AS total_exams,
-                    COALESCE(SUM(CASE WHEN product_type = 'book'   THEN quantity    ELSE 0 END), 0) AS total_books,
-                    COALESCE(SUM(CASE WHEN product_type = 'course' THEN quantity    ELSE 0 END), 0) AS total_courses,
-                    COALESCE(SUM({paid_total}), 0)                                                        AS allocated_revenue,
-                    COALESCE(SUM(CASE WHEN product_type = 'exam'   THEN {paid_total} ELSE 0 END), 0)      AS exam_revenue,
-                    COALESCE(SUM(CASE WHEN product_type = 'book'   THEN {paid_total} ELSE 0 END), 0)      AS book_revenue,
-                    COALESCE(SUM(CASE WHEN product_type = 'course' THEN {paid_total} ELSE 0 END), 0)      AS course_revenue,
-                    COALESCE(SUM({expected_cost_col}), 0)                                                 AS expected_cost,
-                    COALESCE(SUM({expected_total_col}), 0)                                                AS expected_revenue
-                FROM report_line_items
-                WHERE {line_where}
-            """),
-                    line_params,
-                )
-            ).fetchone()
-
-    payment_row, line_row = await asyncio.gather(fetch_payment_row(), fetch_line_row())
+    async with ReportingSessionLocal() as session:
+        payment_row = (
+            await session.execute(
+                text(f"""
+            SELECT
+                COUNT(DISTINCT lead_id) AS total_schools,
+                COALESCE(SUM({payment_amount}), 0) AS total_revenue
+            FROM report_payments
+            WHERE {payment_where}
+        """),
+                payment_params,
+            )
+        ).fetchone()
+        alloc_row = (
+            await session.execute(
+                text(f"""
+            SELECT
+                COALESCE(SUM({alloc_amount}), 0)                                                               AS allocated_revenue,
+                COALESCE(SUM(CASE WHEN rpa.product_type = 'exam'   THEN {alloc_amount} ELSE 0 END), 0)        AS exam_revenue,
+                COALESCE(SUM(CASE WHEN rpa.product_type = 'book'   THEN {alloc_amount} ELSE 0 END), 0)        AS book_revenue,
+                COALESCE(SUM(CASE WHEN rpa.product_type = 'course' THEN {alloc_amount} ELSE 0 END), 0)        AS course_revenue
+            FROM report_payment_allocations rpa
+            WHERE {alloc_where}
+        """),
+                alloc_params,
+            )
+        ).fetchone()
+        line_row = (
+            await session.execute(
+                text(f"""
+            SELECT
+                COALESCE(SUM(CASE WHEN product_type = 'exam'   THEN quantity ELSE 0 END), 0) AS total_exams,
+                COALESCE(SUM(CASE WHEN product_type = 'book'   THEN quantity ELSE 0 END), 0) AS total_books,
+                COALESCE(SUM(CASE WHEN product_type = 'course' THEN quantity ELSE 0 END), 0) AS total_courses,
+                COALESCE(SUM({expected_cost_col}), 0)                                        AS expected_cost,
+                COALESCE(SUM({expected_total_col}), 0)                                       AS expected_revenue
+            FROM report_line_items
+            WHERE {line_where}
+        """),
+                line_params,
+            )
+        ).fetchone()
     total_revenue = float((payment_row.total_revenue or 0) if payment_row else 0)
-    allocated_revenue = float((line_row.allocated_revenue or 0) if line_row else 0)
-    exam_revenue = float((line_row.exam_revenue or 0) if line_row else 0)
-    book_revenue = float((line_row.book_revenue or 0) if line_row else 0)
-    course_revenue = float((line_row.course_revenue or 0) if line_row else 0)
+    allocated_revenue = float((alloc_row.allocated_revenue or 0) if alloc_row else 0)
+    exam_revenue = float((alloc_row.exam_revenue or 0) if alloc_row else 0)
+    book_revenue = float((alloc_row.book_revenue or 0) if alloc_row else 0)
+    course_revenue = float((alloc_row.course_revenue or 0) if alloc_row else 0)
     expected_cost = float((line_row.expected_cost or 0) if line_row else 0)
     expected_revenue = float((line_row.expected_revenue or 0) if line_row else 0)
     return SimpleNamespace(
@@ -651,13 +657,11 @@ async def get_asesor_detail(
             "date_to": comparison_meta.date_to,
         }
     )
-    current, comparison = await asyncio.gather(
-        _get_asesor_detail_base(
-            seller_id, current_filters, comparison_filters, base_currency=base_currency
-        ),
-        _get_asesor_detail_base(
-            seller_id, comparison_filters, current_filters, base_currency=base_currency
-        ),
+    current = await _get_asesor_detail_base(
+        seller_id, current_filters, comparison_filters, base_currency=base_currency
+    )
+    comparison = await _get_asesor_detail_base(
+        seller_id, comparison_filters, current_filters, base_currency=base_currency
     )
     return AsesorDetailResponse(
         current=current,
@@ -678,27 +682,42 @@ async def get_all_asesor_report_rows(
         update={"show_comparison": False, "comparison_date_from": None, "comparison_date_to": None}
     )
 
-    # Collect all current rows; suppress per-page comparison (fetched in one batch below)
-    all_rows: list[AsesorRow] = []
+    # Paginate through all sellers collecting only summary + exam breakdown rows.
+    # Status counts are intentionally skipped here — they require two full-table
+    # presence fetches (no seller_id filter) per page, which is O(pages × dataset).
+    # We compute them correctly in one batch below after all pages are collected.
+    all_summary_rows: list = []
+    all_breakdown_rows: list = []
     cursor = current_filters.cursor
     while True:
-        page = await get_asesor_report(
-            current_filters.model_copy(update={"cursor": cursor}),
-            country_rates=country_rates,
+        summary_rows, has_more, next_cursor = await fetch_paginated_summary_rows(
+            current_filters,
+            limit=current_filters.limit,
+            cursor=cursor,
             base_currency=base_currency,
         )
-        all_rows.extend(page.current.rows)
-        if not page.current.has_more or page.current.next_cursor is None:
+        page_seller_ids = [int(row.seller_id) for row in summary_rows]
+        breakdown_rows = await fetch_summary_exam_breakdown_rows_by_seller_ids(
+            page_seller_ids, current_filters
+        )
+        all_summary_rows.extend(summary_rows)
+        all_breakdown_rows.extend(breakdown_rows)
+        if not has_more or next_cursor is None:
             break
-        cursor = page.current.next_cursor
+        cursor = next_cursor
 
-    current = AsesorReportBase(rows=all_rows, next_cursor=None, has_more=False)
+    all_seller_ids = [int(row.seller_id) for row in all_summary_rows]
 
     if comparison_meta is None:
+        current = build_asesor_report_base(
+            all_summary_rows,
+            map_summary_exam_breakdowns(all_breakdown_rows),
+            {},
+            next_cursor=None,
+            has_more=False,
+        )
         return AsesorReportResponse(current=current, comparison_mode=None, comparison=None)
 
-    # One batch comparison fetch for ALL accumulated seller_ids
-    seller_ids = [row.seller_id for row in all_rows]
     comparison_filters = current_filters.model_copy(
         update={
             "date_from": comparison_meta.date_from,
@@ -706,16 +725,30 @@ async def get_all_asesor_report_rows(
             "cursor": None,
         }
     )
+
+    # Single parallel batch: current status counts + all comparison data.
+    # fetch_summary_status_counts internally opens 4 parallel DB sessions, so
+    # running both current and comparison status fetches concurrently here is safe.
     (
+        current_status_counts,
         comp_summary_rows,
         comp_breakdown_rows,
         comp_status_counts,
     ) = await asyncio.gather(
+        fetch_summary_status_counts(current_filters, comparison_filters, all_seller_ids),
         fetch_comparison_rows_by_seller_ids(
-            seller_ids, comparison_filters, base_currency=base_currency
+            all_seller_ids, comparison_filters, base_currency=base_currency
         ),
-        fetch_summary_exam_breakdown_rows_by_seller_ids(seller_ids, comparison_filters),
-        fetch_summary_status_counts(comparison_filters, current_filters, seller_ids),
+        fetch_summary_exam_breakdown_rows_by_seller_ids(all_seller_ids, comparison_filters),
+        fetch_summary_status_counts(comparison_filters, current_filters, all_seller_ids),
+    )
+
+    current = build_asesor_report_base(
+        all_summary_rows,
+        map_summary_exam_breakdowns(all_breakdown_rows),
+        current_status_counts,
+        next_cursor=None,
+        has_more=False,
     )
     comparison_base = build_asesor_report_base(
         comp_summary_rows,
@@ -743,18 +776,16 @@ async def get_asesor_details_for_rows(
 ) -> list[AsesorDetailBase]:
     if not rows:
         return []
-    results = await asyncio.gather(
-        *(
-            _get_asesor_detail_base(
-                row.seller_id,
-                filters,
-                filters,
-                base_currency=base_currency,
-            )
-            for row in rows
+    results = []
+    for row in rows:
+        detail = await _get_asesor_detail_base(
+            row.seller_id,
+            filters,
+            filters,
+            base_currency=base_currency,
         )
-    )
-    return list(results)
+        results.append(detail)
+    return results
 
 
 def build_asesor_export_filters_for_all(filters: AsesorFilters) -> AsesorFilters:
@@ -777,8 +808,7 @@ def build_asesor_filtered_export_filters(filters: AsesorFilters) -> AsesorFilter
         update={
             "cursor": None,
             "limit": 100,
-            "show_comparison": False,
-            # countries, zones, states, cities, sellers, sort_by, sort_dir preserved
+            # countries, zones, states, cities, sellers, sort_by, sort_dir, show_comparison preserved
         }
     )
 
@@ -848,10 +878,18 @@ def build_asesor_export_worksheets(
             detail_row[f"{cat}_revenue"] = cat_detail.revenue
         detail_rows.append(detail_row)
 
+    _COMPARISON_ONLY_HEADERS = {
+        "Ganados",
+        "Perdidos",
+        "Mantenidos",
+        "L+C Ganados",
+        "L+C Perdidos",
+        "L+C Mantenidos",
+    }
     summary_columns = [
         c
         for c in ASESOR_SUMMARY_COLUMNS
-        if c.header not in ("Ganados", "Perdidos", "Mantenidos") or report.comparison
+        if c.header not in _COMPARISON_ONLY_HEADERS or report.comparison
     ]
 
     detail_columns = [
@@ -1006,12 +1044,20 @@ async def build_por_asesor_pdf_payload(
     comp_total_allocated = sum(r.allocated_revenue for r in comp_rows) if has_comparison else None
     comp_total_expected = sum(r.expected_revenue for r in comp_rows) if has_comparison else None
     comp_total_cost = sum(r.expected_cost for r in comp_rows) if has_comparison else None
+    comp_total_margin = (
+        ((comp_total_allocated - comp_total_cost) / comp_total_allocated * 100)
+        if has_comparison and comp_total_allocated and comp_total_allocated > 0
+        else (0.0 if has_comparison else None)
+    )
 
-    def _kw(curr: float, prev: float | None) -> dict:
+    def _kw(curr: float, prev: float | None, fmt=None) -> dict:
         if prev is None:
             return {}
         g, gp = format_growth(percent_change(curr, prev))
-        return {"growth": g or "N/A", "growth_positive": gp}
+        result: dict = {"growth": g or "N/A", "growth_positive": gp}
+        if fmt is not None:
+            result["comparison_value"] = fmt(prev)
+        return result
 
     def _cat_exams(breakdown: dict, *keys: str) -> int:
         return sum(int(breakdown.get(k, 0) or 0) for k in keys)
@@ -1118,6 +1164,9 @@ async def build_por_asesor_pdf_payload(
     ]
     table_widths += [3, 3, 3, 3, 3, 2]
 
+    def _fmt_cur(v: float) -> str:
+        return format_currency(v, base_currency)
+
     return PorAsesorPDFPayload(
         header=build_pdf_header(
             "Resultados por Asesor",
@@ -1129,42 +1178,43 @@ async def build_por_asesor_pdf_payload(
             PDFKpiItem(
                 label="Asesores",
                 value=format_integer(len(report.current.rows)),
-                **_kw(len(report.current.rows), comp_asesores),
+                **_kw(len(report.current.rows), comp_asesores, format_integer),
             ),
             PDFKpiItem(
                 label="Exámenes",
                 value=format_integer(total_exams),
-                **_kw(total_exams, comp_total_exams),
+                **_kw(total_exams, comp_total_exams, format_integer),
             ),
             *status_kpis,
             PDFKpiItem(
                 label="Sin Categorizar",
-                value=format_currency(total_uncategorized, base_currency),
-                **_kw(total_uncategorized, comp_total_uncategorized),
+                value=_fmt_cur(total_uncategorized),
+                **_kw(total_uncategorized, comp_total_uncategorized, _fmt_cur),
             ),
             PDFKpiItem(
                 label="Valor Total",
-                value=format_currency(total_revenue, base_currency),
-                **_kw(total_revenue, comp_total_revenue),
+                value=_fmt_cur(total_revenue),
+                **_kw(total_revenue, comp_total_revenue, _fmt_cur),
             ),
             PDFKpiItem(
                 label="Ingreso Asignado",
-                value=format_currency(total_allocated, base_currency),
-                **_kw(total_allocated, comp_total_allocated),
+                value=_fmt_cur(total_allocated),
+                **_kw(total_allocated, comp_total_allocated, _fmt_cur),
             ),
             PDFKpiItem(
                 label="Ingreso Esperado",
-                value=format_currency(total_expected, base_currency),
-                **_kw(total_expected, comp_total_expected),
+                value=_fmt_cur(total_expected),
+                **_kw(total_expected, comp_total_expected, _fmt_cur),
             ),
             PDFKpiItem(
                 label="Costo Esperado",
-                value=format_currency(total_cost, base_currency),
-                **_kw(total_cost, comp_total_cost),
+                value=_fmt_cur(total_cost),
+                **_kw(total_cost, comp_total_cost, _fmt_cur),
             ),
             PDFKpiItem(
                 label="Margen de Utilidad",
                 value=format_percent(total_margin),
+                **_kw(total_margin, comp_total_margin, format_percent),
             ),
         ],
         table=PDFTable(
@@ -1191,11 +1241,17 @@ async def build_asesor_detail_pdf_payload(
     comp_detail = response.comparison.data if response.comparison else None
     comp_meta = response.comparison.meta if response.comparison else None
 
-    def _kw(curr: float, prev: float | None) -> dict:
+    def _kw(curr: float, prev: float | None, fmt=None) -> dict:
         if prev is None:
             return {}
         g, gp = format_growth(percent_change(curr, prev))
-        return {"growth": g or "N/A", "growth_positive": gp}
+        result: dict = {"growth": g or "N/A", "growth_positive": gp}
+        if fmt is not None:
+            result["comparison_value"] = fmt(prev)
+        return result
+
+    def _fmt_cur(v: float) -> str:
+        return format_currency(v, base_currency)
 
     empty_bd = ExamBrandDetail(exams=0, schools=0, revenue=0.0)
     category_rows = []
@@ -1271,6 +1327,8 @@ async def build_asesor_detail_pdf_payload(
                     label,
                     format_integer(curr_status.schools),
                     format_integer(curr_status.exams),
+                    format_integer(curr_status.books),
+                    format_integer(curr_status.courses),
                     format_currency(curr_status.revenue, base_currency),
                 ],
             )
@@ -1287,58 +1345,92 @@ async def build_asesor_detail_pdf_payload(
             PDFKpiItem(
                 label="Total Colegios",
                 value=format_integer(detail.total_schools),
-                **_kw(detail.total_schools, comp_detail.total_schools if comp_detail else None),
+                **_kw(
+                    detail.total_schools,
+                    comp_detail.total_schools if comp_detail else None,
+                    format_integer,
+                ),
             ),
             PDFKpiItem(
                 label="Total Exámenes",
                 value=format_integer(detail.total_exams),
-                **_kw(detail.total_exams, comp_detail.total_exams if comp_detail else None),
+                **_kw(
+                    detail.total_exams,
+                    comp_detail.total_exams if comp_detail else None,
+                    format_integer,
+                ),
             ),
             PDFKpiItem(
                 label="Libros",
                 value=format_integer(detail.total_books),
-                **_kw(detail.total_books, comp_detail.total_books if comp_detail else None),
+                **_kw(
+                    detail.total_books,
+                    comp_detail.total_books if comp_detail else None,
+                    format_integer,
+                ),
             ),
             PDFKpiItem(
                 label="Cursos",
                 value=format_integer(detail.total_courses),
-                **_kw(detail.total_courses, comp_detail.total_courses if comp_detail else None),
+                **_kw(
+                    detail.total_courses,
+                    comp_detail.total_courses if comp_detail else None,
+                    format_integer,
+                ),
             ),
             PDFKpiItem(
                 label="Sin Categorizar",
-                value=format_currency(detail.uncategorized_revenue, base_currency),
+                value=_fmt_cur(detail.uncategorized_revenue),
                 **_kw(
                     detail.uncategorized_revenue,
                     comp_detail.uncategorized_revenue if comp_detail else None,
+                    _fmt_cur,
                 ),
             ),
             PDFKpiItem(
                 label="Valor Total",
-                value=format_currency(detail.total_revenue, base_currency),
-                **_kw(detail.total_revenue, comp_detail.total_revenue if comp_detail else None),
+                value=_fmt_cur(detail.total_revenue),
+                **_kw(
+                    detail.total_revenue,
+                    comp_detail.total_revenue if comp_detail else None,
+                    _fmt_cur,
+                ),
             ),
             PDFKpiItem(
                 label="Ingreso Asignado",
-                value=format_currency(detail.allocated_revenue, base_currency),
+                value=_fmt_cur(detail.allocated_revenue),
                 **_kw(
-                    detail.allocated_revenue, comp_detail.allocated_revenue if comp_detail else None
+                    detail.allocated_revenue,
+                    comp_detail.allocated_revenue if comp_detail else None,
+                    _fmt_cur,
                 ),
             ),
             PDFKpiItem(
                 label="Ingreso Esperado",
-                value=format_currency(detail.expected_revenue, base_currency),
+                value=_fmt_cur(detail.expected_revenue),
                 **_kw(
-                    detail.expected_revenue, comp_detail.expected_revenue if comp_detail else None
+                    detail.expected_revenue,
+                    comp_detail.expected_revenue if comp_detail else None,
+                    _fmt_cur,
                 ),
             ),
             PDFKpiItem(
                 label="Costo Esperado",
-                value=format_currency(detail.expected_cost, base_currency),
-                **_kw(detail.expected_cost, comp_detail.expected_cost if comp_detail else None),
+                value=_fmt_cur(detail.expected_cost),
+                **_kw(
+                    detail.expected_cost,
+                    comp_detail.expected_cost if comp_detail else None,
+                    _fmt_cur,
+                ),
             ),
             PDFKpiItem(
                 label="Margen de Utilidad",
                 value=format_percent(detail.profit_margin),
+                **_kw(
+                    detail.profit_margin,
+                    comp_detail.profit_margin if comp_detail else None,
+                    format_percent,
+                ),
             ),
         ],
         geo_table=PDFTable(
@@ -1361,8 +1453,8 @@ async def build_asesor_detail_pdf_payload(
             column_widths=[4, 2, 2, 2],
         ),
         status_table=PDFTable(
-            headers=["Estado", "Colegios", "Exámenes", "Valor"],
+            headers=["Estado", "Colegios", "Exámenes", "Libros", "Cursos", "Valor"],
             rows=status_rows,
-            column_widths=[3, 2, 2, 2],
+            column_widths=[3, 2, 2, 2, 2, 2],
         ),
     )

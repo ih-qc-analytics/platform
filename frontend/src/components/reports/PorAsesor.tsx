@@ -411,30 +411,57 @@ export default function PorAsesor() {
 }
 
 function AsesorGlossaryNote() {
+    const [open, setOpen] = useState(false)
     return (
-        <div className="rounded-xl border border-slate-200 bg-slate-50 px-5 py-4 text-xs text-slate-500 space-y-1">
-            <p className="font-semibold text-slate-600 mb-2">Notas</p>
-            <p>
-                <span className="font-medium text-slate-700">Sin categorizar:</span> Pagos del asesor registrados sin
-                ningún detalle de producto en el sistema — no existen líneas de venta asociadas. No es que el producto
-                sea desconocido: es que no hay registro de qué se vendió. Se suman al ingreso total pero no aparecen en
-                ningún desglose por tipo.
-            </p>
-            <p>
-                <span className="font-medium text-slate-700">Ingreso Asignado:</span> Suma de los pagos recibidos que
-                tienen detalle de producto en el sistema. Es un subconjunto del Valor Total — la diferencia entre ambos
-                es el ingreso sin categorizar.
-            </p>
-            <p>
-                <span className="font-medium text-slate-700">Ingreso Esperado:</span> Suma de los montos facturados
-                (independientemente de si se han cobrado). Refleja el valor contractual acordado con los colegios. La
-                diferencia entre el Ingreso Esperado y el Ingreso Asignado representa pagos pendientes de cobro.
-            </p>
-            <p>
-                <span className="font-medium text-slate-700">Margen de Utilidad:</span> Calculado como (Ingreso Asignado
-                − Costo Esperado) / Ingreso Asignado × 100. Se calcula sobre el ingreso asignado (no el total) porque el
-                costo esperado solo cubre los productos con detalle de línea.
-            </p>
+        <div className="rounded-xl border border-slate-200 bg-slate-50 text-xs text-slate-500">
+            <button
+                onClick={() => setOpen((o) => !o)}
+                className="flex w-full items-center justify-between px-5 py-4 font-semibold text-slate-600"
+            >
+                <span>Notas</span>
+                {open ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+            </button>
+            {open && (
+                <div className="px-5 pb-4 space-y-1">
+                    <p>
+                        <span className="font-medium text-slate-700">Sin categorizar:</span> Diferencia entre el Valor
+                        Total cobrado y el Ingreso Asignado a productos. En condiciones normales es cero — cada peso
+                        cobrado queda distribuido entre los productos del carrito. Un valor distinto de cero indica un
+                        problema de calidad en los datos fuente:
+                    </p>
+                    <ul className="list-disc list-inside space-y-1 pl-2">
+                        <li>
+                            <span className="font-medium text-slate-700">Positivo</span> (cobrado &gt; asignado): el
+                            pago fue registrado en el sistema pero sus asignaciones por producto cayeron fuera del
+                            período consultado. Ocurre cuando la fecha del pago y la fecha de sus asignaciones son
+                            inconsistentes en la base de datos de QC — típicamente en pagos de Colombia donde la fecha
+                            de pago no fue capturada correctamente.
+                        </li>
+                        <li>
+                            <span className="font-medium text-slate-700">Negativo</span> (asignado &gt; cobrado): los
+                            montos registrados por estudiante en la base de datos de QC superan el monto total del pago.
+                            Indica un error de captura — se asignaron más recursos a estudiantes de los que realmente se
+                            cobraron. Requiere corrección en la base de datos de QC.
+                        </li>
+                    </ul>
+                    <p>
+                        <span className="font-medium text-slate-700">Ingreso Asignado:</span> Suma de los pagos
+                        recibidos que tienen detalle de producto en el sistema. Es un subconjunto del Valor Total — la
+                        diferencia entre ambos es el ingreso sin categorizar.
+                    </p>
+                    <p>
+                        <span className="font-medium text-slate-700">Ingreso Esperado:</span> Suma de los montos
+                        facturados (independientemente de si se han cobrado). Refleja el valor contractual acordado con
+                        los colegios. La diferencia entre el Ingreso Esperado y el Ingreso Asignado representa pagos
+                        pendientes de cobro.
+                    </p>
+                    <p>
+                        <span className="font-medium text-slate-700">Margen de Utilidad:</span> Calculado como (Ingreso
+                        Asignado − Costo Esperado) / Ingreso Asignado × 100. Se calcula sobre el ingreso asignado (no el
+                        total) porque el costo esperado solo cubre los productos con detalle de línea.
+                    </p>
+                </div>
+            )}
         </div>
     )
 }

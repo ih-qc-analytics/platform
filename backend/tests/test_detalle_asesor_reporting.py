@@ -22,7 +22,6 @@ from tests.conftest_reporting import bind_test_reporting_database
 
 def make_row(**overrides) -> dict:
     created_at = overrides.get("created_at", datetime(2025, 1, 15))
-    payment_date = overrides.get("payment_date", created_at.date())
     defaults = {
         "cart_product_id": 1,
         "etl_date": date.today(),
@@ -42,8 +41,8 @@ def make_row(**overrides) -> dict:
         "year": 2025,
         "month": 1,
         "payment_status": "Aprobado",
-        "payment_date": payment_date,
-        "payment_day": payment_date,
+        # first_payment_date replaces the old payment_day / payment_date columns
+        "first_payment_date": created_at.date(),
         "billing_status": "Aprobado",
         "product_id": 1,
         "product_type": "exam",
@@ -68,7 +67,6 @@ def make_row(**overrides) -> dict:
         "state_names", [row["state_name"]] if row.get("state_name") else []
     )
     row["city_names"] = overrides.get("city_names", [row["city"]] if row.get("city") else [])
-    row["payment_day"] = overrides.get("payment_day", row["payment_date"])
     return row
 
 

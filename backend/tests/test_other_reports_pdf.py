@@ -224,7 +224,7 @@ async def test_build_asesor_detail_pdf_payload_contains_drawer_sections():
     assert payload.kpis[0].value == "3"
     assert payload.geo_table.rows[0].cells == ["México", "IH Mexico", "CDMX", "Mexico City"]
     assert payload.categories_table.rows[0].cells[-1] == "$18,000"
-    assert payload.status_table.rows[0].cells == ["Ganados", "2", "16", "$14,600"]
+    assert payload.status_table.rows[0].cells == ["Ganados", "2", "16", "0", "0", "$14,600"]
 
 
 @pytest.mark.asyncio(loop_scope="session")

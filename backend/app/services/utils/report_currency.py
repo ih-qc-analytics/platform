@@ -22,8 +22,9 @@ def payment_amount_column(base_currency: BaseCurrency) -> str:
     return "amount_usd" if base_currency == BaseCurrency.USD else "amount_mxn"
 
 
-def line_paid_total_column(base_currency: BaseCurrency) -> str:
-    return "paid_total_usd" if base_currency == BaseCurrency.USD else "paid_total_mxn"
+def alloc_amount_column(base_currency: BaseCurrency) -> str:
+    """Revenue column from report_payment_allocations."""
+    return "allocated_amount_usd" if base_currency == BaseCurrency.USD else "allocated_amount_mxn"
 
 
 def line_expected_total_column(base_currency: BaseCurrency) -> str:

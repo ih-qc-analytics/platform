@@ -15,6 +15,7 @@ class PDFKpiItem(BaseModel):
     value: str
     growth: Optional[str] = None
     growth_positive: Optional[bool] = None
+    comparison_value: Optional[str] = None
 
 
 class PDFTrendPoint(BaseModel):
