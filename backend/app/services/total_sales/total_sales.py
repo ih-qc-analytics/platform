@@ -365,76 +365,93 @@ async def build_ventas_totales_pdf_payload(
     scaled_geo = [v / max_geo if max_geo else 0.0 for v in geo_values]
     scaled_comp_geo = [v / max_geo if max_geo else 0.0 for v in comp_geo_values]
 
-    def _kw(delta_key: str) -> dict:
+    def _fmt_cur(v: float) -> str:
+        return format_currency(v, base_currency)
+
+    def _fmt_int(v: float) -> str:
+        return str(int(round(v)))
+
+    def _kw(delta_key: str, formatter=None) -> dict:
         if not comp:
             return {}
         delta = comp.deltas.get(delta_key)
         growth_str, positive = format_growth(delta.pct_change if delta else None)
-        return {
+        result: dict = {
             "growth": growth_str if growth_str is not None else "N/A",
             "growth_positive": positive,
         }
+        if formatter is not None and delta and delta.comparison_value is not None:
+            result["comparison_value"] = formatter(delta.comparison_value)
+        return result
 
     kpis = [
-        PDFKpiItem(label="Total Clientes", value=str(base.total_clients), **_kw("total_clients")),
-        PDFKpiItem(label="Total Exámenes", value=str(base.total_exams), **_kw("total_exams")),
+        PDFKpiItem(
+            label="Total Clientes", value=str(base.total_clients), **_kw("total_clients", _fmt_int)
+        ),
+        PDFKpiItem(
+            label="Total Exámenes", value=str(base.total_exams), **_kw("total_exams", _fmt_int)
+        ),
         PDFKpiItem(
             label="Ingreso Exámenes",
-            value=format_currency(base.exam_revenue, base_currency),
-            **_kw("exam_revenue"),
+            value=_fmt_cur(base.exam_revenue),
+            **_kw("exam_revenue", _fmt_cur),
         ),
-        PDFKpiItem(label="Total Libros", value=str(base.total_books), **_kw("total_books")),
+        PDFKpiItem(
+            label="Total Libros", value=str(base.total_books), **_kw("total_books", _fmt_int)
+        ),
         PDFKpiItem(
             label="Ingreso Libros",
-            value=format_currency(base.book_revenue, base_currency),
-            **_kw("book_revenue"),
+            value=_fmt_cur(base.book_revenue),
+            **_kw("book_revenue", _fmt_cur),
         ),
-        PDFKpiItem(label="Total Cursos", value=str(base.total_courses), **_kw("total_courses")),
+        PDFKpiItem(
+            label="Total Cursos", value=str(base.total_courses), **_kw("total_courses", _fmt_int)
+        ),
         PDFKpiItem(
             label="Ingreso Cursos",
-            value=format_currency(base.course_revenue, base_currency),
-            **_kw("course_revenue"),
+            value=_fmt_cur(base.course_revenue),
+            **_kw("course_revenue", _fmt_cur),
         ),
-        PDFKpiItem(label="Otros", value=str(base.total_otros), **_kw("total_otros")),
+        PDFKpiItem(label="Otros", value=str(base.total_otros), **_kw("total_otros", _fmt_int)),
         PDFKpiItem(
             label="Ingreso Otros",
-            value=format_currency(base.otros_revenue, base_currency),
-            **_kw("otros_revenue"),
+            value=_fmt_cur(base.otros_revenue),
+            **_kw("otros_revenue", _fmt_cur),
         ),
         PDFKpiItem(
             label="Ingreso Esperado",
-            value=format_currency(base.expected_revenue, base_currency),
-            **_kw("expected_revenue"),
+            value=_fmt_cur(base.expected_revenue),
+            **_kw("expected_revenue", _fmt_cur),
         ),
         PDFKpiItem(
             label="Costo Esperado",
-            value=format_currency(base.expected_cost, base_currency),
-            **_kw("expected_cost"),
+            value=_fmt_cur(base.expected_cost),
+            **_kw("expected_cost", _fmt_cur),
         ),
         PDFKpiItem(
             label="Sin Categorizar",
-            value=format_currency(base.uncategorized_revenue, base_currency),
-            **_kw("uncategorized_revenue"),
+            value=_fmt_cur(base.uncategorized_revenue),
+            **_kw("uncategorized_revenue", _fmt_cur),
         ),
         PDFKpiItem(
             label="Ingreso Sitio Desconocido",
-            value=format_currency(base.unknown_site_revenue, base_currency),
-            **_kw("unknown_site_revenue"),
+            value=_fmt_cur(base.unknown_site_revenue),
+            **_kw("unknown_site_revenue", _fmt_cur),
         ),
         PDFKpiItem(
             label="Esperado Sitio Desconocido",
-            value=format_currency(base.unknown_site_expected_revenue, base_currency),
-            **_kw("unknown_site_expected_revenue"),
+            value=_fmt_cur(base.unknown_site_expected_revenue),
+            **_kw("unknown_site_expected_revenue", _fmt_cur),
         ),
         PDFKpiItem(
             label="Ingreso Total",
-            value=format_currency(base.total_revenue, base_currency),
-            **_kw("total_revenue"),
+            value=_fmt_cur(base.total_revenue),
+            **_kw("total_revenue", _fmt_cur),
         ),
         PDFKpiItem(
             label="Margen de Utilidad",
             value=format_percent(base.profit_margin),
-            **_kw("profit_margin"),
+            **_kw("profit_margin", format_percent),
         ),
     ]
 
@@ -504,6 +521,12 @@ _COMPARISON_COLUMNS = [
 ]
 
 
+_VENTAS_TOTALES_SHEET_COLUMNS = [
+    ExcelColumn("metric", "Métrica"),
+    ExcelColumn("value", "Valor"),
+]
+
+
 def build_total_sales_export_worksheets(
     response: TotalSalesResponse,
     *,
@@ -511,31 +534,15 @@ def build_total_sales_export_worksheets(
 ) -> list[ExcelWorksheetSpec]:
     base = response.current
     comp = response.comparison
-    summary_row = {
-        "total_clients": base.total_clients,
-        "total_exams": base.total_exams,
-        "exam_revenue": base.exam_revenue,
-        "total_books": base.total_books,
-        "book_revenue": base.book_revenue,
-        "total_courses": base.total_courses,
-        "course_revenue": base.course_revenue,
-        "total_otros": base.total_otros,
-        "otros_revenue": base.otros_revenue,
-        "total_revenue": base.total_revenue,
-        "expected_revenue": base.expected_revenue,
-        "expected_cost": base.expected_cost,
-        "uncategorized_revenue": base.uncategorized_revenue,
-        "unknown_site_revenue": base.unknown_site_revenue,
-        "unknown_site_expected_revenue": base.unknown_site_expected_revenue,
-        "profit_margin": base.profit_margin,
-        "prior_year_revenue": comp.data.total_revenue if comp else 0.0,
-        "growth_pct": comp.deltas.get("total_revenue").pct_change if comp else None,
-    }
+
+    summary_rows_2col = [
+        {"metric": label, "value": getattr(base, key)} for key, label in _COMPARISON_KPI_KEYS
+    ]
     worksheets = [
         ExcelWorksheetSpec(
             name="Ventas Totales",
-            columns=TOTAL_SALES_SUMMARY_COLUMNS,
-            rows=[summary_row],
+            columns=_VENTAS_TOTALES_SHEET_COLUMNS,
+            rows=summary_rows_2col,
         )
     ]
 

@@ -67,6 +67,9 @@ POR_PAIS_STATUS_COLUMNS = [
     ExcelColumn("exams_ganados", "Exámenes Ganados"),
     ExcelColumn("exams_perdidos", "Exámenes Perdidos"),
     ExcelColumn("exams_mantenidos", "Exámenes Mantenidos"),
+    ExcelColumn("books_courses_ganados", "L+C Ganados"),
+    ExcelColumn("books_courses_perdidos", "L+C Perdidos"),
+    ExcelColumn("books_courses_mantenidos", "L+C Mantenidos"),
 ]
 POR_PAIS_DETAIL_COLUMNS = [
     ExcelColumn("country", "País"),
@@ -481,6 +484,18 @@ def build_por_pais_export_worksheets(
                     "otros_act": r.other,
                     "otros_ant": comp.other if comp else None,
                     "otros_pct": _pct(r.other, comp.other) if comp else None,
+                    "books_act": r.total_books,
+                    "books_ant": comp.total_books if comp else None,
+                    "books_pct": _pct(r.total_books, comp.total_books) if comp else None,
+                    "courses_act": r.total_courses,
+                    "courses_ant": comp.total_courses if comp else None,
+                    "courses_pct": _pct(r.total_courses, comp.total_courses) if comp else None,
+                    "book_rev_act": r.book_revenue,
+                    "book_rev_ant": comp.book_revenue if comp else None,
+                    "book_rev_pct": _pct(r.book_revenue, comp.book_revenue) if comp else None,
+                    "course_rev_act": r.course_revenue,
+                    "course_rev_ant": comp.course_revenue if comp else None,
+                    "course_rev_pct": _pct(r.course_revenue, comp.course_revenue) if comp else None,
                 }
             )
         specs.append(
@@ -512,6 +527,18 @@ def build_por_pais_export_worksheets(
                     ExcelColumn("otros_act", "Otros (Act.)"),
                     ExcelColumn("otros_ant", "Otros (Ant.)"),
                     ExcelColumn("otros_pct", "Otros Δ%"),
+                    ExcelColumn("books_act", "Libros (Act.)"),
+                    ExcelColumn("books_ant", "Libros (Ant.)"),
+                    ExcelColumn("books_pct", "Libros Δ%"),
+                    ExcelColumn("courses_act", "Cursos (Act.)"),
+                    ExcelColumn("courses_ant", "Cursos (Ant.)"),
+                    ExcelColumn("courses_pct", "Cursos Δ%"),
+                    ExcelColumn("book_rev_act", "Ing. Libros (Act.)"),
+                    ExcelColumn("book_rev_ant", "Ing. Libros (Ant.)"),
+                    ExcelColumn("book_rev_pct", "Ing. Libros Δ%"),
+                    ExcelColumn("course_rev_act", "Ing. Cursos (Act.)"),
+                    ExcelColumn("course_rev_ant", "Ing. Cursos (Ant.)"),
+                    ExcelColumn("course_rev_pct", "Ing. Cursos Δ%"),
                 ],
                 rows=comparison_rows,
                 note=f"Período comparativo: {report.comparison.meta.date_from} – {report.comparison.meta.date_to}",
@@ -553,11 +580,17 @@ async def build_por_pais_pdf_payload(
     comp_total_books = sum(r.total_books for r in comp_rows) if has_comparison else None
     comp_total_courses = sum(r.total_courses for r in comp_rows) if has_comparison else None
 
-    def _kw(curr: float, prev: float | None) -> dict:
+    def _kw(curr: float, prev: float | None, fmt=None) -> dict:
         if prev is None:
             return {}
         g, gp = format_growth(percent_change(curr, prev))
-        return {"growth": g or "N/A", "growth_positive": gp}
+        result: dict = {"growth": g or "N/A", "growth_positive": gp}
+        if fmt is not None:
+            result["comparison_value"] = fmt(prev)
+        return result
+
+    def _fmt_cur(v: float) -> str:
+        return format_currency(v, base_currency)
 
     def _summary_row_deltas(r: PorPaisSummaryRow) -> list:
         comp = comp_by_country.get(r.country)
@@ -623,52 +656,56 @@ async def build_por_pais_pdf_payload(
             PDFKpiItem(
                 label="Países",
                 value=format_integer(len(current.summary_rows)),
-                **_kw(len(current.summary_rows), len(comp_rows) if has_comparison else None),
+                **_kw(
+                    len(current.summary_rows),
+                    len(comp_rows) if has_comparison else None,
+                    format_integer,
+                ),
             ),
             PDFKpiItem(
                 label="Colegios",
                 value=format_integer(total_schools),
-                **_kw(total_schools, comp_total_schools),
+                **_kw(total_schools, comp_total_schools, format_integer),
             ),
             PDFKpiItem(
                 label="Ingreso Total",
-                value=format_currency(total_revenue, base_currency),
-                **_kw(total_revenue, comp_total_revenue),
+                value=_fmt_cur(total_revenue),
+                **_kw(total_revenue, comp_total_revenue, _fmt_cur),
             ),
             PDFKpiItem(
                 label="Sin Categorizar",
-                value=format_currency(total_uncategorized, base_currency),
-                **_kw(total_uncategorized, comp_total_uncategorized),
+                value=_fmt_cur(total_uncategorized),
+                **_kw(total_uncategorized, comp_total_uncategorized, _fmt_cur),
             ),
             PDFKpiItem(
                 label="Cambridge",
                 value=format_integer(total_cambridge),
-                **_kw(total_cambridge, comp_total_cambridge),
+                **_kw(total_cambridge, comp_total_cambridge, format_integer),
             ),
             PDFKpiItem(
                 label="IELTS",
                 value=format_integer(total_ielts),
-                **_kw(total_ielts, comp_total_ielts),
+                **_kw(total_ielts, comp_total_ielts, format_integer),
             ),
             PDFKpiItem(
                 label="MET",
                 value=format_integer(total_met),
-                **_kw(total_met, comp_total_met),
+                **_kw(total_met, comp_total_met, format_integer),
             ),
             PDFKpiItem(
                 label="Otros",
                 value=format_integer(total_otros),
-                **_kw(total_otros, comp_total_otros),
+                **_kw(total_otros, comp_total_otros, format_integer),
             ),
             PDFKpiItem(
                 label="Libros",
                 value=format_integer(total_books),
-                **_kw(total_books, comp_total_books),
+                **_kw(total_books, comp_total_books, format_integer),
             ),
             PDFKpiItem(
                 label="Cursos",
                 value=format_integer(total_courses),
-                **_kw(total_courses, comp_total_courses),
+                **_kw(total_courses, comp_total_courses, format_integer),
             ),
         ],
         summary_table=PDFTable(
@@ -711,17 +748,23 @@ async def build_por_pais_pdf_payload(
 
 
 async def build_por_pais_detail_pdf_payload(
-    country: str, filters: PorPaisFilters
+    country: str, filters: PorPaisFilters, base_currency: BaseCurrency = BaseCurrency.MXN
 ) -> PorPaisDetailPDFPayload:
     detail = await get_por_pais_detail(country, filters)
     comp_counts = detail.comparison_exam_counts
     has_comparison = comp_counts is not None
 
-    def _kw(curr: float, prev: float | None) -> dict:
+    def _fmt_cur(v: float) -> str:
+        return format_currency(v, base_currency)
+
+    def _kw(curr: float, prev: float | None, fmt=None) -> dict:
         if prev is None:
             return {}
         g, gp = format_growth(percent_change(curr, prev))
-        return {"growth": g or "N/A", "growth_positive": gp}
+        result: dict = {"growth": g or "N/A", "growth_positive": gp}
+        if fmt is not None:
+            result["comparison_value"] = fmt(prev)
+        return result
 
     total_exams = sum(detail.exam_counts.values())
     cambridge_total = sum(
@@ -809,6 +852,21 @@ async def build_por_pais_detail_pdf_payload(
                 label="Cursos",
                 value=format_integer(detail.total_courses),
                 **_kw(detail.total_courses, detail.comparison_total_courses),
+            ),
+            PDFKpiItem(
+                label="Ingreso Exámenes",
+                value=_fmt_cur(detail.exam_revenue),
+                **_kw(detail.exam_revenue, detail.comparison_exam_revenue, _fmt_cur),
+            ),
+            PDFKpiItem(
+                label="Ingreso Libros",
+                value=_fmt_cur(detail.book_revenue),
+                **_kw(detail.book_revenue, detail.comparison_book_revenue, _fmt_cur),
+            ),
+            PDFKpiItem(
+                label="Ingreso Cursos",
+                value=_fmt_cur(detail.course_revenue),
+                **_kw(detail.course_revenue, detail.comparison_course_revenue, _fmt_cur),
             ),
         ],
         detail_table=PDFTable(

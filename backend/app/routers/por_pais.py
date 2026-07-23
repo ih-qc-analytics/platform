@@ -36,8 +36,10 @@ async def export_por_pais_pdf(filters: PorPaisFilters, request: Request):
 
 
 @router.post("/por-pais/{country}/export/pdf")
-async def export_por_pais_detail_pdf(country: str, filters: PorPaisFilters):
-    payload = await build_por_pais_detail_pdf_payload(country, filters)
+async def export_por_pais_detail_pdf(country: str, filters: PorPaisFilters, request: Request):
+    payload = await build_por_pais_detail_pdf_payload(
+        country, filters, base_currency=get_request_base_currency(request)
+    )
     return await render_por_pais_detail_pdf(payload)
 
 

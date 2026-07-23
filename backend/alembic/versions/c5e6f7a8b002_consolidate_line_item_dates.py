@@ -41,9 +41,7 @@ def upgrade() -> None:
     op.execute("ALTER TABLE report_line_items DROP COLUMN IF EXISTS paid_total_usd")
 
     # Add single authoritative date column
-    op.execute(
-        "ALTER TABLE report_line_items ADD COLUMN IF NOT EXISTS first_payment_date DATE"
-    )
+    op.execute("ALTER TABLE report_line_items ADD COLUMN IF NOT EXISTS first_payment_date DATE")
     op.execute(
         "CREATE INDEX IF NOT EXISTS idx_rli_first_payment_date ON report_line_items (first_payment_date)"
     )
@@ -53,7 +51,9 @@ def downgrade() -> None:
     op.execute("DROP INDEX IF EXISTS idx_rli_first_payment_date")
     op.execute("ALTER TABLE report_line_items DROP COLUMN IF EXISTS first_payment_date")
 
-    op.execute("ALTER TABLE report_line_items ADD COLUMN IF NOT EXISTS paid_total_usd DECIMAL(18,2)")
+    op.execute(
+        "ALTER TABLE report_line_items ADD COLUMN IF NOT EXISTS paid_total_usd DECIMAL(18,2)"
+    )
     op.execute(
         "ALTER TABLE report_line_items ADD COLUMN IF NOT EXISTS paid_total_mxn DECIMAL(18,2)"
     )

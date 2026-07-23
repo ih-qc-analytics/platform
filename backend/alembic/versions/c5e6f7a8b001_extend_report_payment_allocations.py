@@ -21,17 +21,11 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     op.execute("ALTER TABLE report_payment_allocations ADD COLUMN IF NOT EXISTS payment_date DATE")
-    op.execute(
-        "ALTER TABLE report_payment_allocations ADD COLUMN IF NOT EXISTS seller_id INTEGER"
-    )
-    op.execute(
-        "ALTER TABLE report_payment_allocations ADD COLUMN IF NOT EXISTS seller_name TEXT"
-    )
+    op.execute("ALTER TABLE report_payment_allocations ADD COLUMN IF NOT EXISTS seller_id INTEGER")
+    op.execute("ALTER TABLE report_payment_allocations ADD COLUMN IF NOT EXISTS seller_name TEXT")
     op.execute("ALTER TABLE report_payment_allocations ADD COLUMN IF NOT EXISTS lead_id INTEGER")
     op.execute("ALTER TABLE report_payment_allocations ADD COLUMN IF NOT EXISTS site TEXT")
-    op.execute(
-        "ALTER TABLE report_payment_allocations ADD COLUMN IF NOT EXISTS product_type TEXT"
-    )
+    op.execute("ALTER TABLE report_payment_allocations ADD COLUMN IF NOT EXISTS product_type TEXT")
     op.execute(
         "ALTER TABLE report_payment_allocations ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE"
     )
@@ -54,20 +48,10 @@ def downgrade() -> None:
     op.execute("DROP INDEX IF EXISTS idx_rpa_site")
     op.execute("DROP INDEX IF EXISTS idx_rpa_date_active_seller")
     op.execute("DROP INDEX IF EXISTS idx_rpa_payment_date")
-    op.execute(
-        "ALTER TABLE report_payment_allocations DROP COLUMN IF EXISTS is_active"
-    )
-    op.execute(
-        "ALTER TABLE report_payment_allocations DROP COLUMN IF EXISTS product_type"
-    )
+    op.execute("ALTER TABLE report_payment_allocations DROP COLUMN IF EXISTS is_active")
+    op.execute("ALTER TABLE report_payment_allocations DROP COLUMN IF EXISTS product_type")
     op.execute("ALTER TABLE report_payment_allocations DROP COLUMN IF EXISTS site")
     op.execute("ALTER TABLE report_payment_allocations DROP COLUMN IF EXISTS lead_id")
-    op.execute(
-        "ALTER TABLE report_payment_allocations DROP COLUMN IF EXISTS seller_name"
-    )
-    op.execute(
-        "ALTER TABLE report_payment_allocations DROP COLUMN IF EXISTS seller_id"
-    )
-    op.execute(
-        "ALTER TABLE report_payment_allocations DROP COLUMN IF EXISTS payment_date"
-    )
+    op.execute("ALTER TABLE report_payment_allocations DROP COLUMN IF EXISTS seller_name")
+    op.execute("ALTER TABLE report_payment_allocations DROP COLUMN IF EXISTS seller_id")
+    op.execute("ALTER TABLE report_payment_allocations DROP COLUMN IF EXISTS payment_date")

@@ -7,8 +7,10 @@ ETL upsert pipeline: MySQL → report_payments, report_line_items, report_paymen
    Decision: fall back to payment.createdAt, never to NULL or today's date.
 
 2. Garbage years in paymentDate (e.g. year 206, 1901).
-   Decision: sanitise inside PAYMENTS_FOR_CARTS_QUERY with
-   BETWEEN '2000-01-01' AND '2099-12-31'; fall back to createdAt.
+   Decision: sanitise in PAYMENT_EXTRACT_QUERY and PAYMENTS_FOR_CARTS_QUERY
+   with BETWEEN '2000-01-01' AND '2099-12-31'; fall back to createdAt.
+   Both queries must apply the same guard so that report_payments.payment_date
+   and report_payment_allocations.payment_date are always consistent.
 
 3. Negative remainder (SUM(student_payment.amount for P) > P.quantity).
    This means a data-entry error in the source: more was recorded via
@@ -63,7 +65,11 @@ PAYMENT_EXTRACT_QUERY = """
         pay.id                              AS payment_id,
         pay.quantity                        AS amount,
         pay.status                          AS payment_status,
-        pay.paymentDate                     AS payment_date,
+        CASE
+            WHEN pay.paymentDate BETWEEN '2000-01-01' AND '2099-12-31'
+            THEN pay.paymentDate
+            ELSE DATE(pay.createdAt)
+        END                                 AS payment_date,
         c.id                                AS cart_id,
         c.createdAt                         AS created_at,
         c.deletedAt                         AS cart_deleted_at,
@@ -312,21 +318,23 @@ async def _build_allocation_rows_v2(
             mxn, usd = await convert_currency(allocated, site, payment_date or date.today(), rates)
             raw_pt = cp.get("product_type") or ""
             product_type = raw_pt if raw_pt in ("exam", "book", "course") else "UNCATEGORIZED"
-            allocation_rows.append({
-                "payment_id": payment_id,
-                "cart_product_id": cp_id,
-                "etl_date": datetime.now().date(),
-                "payment_date": payment_date,
-                "allocated_amount": allocated,
-                "allocated_amount_mxn": mxn,
-                "allocated_amount_usd": usd,
-                "seller_id": seller_id,
-                "seller_name": seller_name,
-                "lead_id": lead_id,
-                "site": site,
-                "product_type": product_type,
-                "is_active": True,
-            })
+            allocation_rows.append(
+                {
+                    "payment_id": payment_id,
+                    "cart_product_id": cp_id,
+                    "etl_date": datetime.now().date(),
+                    "payment_date": payment_date,
+                    "allocated_amount": allocated,
+                    "allocated_amount_mxn": mxn,
+                    "allocated_amount_usd": usd,
+                    "seller_id": seller_id,
+                    "seller_name": seller_name,
+                    "lead_id": lead_id,
+                    "site": site,
+                    "product_type": product_type,
+                    "is_active": True,
+                }
+            )
             if payment_date is not None:
                 prev = cp_first_dates.get(cp_id)
                 cp_first_dates[cp_id] = min(prev, payment_date) if prev else payment_date
@@ -345,21 +353,23 @@ async def _build_allocation_rows_v2(
             mxn, usd = await convert_currency(allocated, site, payment_date or date.today(), rates)
             raw_pt = cp.get("product_type") or ""
             product_type = raw_pt if raw_pt in ("exam", "book", "course") else "UNCATEGORIZED"
-            allocation_rows.append({
-                "payment_id": payment_id,
-                "cart_product_id": cp_id,
-                "etl_date": datetime.now().date(),
-                "payment_date": payment_date,
-                "allocated_amount": allocated,
-                "allocated_amount_mxn": mxn,
-                "allocated_amount_usd": usd,
-                "seller_id": seller_id,
-                "seller_name": seller_name,
-                "lead_id": lead_id,
-                "site": site,
-                "product_type": product_type,
-                "is_active": True,
-            })
+            allocation_rows.append(
+                {
+                    "payment_id": payment_id,
+                    "cart_product_id": cp_id,
+                    "etl_date": datetime.now().date(),
+                    "payment_date": payment_date,
+                    "allocated_amount": allocated,
+                    "allocated_amount_mxn": mxn,
+                    "allocated_amount_usd": usd,
+                    "seller_id": seller_id,
+                    "seller_name": seller_name,
+                    "lead_id": lead_id,
+                    "site": site,
+                    "product_type": product_type,
+                    "is_active": True,
+                }
+            )
             if payment_date is not None:
                 prev = cp_first_dates.get(cp_id)
                 cp_first_dates[cp_id] = min(prev, payment_date) if prev else payment_date
@@ -673,11 +683,13 @@ async def run_upsert(
         cart_products_by_cart: dict[int, list[dict]] = {}
         for row in line_item_rows_raw:
             cart_id = int(row["cart_id"])
-            cart_products_by_cart.setdefault(cart_id, []).append({
-                "cart_product_id": int(row["cart_product_id"]),
-                "expected_total": float(row.get("expected_total") or 0),
-                "product_type": row.get("product_type"),
-            })
+            cart_products_by_cart.setdefault(cart_id, []).append(
+                {
+                    "cart_product_id": int(row["cart_product_id"]),
+                    "expected_total": float(row.get("expected_total") or 0),
+                    "product_type": row.get("product_type"),
+                }
+            )
 
         # Fetch student amounts and full payment history for affected carts in parallel.
         # Both queries are not windowed by :since — they fetch the complete approved
@@ -685,6 +697,7 @@ async def run_upsert(
         student_amounts_rows: list[dict] = []
         payments_for_carts: list[dict] = []
         if affected_cart_ids:
+
             async def _fetch_student_amounts() -> list[dict]:
                 async with SessionLocal() as source:
                     result = await source.execute(

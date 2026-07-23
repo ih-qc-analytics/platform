@@ -12,7 +12,11 @@ from app.services.utils.report_currency import (
     line_expected_total_column,
     payment_amount_column,
 )
-from app.services.shared import build_alloc_where_clause, build_line_item_where_clause, build_payment_where_clause
+from app.services.shared import (
+    build_alloc_where_clause,
+    build_line_item_where_clause,
+    build_payment_where_clause,
+)
 
 # Whitelist — only these strings ever reach SQL interpolation
 SORTABLE_COLUMNS: dict[str, str] = {

@@ -330,9 +330,7 @@ async def test_products_without_students_get_allocated_from_remainder(
 
 
 @pytest.mark.asyncio(loop_scope="session")
-async def test_line_items_student_counts_without_duplication(
-    ui_dev_reporting_db, reporting_engine
-):
+async def test_line_items_student_counts_without_duplication(ui_dev_reporting_db, reporting_engine):
     async with reporting_engine.connect() as conn:
         row = (
             await conn.execute(
@@ -410,9 +408,7 @@ async def test_book_without_students_gets_remainder_allocation(
 
 
 @pytest.mark.asyncio(loop_scope="session")
-async def test_exam_on_same_cart_as_book_uses_student_amount(
-    ui_dev_reporting_db, reporting_engine
-):
+async def test_exam_on_same_cart_as_book_uses_student_amount(ui_dev_reporting_db, reporting_engine):
     # cart_product_id=18 is a PET Exam on cart 14 with student 16 (student_payment=1000).
     # The allocation must use the exact student_payment amount (1000), not a
     # proportional share of the cart total.
@@ -515,6 +511,7 @@ async def test_first_payment_date_set_on_line_items(ui_dev_reporting_db, reporti
         ).scalar()
 
     from datetime import date as date_type
+
     assert fpd is not None
     assert isinstance(fpd, date_type)
     # Payment 15 paymentDate = '2025-03-05' → first_payment_date must be 2025-03-05
@@ -540,6 +537,7 @@ async def test_allocation_payment_date_is_payments_actual_date(
         ).scalar()
 
     from datetime import date as date_type
+
     assert payment_date is not None
     assert payment_date == date_type(2025, 3, 5)
 

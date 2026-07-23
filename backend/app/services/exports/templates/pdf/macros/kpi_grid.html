@@ -6,6 +6,9 @@
     <div class="kpi-card">
       <div class="kpi-label">{{ kpi.label }}</div>
       <div class="kpi-value">{{ kpi.value }}</div>
+      {% if kpi.comparison_value is not none %}
+      <div class="kpi-comp-value">ant. {{ kpi.comparison_value }}</div>
+      {% endif %}
       {% if kpi.growth is not none %}
       <div class="kpi-growth {% if kpi.growth_positive == true %}kpi-growth-pos{% elif kpi.growth_positive == false %}kpi-growth-neg{% endif %}">
         Variación: {{ kpi.growth }}

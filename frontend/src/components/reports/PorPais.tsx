@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react"
-import { ChevronRight } from "lucide-react"
+import { ChevronDown, ChevronRight, ChevronUp } from "lucide-react"
 
 import { exportPorPaisExcel, exportPorPaisExcelAll, exportPorPaisPdf } from "@/api/reports"
 import PorPaisDetail from "@/components/reports/PorPaisDetail"
@@ -218,15 +218,26 @@ export default function PorPais() {
 }
 
 function AsesorGlossaryNote() {
+    const [open, setOpen] = useState(false)
     return (
-        <div className="rounded-xl border border-slate-200 bg-slate-50 px-5 py-4 text-xs text-slate-500 space-y-1">
-            <p className="font-semibold text-slate-600 mb-2">Notas</p>
-            <p>
-                <span className="font-medium text-slate-700">Sin categorizar:</span> Pagos registrados sin ningún
-                detalle de producto en el sistema — no existen líneas de venta asociadas. No es que el producto sea
-                desconocido: es que no hay registro de qué se vendió. Se suman al ingreso total pero no aparecen en
-                ningún desglose por tipo.
-            </p>
+        <div className="rounded-xl border border-slate-200 bg-slate-50 text-xs text-slate-500">
+            <button
+                onClick={() => setOpen((o) => !o)}
+                className="flex w-full items-center justify-between px-5 py-4 font-semibold text-slate-600"
+            >
+                <span>Notas</span>
+                {open ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+            </button>
+            {open && (
+                <div className="px-5 pb-4 space-y-1">
+                    <p>
+                        <span className="font-medium text-slate-700">Sin categorizar:</span> Pagos registrados sin
+                        ningún detalle de producto en el sistema — no existen líneas de venta asociadas. No es que el
+                        producto sea desconocido: es que no hay registro de qué se vendió. Se suman al ingreso total
+                        pero no aparecen en ningún desglose por tipo.
+                    </p>
+                </div>
+            )}
         </div>
     )
 }

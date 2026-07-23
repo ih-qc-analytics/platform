@@ -259,17 +259,34 @@ export default function DetallePorAsesor() {
                     )}
                 </CardContent>
             </Card>
-            <div className="rounded-xl border border-slate-200 bg-slate-50 px-5 py-4 text-xs text-slate-500 space-y-1">
-                <p className="font-semibold text-slate-600 mb-2">Notas</p>
-                <p>
-                    <span className="font-medium text-slate-700">Solo exámenes:</span> Este reporte contempla únicamente
-                    productos de tipo examen. Libros y cursos no aparecen en este desglose.
-                </p>
-                <p>
-                    <span className="font-medium text-slate-700">Otros:</span> Exámenes cuyo nombre no corresponde a
-                    ninguna categoría canónica reconocida por el sistema.
-                </p>
-            </div>
+            <DetalleGlossaryNote />
+        </div>
+    )
+}
+
+function DetalleGlossaryNote() {
+    const [open, setOpen] = useState(false)
+    return (
+        <div className="rounded-xl border border-slate-200 bg-slate-50 text-xs text-slate-500">
+            <button
+                onClick={() => setOpen((o) => !o)}
+                className="flex w-full items-center justify-between px-5 py-4 font-semibold text-slate-600"
+            >
+                <span>Notas</span>
+                {open ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+            </button>
+            {open && (
+                <div className="px-5 pb-4 space-y-1">
+                    <p>
+                        <span className="font-medium text-slate-700">Solo exámenes:</span> Este reporte contempla
+                        únicamente productos de tipo examen. Libros y cursos no aparecen en este desglose.
+                    </p>
+                    <p>
+                        <span className="font-medium text-slate-700">Otros:</span> Exámenes cuyo nombre no corresponde a
+                        ninguna categoría canónica reconocida por el sistema.
+                    </p>
+                </div>
+            )}
         </div>
     )
 }

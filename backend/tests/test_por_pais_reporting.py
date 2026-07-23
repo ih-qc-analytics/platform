@@ -23,7 +23,9 @@ from tests.conftest_reporting import bind_test_reporting_database
 # ─────────────────────────────────────────────────────────────
 
 
-_LINE_ITEMS_EXCLUDED = frozenset({"payment_day", "payment_date", "paid_total", "paid_total_mxn", "paid_total_usd"})
+_LINE_ITEMS_EXCLUDED = frozenset(
+    {"payment_day", "payment_date", "paid_total", "paid_total_mxn", "paid_total_usd"}
+)
 
 
 def make_row(**overrides) -> dict:
