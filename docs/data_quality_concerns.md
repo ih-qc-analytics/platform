@@ -6,7 +6,7 @@ This document catalogues data quality issues discovered during production invest
 
 ## Issue 1 — Garbage `paymentDate` Years (ETL Bug — Fixed)
 
-**Root cause:** Some MySQL `payment.paymentDate` values contain clearly invalid years (e.g. `1901-01-01`, `0206-04-14`). These appear to be default or corrupt CRM values.
+**Root cause:** Some MySQL `payment.paymentDate` values contain clearly invalid years (e.g. `1901-01-01`, `0206-04-14`). These appear to be default or corrupt QC source DB values.
 
 **ETL impact (before fix):**
 - `PAYMENT_EXTRACT_QUERY` stored the raw garbage date in `report_payments.payment_date`.
