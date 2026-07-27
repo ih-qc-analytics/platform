@@ -2,8 +2,9 @@
 Detalle Asesor report query tests.
 
 Seed rows directly into report_line_items — no Jones DB needed.
-Each row IS one cart_product (no grouping). Cursor is cart_product_id.
 The detalle WHERE always includes product_type = 'exam'.
+Rows are grouped by (seller_name, school_name, first_payment_date) in SQL,
+so tests that need multiple distinct result rows must use different (seller/school/date) values.
 """
 
 import pytest
@@ -99,18 +100,24 @@ def _filters(**overrides) -> DetalleFilters:
 
 
 @pytest.mark.asyncio
-async def test_returns_one_row_per_cart_product(reporting_session_factory, clean_reporting_db):
+async def test_groups_same_seller_school_date_into_one_row(
+    reporting_session_factory, clean_reporting_db
+):
+    """Multiple cart_products with the same (seller, school, date) collapse into one group."""
     _bind(reporting_session_factory)
     await _insert(
         reporting_session_factory,
         make_row(cart_product_id=1, exam_canonical_name="A2 Key", quantity=3),
-        make_row(cart_product_id=2, exam_canonical_name="B2 First", quantity=7, lead_id=2),
-        make_row(cart_product_id=3, exam_canonical_name="C1 Advanced", quantity=2, lead_id=3),
+        make_row(cart_product_id=2, exam_canonical_name="B2 First", quantity=7),
+        make_row(cart_product_id=3, exam_canonical_name="C1 Advanced", quantity=2),
     )
     result = await get_detalle_data(_filters())
-    assert len(result.current.rows) == 3
-    ids = {row.id for row in result.current.rows}
-    assert ids == {1, 2, 3}
+    assert len(result.current.rows) == 1
+    row = result.current.rows[0]
+    assert row.exam_counts["A2 Key"] == 3
+    assert row.exam_counts["B2 First"] == 7
+    assert row.exam_counts["C1 Advanced"] == 2
+    assert row.total == 12
 
 
 @pytest.mark.asyncio
@@ -199,6 +206,8 @@ async def test_search_partial_match(reporting_session_factory, clean_reporting_d
 
 # ─────────────────────────────────────────────────────────────
 # Cursor pagination
+# Each row needs a distinct (seller_name, school_name, first_payment_date) to produce
+# separate groups. Use different created_at values to vary first_payment_date.
 # ─────────────────────────────────────────────────────────────
 
 
@@ -208,12 +217,13 @@ async def test_cursor_pagination_first_page(reporting_session_factory, clean_rep
     for i in range(1, 6):
         await _insert(
             reporting_session_factory,
-            make_row(cart_product_id=i, lead_id=i, quantity=i),
+            make_row(cart_product_id=i, lead_id=i, quantity=i, created_at=datetime(2025, i, 15)),
         )
     result = await get_detalle_data(_filters(page_size=3))
     assert len(result.current.rows) == 3
-    assert result.current.rows[0].id == 1
-    assert result.current.rows[2].id == 3
+    # Default sort: exam_date DESC → largest dates first
+    assert result.current.rows[0].exam_date == "2025-05-15"
+    assert result.current.rows[2].exam_date == "2025-03-15"
 
 
 @pytest.mark.asyncio
@@ -222,7 +232,7 @@ async def test_cursor_pagination_second_page(reporting_session_factory, clean_re
     for i in range(1, 6):
         await _insert(
             reporting_session_factory,
-            make_row(cart_product_id=i, lead_id=i, quantity=i),
+            make_row(cart_product_id=i, lead_id=i, quantity=i, created_at=datetime(2025, i, 15)),
         )
     first_page = await get_detalle_data(_filters(page_size=3))
     assert isinstance(first_page.current.next_cursor, str)
@@ -231,7 +241,7 @@ async def test_cursor_pagination_second_page(reporting_session_factory, clean_re
         _filters(page_size=3, cursor=first_page.current.next_cursor)
     )
     assert len(second_page.current.rows) == 2
-    assert second_page.current.rows[0].id == 4
+    assert second_page.current.rows[0].exam_date == "2025-02-15"
 
 
 @pytest.mark.asyncio
@@ -240,7 +250,7 @@ async def test_cursor_pagination_has_more_true(reporting_session_factory, clean_
     for i in range(1, 6):
         await _insert(
             reporting_session_factory,
-            make_row(cart_product_id=i, lead_id=i, quantity=i),
+            make_row(cart_product_id=i, lead_id=i, quantity=i, created_at=datetime(2025, i, 15)),
         )
     result = await get_detalle_data(_filters(page_size=3))
     assert result.current.has_more is True
@@ -255,7 +265,7 @@ async def test_cursor_pagination_has_more_false_on_last_page(
     for i in range(1, 4):
         await _insert(
             reporting_session_factory,
-            make_row(cart_product_id=i, lead_id=i, quantity=i),
+            make_row(cart_product_id=i, lead_id=i, quantity=i, created_at=datetime(2025, i, 15)),
         )
     result = await get_detalle_data(_filters(page_size=5))
     assert result.current.has_more is False
@@ -270,15 +280,15 @@ async def test_cursor_pagination_no_duplicates_across_pages(
     for i in range(1, 8):
         await _insert(
             reporting_session_factory,
-            make_row(cart_product_id=i, lead_id=i, quantity=i),
+            make_row(cart_product_id=i, lead_id=i, quantity=i, created_at=datetime(2025, i, 15)),
         )
     page1 = await get_detalle_data(_filters(page_size=4))
     page2 = await get_detalle_data(_filters(page_size=4, cursor=page1.current.next_cursor))
 
-    ids_p1 = {r.id for r in page1.current.rows}
-    ids_p2 = {r.id for r in page2.current.rows}
-    assert ids_p1.isdisjoint(ids_p2)
-    assert ids_p1 | ids_p2 == set(range(1, 8))
+    keys_p1 = {r.exam_date for r in page1.current.rows}
+    keys_p2 = {r.exam_date for r in page2.current.rows}
+    assert keys_p1.isdisjoint(keys_p2)
+    assert len(keys_p1) + len(keys_p2) == 7
 
 
 # ─────────────────────────────────────────────────────────────
@@ -296,7 +306,7 @@ async def test_date_filter(reporting_session_factory, clean_reporting_db):
     )
     result = await get_detalle_data(_filters(date_from="2025-02-01", date_to="2025-12-31"))
     assert len(result.current.rows) == 1
-    assert result.current.rows[0].id == 2
+    assert result.current.rows[0].exam_date == "2025-03-10"
 
 
 @pytest.mark.asyncio
@@ -309,4 +319,4 @@ async def test_country_filter(reporting_session_factory, clean_reporting_db):
     )
     result = await get_detalle_data(_filters(countries=["colombia"]))
     assert len(result.current.rows) == 1
-    assert result.current.rows[0].id == 2
+    assert result.current.rows[0].total == 5

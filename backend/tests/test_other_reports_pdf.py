@@ -110,7 +110,8 @@ async def test_build_detalle_asesor_pdf_payload_uses_landscape_and_split_tables(
         )
 
     assert payload.orientation == "landscape"
-    assert payload.table_identity.rows[0].cells == ["Ana Garcia", "Colegio Uno", "15/01/2025", "3"]
+    # table_identity is intentionally empty (legacy field, removed from the HTML template)
+    assert payload.table_identity.rows == []
     assert payload.table_exams.rows[0].cells[0] == "Ana Garcia"
     assert payload.table_exams.rows[0].cells[-1] == "3"
 
