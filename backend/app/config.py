@@ -54,8 +54,9 @@ class Settings:
         )
 
     # Auth
-    supabase_url: str = os.getenv("SUPABASE_URL", "")
-    supabase_anon_key: str = os.getenv("SUPABASE_ANON_KEY", "")
+    jwt_secret: str = os.getenv("JWT_SECRET", "")
+    dev_auth_users: str = os.getenv("DEV_AUTH_USERS", "")
+    sso_shared_secret: str = os.getenv("SSO_SHARED_SECRET", "")
     admin_api_key: str = os.getenv("ADMIN_API_KEY", "")
 
     # CORS — comma-separated origins, e.g. "https://app.example.com,http://localhost:5173"
