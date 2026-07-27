@@ -23,11 +23,16 @@ function ProtectedLayout({ session }: { session: boolean }) {
 }
 
 export default function App() {
-    const [session] = useState<boolean>(() => isAuthenticated())
+    const [session, setSession] = useState<boolean>(() => isAuthenticated())
 
     return (
         <Routes>
-            <Route path="/login" element={session ? <Navigate to="/ventas-totales" replace /> : <LoginPage />} />
+            <Route
+                path="/login"
+                element={
+                    session ? <Navigate to="/ventas-totales" replace /> : <LoginPage onLogin={() => setSession(true)} />
+                }
+            />
             <Route path="/sso" element={<SsoPage />} />
             <Route element={<ProtectedLayout session={session} />}>
                 <Route path="/" element={<Navigate to="/ventas-totales" replace />} />
