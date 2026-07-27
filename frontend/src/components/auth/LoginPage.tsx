@@ -5,7 +5,7 @@ import config from "@/config"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 
-export default function LoginPage() {
+export default function LoginPage({ onLogin }: { onLogin: () => void }) {
     const [email, setEmail] = useState("")
     const [password, setPassword] = useState("")
     const [error, setError] = useState<string | null>(null)
@@ -29,6 +29,7 @@ export default function LoginPage() {
             } else {
                 const { access_token } = await res.json()
                 setToken(access_token)
+                onLogin()
                 navigate(from, { replace: true })
             }
         } catch {
