@@ -17,7 +17,7 @@ from app.etl.exchange_rates import fetch_and_store_rates
 from app.etl.scheduler import start_scheduler
 from app.etl.startup_backfill import run_startup_backfill_if_needed
 from app.etl.upsert import run_upsert
-from app.routers import detalle_asesor, filters, por_asesor, por_pais, total_sales
+from app.routers import auth, detalle_asesor, filters, por_asesor, por_pais, total_sales
 
 
 def verify_admin_key(x_admin_key: str = Header()) -> None:
@@ -101,6 +101,8 @@ async def trigger_fetch_rates():
     result = await fetch_and_store_rates()
     return {"status": "ok", **result}
 
+
+app.include_router(auth.router, prefix="/auth", tags=["auth"])
 
 _auth = [Depends(verify_token)]
 app.include_router(filters.router, prefix="/filters", tags=["filters"], dependencies=_auth)

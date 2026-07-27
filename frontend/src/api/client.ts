@@ -1,6 +1,6 @@
 import config from "../config"
 import { getStoredBaseCurrency } from "@/lib/reportPreferences"
-import { supabase } from "@/lib/supabase"
+import { getToken, clearToken } from "@/lib/auth"
 
 export class ApiError extends Error {
     constructor(
@@ -18,15 +18,15 @@ type ApiRequestOptions = Omit<RequestInit, "body"> & {
     responseType?: ResponseType
 }
 
-const buildHeaders = async (headers?: HeadersInit, hasJsonBody = false) => {
+const buildHeaders = (headers?: HeadersInit, hasJsonBody = false): Headers => {
     const nextHeaders = new Headers(headers)
     nextHeaders.set("X-Base-Currency", getStoredBaseCurrency())
     if (hasJsonBody && !nextHeaders.has("Content-Type")) {
         nextHeaders.set("Content-Type", "application/json")
     }
-    const { data } = await supabase.auth.getSession()
-    if (data.session?.access_token) {
-        nextHeaders.set("Authorization", `Bearer ${data.session.access_token}`)
+    const token = getToken()
+    if (token) {
+        nextHeaders.set("Authorization", `Bearer ${token}`)
     }
     return nextHeaders
 }
@@ -51,13 +51,13 @@ export const apiResponse = async (
     const hasJsonBody = body !== undefined && !(body instanceof FormData)
     const response = await fetch(`${config.apiUrl}${path}`, {
         ...init,
-        headers: await buildHeaders(headers, hasJsonBody),
+        headers: buildHeaders(headers, hasJsonBody),
         body: body === undefined ? undefined : hasJsonBody ? JSON.stringify(body) : (body as BodyInit),
     })
 
     if (!response.ok) {
         if (response.status === 401) {
-            await supabase.auth.signOut()
+            clearToken()
             window.location.replace("/login")
         }
         throw new ApiError(response.status, response.statusText)

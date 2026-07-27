@@ -1,6 +1,7 @@
 import { useState } from "react"
 import { useLocation, useNavigate } from "react-router-dom"
-import { supabase } from "@/lib/supabase"
+import { setToken } from "@/lib/auth"
+import config from "@/config"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 
@@ -17,11 +18,21 @@ export default function LoginPage() {
         e.preventDefault()
         setError(null)
         setLoading(true)
-        const { error } = await supabase.auth.signInWithPassword({ email, password })
-        if (error) {
-            setError("Correo o contraseña incorrectos.")
-        } else {
-            navigate(from, { replace: true })
+        try {
+            const res = await fetch(`${config.apiUrl}/auth/login`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ username: email, password }),
+            })
+            if (!res.ok) {
+                setError("Correo o contraseña incorrectos.")
+            } else {
+                const { access_token } = await res.json()
+                setToken(access_token)
+                navigate(from, { replace: true })
+            }
+        } catch {
+            setError("Error de conexión. Intenta de nuevo.")
         }
         setLoading(false)
     }

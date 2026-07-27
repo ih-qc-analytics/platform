@@ -19,7 +19,7 @@ import {
     DialogTitle,
 } from "@/components/ui/dialog"
 import { useBaseCurrency, setStoredBaseCurrency } from "@/lib/reportPreferences"
-import { supabase } from "@/lib/supabase"
+import { clearToken } from "@/lib/auth"
 import type { BaseCurrency } from "@/types"
 
 const NAV_ITEMS = [
@@ -93,7 +93,10 @@ export default function AppTopBar() {
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem
-                            onClick={() => supabase.auth.signOut()}
+                            onClick={() => {
+                                clearToken()
+                                window.location.replace("/login")
+                            }}
                             className="text-destructive focus:text-destructive"
                         >
                             <LogOut className="size-4 mr-2" />

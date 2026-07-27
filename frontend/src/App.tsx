@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import { Routes, Route, Navigate, Outlet, useLocation } from "react-router-dom"
 import VentasTotales from "@/components/reports/VentasTotales"
 import PorAsesor from "@/components/reports/PorAsesor"
@@ -6,12 +6,11 @@ import DetallePorAsesor from "@/components/reports/DetallePorAsesor"
 import PorPais from "@/components/reports/PorPais"
 import AppTopBar from "./components/layout/AppTopBar"
 import LoginPage from "@/components/auth/LoginPage"
-import { supabase } from "@/lib/supabase"
-import type { Session } from "@supabase/supabase-js"
+import SsoPage from "@/components/auth/SsoPage"
+import { isAuthenticated } from "@/lib/auth"
 
-function ProtectedLayout({ session }: { session: Session | null | undefined }) {
+function ProtectedLayout({ session }: { session: boolean }) {
     const location = useLocation()
-    if (session === undefined) return null
     if (!session) return <Navigate to="/login" state={{ from: location }} replace />
     return (
         <div className="flex flex-col h-screen">
@@ -24,21 +23,12 @@ function ProtectedLayout({ session }: { session: Session | null | undefined }) {
 }
 
 export default function App() {
-    const [session, setSession] = useState<Session | null | undefined>(undefined)
-
-    useEffect(() => {
-        supabase.auth.getSession().then(({ data }) => setSession(data.session))
-        const {
-            data: { subscription },
-        } = supabase.auth.onAuthStateChange((_event, session) => {
-            setSession(session)
-        })
-        return () => subscription.unsubscribe()
-    }, [])
+    const [session] = useState<boolean>(() => isAuthenticated())
 
     return (
         <Routes>
             <Route path="/login" element={session ? <Navigate to="/ventas-totales" replace /> : <LoginPage />} />
+            <Route path="/sso" element={<SsoPage />} />
             <Route element={<ProtectedLayout session={session} />}>
                 <Route path="/" element={<Navigate to="/ventas-totales" replace />} />
                 <Route path="/ventas-totales" element={<VentasTotales />} />
