@@ -74,6 +74,7 @@ POR_PAIS_STATUS_COLUMNS = [
 POR_PAIS_DETAIL_COLUMNS = [
     ExcelColumn("country", "País"),
     *[ExcelColumn(name, name) for name in DETALLE_EXAM_NAME_ORDER],
+    ExcelColumn("exam_revenue", "Ingreso Exámenes"),
     ExcelColumn("total_books", "Libros"),
     ExcelColumn("total_courses", "Cursos"),
     ExcelColumn("book_revenue", "Ingreso Libros"),
@@ -421,6 +422,7 @@ def build_por_pais_export_worksheets(
         row = {"country": detail.country}
         for name in DETALLE_EXAM_NAME_ORDER:
             row[name] = int(detail.exam_counts.get(name, 0) or 0)
+        row["exam_revenue"] = detail.exam_revenue
         row["total_books"] = detail.total_books
         row["total_courses"] = detail.total_courses
         row["book_revenue"] = detail.book_revenue
@@ -826,32 +828,32 @@ async def build_por_pais_detail_pdf_payload(
             PDFKpiItem(
                 label="Exámenes",
                 value=format_integer(total_exams),
-                **_kw(total_exams, comp_total_exams),
+                **_kw(total_exams, comp_total_exams, format_integer),
             ),
             PDFKpiItem(
                 label="Cambridge",
                 value=format_integer(cambridge_total),
-                **_kw(cambridge_total, comp_cambridge),
+                **_kw(cambridge_total, comp_cambridge, format_integer),
             ),
             PDFKpiItem(
                 label="IELTS",
                 value=format_integer(detail.exam_counts.get("IELTS", 0)),
-                **_kw(detail.exam_counts.get("IELTS", 0), comp_ielts),
+                **_kw(detail.exam_counts.get("IELTS", 0), comp_ielts, format_integer),
             ),
             PDFKpiItem(
                 label="Otros",
                 value=format_integer(other_total),
-                **_kw(other_total, comp_other),
+                **_kw(other_total, comp_other, format_integer),
             ),
             PDFKpiItem(
                 label="Libros",
                 value=format_integer(detail.total_books),
-                **_kw(detail.total_books, detail.comparison_total_books),
+                **_kw(detail.total_books, detail.comparison_total_books, format_integer),
             ),
             PDFKpiItem(
                 label="Cursos",
                 value=format_integer(detail.total_courses),
-                **_kw(detail.total_courses, detail.comparison_total_courses),
+                **_kw(detail.total_courses, detail.comparison_total_courses, format_integer),
             ),
             PDFKpiItem(
                 label="Ingreso Exámenes",

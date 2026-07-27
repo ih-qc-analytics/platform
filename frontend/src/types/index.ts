@@ -203,6 +203,9 @@ export type AsesorRow = {
     books_courses_ganados: number
     books_courses_perdidos: number
     books_courses_mantenidos: number
+    exams_ganados: number
+    exams_perdidos: number
+    exams_mantenidos: number
     allocated_revenue: number
     expected_revenue: number
     expected_cost: number

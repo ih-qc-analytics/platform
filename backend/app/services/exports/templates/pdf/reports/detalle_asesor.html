@@ -8,6 +8,5 @@
 
 {% block content %}
 {{ render_header(payload.header, logo_b64) }}
-{{ render_table("Identidad de registros", payload.table_identity) }}
-{{ render_table("Desglose por examen", payload.table_exams, compact=true) }}
+{{ render_table("Desglose por asesor y examen", payload.table_exams, compact=true) }}
 {% endblock %}

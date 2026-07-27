@@ -1,6 +1,5 @@
 import base64
 import json
-from datetime import date as date_type
 
 from app.schemas.pdf import DetalleAsesorPDFPayload, PDFTable, PDFTableRow
 from app.schemas.reports import (
@@ -31,13 +30,27 @@ DETALLE_EXPORT_COLUMNS = [
 SORTABLE_COLUMNS: dict[str, str] = {
     "seller_name": "seller_name",
     "school_name": "school_name",
-    "exam_date": "first_payment_date",
+    "exam_date": "exam_date",  # matches subquery alias, not raw column
     "total": "quantity",
 }
 
 
-def encode_cursor(sort_by: str, sort_dir: str, sort_value, row_id: int) -> str:
-    payload = {"sort_by": sort_by, "sort_dir": sort_dir, "sort_value": sort_value, "id": row_id}
+def encode_cursor(
+    sort_by: str,
+    sort_dir: str,
+    sort_value,
+    seller_name: str,
+    school_name: str,
+    exam_date: str,
+) -> str:
+    payload = {
+        "sort_by": sort_by,
+        "sort_dir": sort_dir,
+        "sort_value": sort_value,
+        "seller": seller_name,
+        "school": school_name,
+        "date": exam_date,
+    }
     return base64.urlsafe_b64encode(json.dumps(payload).encode()).decode()
 
 
@@ -48,7 +61,9 @@ def decode_cursor(cursor: str) -> dict:
         "cursor_sort_by": str(payload["sort_by"]),
         "cursor_sort_dir": str(payload["sort_dir"]),
         "cursor_sort_value": payload["sort_value"],
-        "cursor_id": int(payload["id"]),
+        "cursor_seller": str(payload["seller"]),
+        "cursor_school": str(payload["school"]),
+        "cursor_date": str(payload["date"]),
     }
 
 
@@ -84,18 +99,19 @@ def _build_where(filters: DetalleFilters) -> tuple[str, dict]:
     return " AND ".join(conditions), params
 
 
-def _row_from_record(row) -> DetalleRow:
-    exam_type = row.exam_name if row.exam_name in DETALLE_EXAM_NAME_ORDER else "Otros"
-    exam_counts = {name: 0 for name in DETALLE_EXAM_NAME_ORDER}
-    exam_counts[exam_type] = int(row.quantity or 0)
+def _row_from_record(idx: int, row) -> DetalleRow:
+    exam_counts: dict[str, int] = {}
+    for i, name in enumerate(EXAM_NAME_ORDER):
+        exam_counts[name] = int(row[f"exam_{i}"] or 0)
+    exam_counts["Otros"] = int(row["exam_otros"] or 0)
     return DetalleRow(
-        id=int(row.id),
-        seller_name=row.seller_name,
-        school_name=row.school_name or "",
-        exam_date=str(row.exam_date) if row.exam_date else "",
-        exam_type=exam_type,
+        id=idx,
+        seller_name=row["seller_name"],
+        school_name=row["school_name"] or "",
+        exam_date=str(row["exam_date"]) if row["exam_date"] else "",
+        exam_type="",
         exam_counts=exam_counts,
-        total=sum(exam_counts.values()),
+        total=int(row["quantity"] or 0),
     )
 
 
@@ -111,53 +127,73 @@ async def _fetch_current_base(filters: DetalleFilters) -> DetalleReportBase:
     cursor_clause = ""
     if filters.cursor:
         cp = decode_cursor(filters.cursor)
-        params["cursor_id"] = cp["cursor_id"]
-        # asyncpg requires Python date objects for date column comparisons
-        raw_cv = cp["cursor_sort_value"]
-        params["cursor_sort_value"] = (
-            date_type.fromisoformat(raw_cv) if sort_by == "exam_date" else raw_cv
-        )
+        cv = cp["cursor_sort_value"]
+        params["cursor_sort_value"] = int(cv) if sort_by == "total" else str(cv)
+        params["cursor_seller"] = cp["cursor_seller"]
+        params["cursor_school"] = cp["cursor_school"]
+        params["cursor_date"] = cp["cursor_date"]
         cursor_clause = f"""
-            AND (
+            WHERE (
                 {sort_col} {cmp_op} :cursor_sort_value
-                OR ({sort_col} = :cursor_sort_value AND cart_product_id > :cursor_id)
+                OR (
+                    {sort_col} = :cursor_sort_value
+                    AND (seller_name, school_name, exam_date) > (:cursor_seller, :cursor_school, :cursor_date)
+                )
             )
         """
 
+    # Build per-exam conditional SUM columns (values from Python enum whitelist — safe to interpolate)
+    exam_case_exprs = []
+    for i, name in enumerate(EXAM_NAME_ORDER):
+        safe_name = name.replace("'", "''")
+        exam_case_exprs.append(
+            f"COALESCE(SUM(CASE WHEN exam_canonical_name = '{safe_name}' THEN quantity ELSE 0 END), 0) AS exam_{i}"
+        )
+    all_known_sql = ", ".join(f"'{n.replace(chr(39), chr(39) * 2)}'" for n in EXAM_NAME_ORDER)
+    otros_expr = f"COALESCE(SUM(CASE WHEN exam_canonical_name NOT IN ({all_known_sql}) THEN quantity ELSE 0 END), 0) AS exam_otros"
+    exam_cols_sql = ",\n                ".join(exam_case_exprs + [otros_expr])
+
     params["page_size"] = filters.page_size + 1
     query = f"""
-        SELECT
-            cart_product_id AS id,
-            seller_name,
-            school_name,
-            first_payment_date::text AS exam_date,
-            exam_canonical_name AS exam_name,
-            quantity,
-            {sort_col} AS sort_val
-        FROM report_line_items
-        WHERE {where}
+        SELECT * FROM (
+            SELECT
+                seller_name,
+                school_name,
+                first_payment_date::text AS exam_date,
+                {exam_cols_sql},
+                COALESCE(SUM(quantity), 0) AS quantity
+            FROM report_line_items
+            WHERE {where}
+            GROUP BY seller_name, school_name, first_payment_date
+        ) t
         {cursor_clause}
-        ORDER BY {sort_col} {sort_dir_sql}, cart_product_id ASC
+        ORDER BY {sort_col} {sort_dir_sql}, seller_name ASC, school_name ASC, exam_date ASC
         LIMIT :page_size
     """
     async with ReportingSessionLocal() as session:
-        records = (await session.execute(text(query), params)).fetchall()
+        records = (await session.execute(text(query), params)).mappings().fetchall()
 
     page_records = records[: filters.page_size]
-    rows = [_row_from_record(row) for row in page_records]
+    rows = [_row_from_record(idx, row) for idx, row in enumerate(page_records)]
     has_more = len(records) > filters.page_size
 
     next_cursor = None
     if has_more and rows:
         last_record = page_records[-1]
         last_row = rows[-1]
-        raw_sort_val = last_record.sort_val
-        # Normalize to JSON-safe types: strings for text/date, int for quantity
+        raw_sort_val = last_record[sort_col]
         if sort_by == "total":
             sort_value = int(raw_sort_val) if raw_sort_val is not None else 0
         else:
             sort_value = str(raw_sort_val) if raw_sort_val is not None else ""
-        next_cursor = encode_cursor(sort_by, sort_dir, sort_value, last_row.id)
+        next_cursor = encode_cursor(
+            sort_by,
+            sort_dir,
+            sort_value,
+            last_row.seller_name,
+            last_row.school_name,
+            last_row.exam_date,
+        )
 
     return DetalleReportBase(rows=rows, next_cursor=next_cursor, has_more=has_more)
 
@@ -230,22 +266,14 @@ def build_detalle_export_worksheets(report: DetalleReportResponse) -> list[Excel
 
 async def build_detalle_asesor_pdf_payload(filters: DetalleFilters) -> DetalleAsesorPDFPayload:
     report = await get_all_detalle_rows(build_detalle_export_filters_for_all(filters))
-    identity_rows = [
-        PDFTableRow(
-            cells=[
-                row.seller_name,
-                row.school_name,
-                format_date(row.exam_date) if row.exam_date else "-",
-                format_integer(row.total),
-            ]
-        )
-        for row in report.current.rows
-    ]
+
+    # Rows are already aggregated per (seller, school, date) by the SQL GROUP BY
     exam_rows = [
         PDFTableRow(
             cells=[
                 row.seller_name,
                 row.school_name,
+                format_date(row.exam_date) if row.exam_date else "-",
                 *[
                     format_integer(row.exam_counts.get(name, 0) or 0)
                     for name in DETALLE_EXAM_NAME_ORDER
@@ -255,19 +283,20 @@ async def build_detalle_asesor_pdf_payload(filters: DetalleFilters) -> DetalleAs
         )
         for row in report.current.rows
     ]
+
     return DetalleAsesorPDFPayload(
         header=build_pdf_header(
             "Detalle por Asesor", "Desglose por asesor, escuela y fecha de examen", filters
         ),
         table_identity=PDFTable(
             headers=["Asesor", "Escuela", "Fecha", "Total"],
-            rows=identity_rows,
+            rows=[],
             column_widths=[3, 4, 2, 1],
         ),
         table_exams=PDFTable(
-            headers=["Asesor", "Escuela", *DETALLE_EXAM_NAME_ORDER, "Total"],
+            headers=["Asesor", "Escuela", "Fecha", *DETALLE_EXAM_NAME_ORDER, "Total"],
             rows=exam_rows,
-            column_widths=[3, 4, *([1] * len(DETALLE_EXAM_NAME_ORDER)), 1],
+            column_widths=[3, 4, 2, *([1] * len(DETALLE_EXAM_NAME_ORDER)), 1],
         ),
         orientation="landscape",
     )

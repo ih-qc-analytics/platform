@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 from fastapi import HTTPException, Security
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
-from passlib.context import CryptContext
+import bcrypt
 from sqlalchemy import text
 
 from app.config import settings
@@ -13,7 +13,6 @@ from app.database import SessionLocal
 
 logger = logging.getLogger(__name__)
 bearer = HTTPBearer()
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 _ALGORITHM = "HS256"
 _ACCESS_TOKEN_EXPIRE_HOURS = 8
@@ -136,7 +135,7 @@ async def authenticate_user(username: str, password: str) -> dict:
         )
         row = result.mappings().first()
 
-    if not row or not pwd_context.verify(password, row["password"]):
+    if not row or not bcrypt.checkpw(password.encode(), row["password"].encode()):
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
     return dict(row)

@@ -40,6 +40,7 @@ from app.services.exports.pdf_helpers import (
 from app.services.por_asesor.product_grouping import EXAM_CATEGORY_ORDER
 from app.services.por_asesor.repository import (
     fetch_books_courses_presence_rows,
+    fetch_exams_presence_rows,
     fetch_comparison_rows_by_seller_ids,
     fetch_detail_exam_breakdown_rows,
     fetch_paginated_summary_rows,
@@ -70,12 +71,6 @@ ASESOR_SUMMARY_COLUMNS = [
     ExcelColumn("exam_revenue", "Ingreso Exámenes"),
     ExcelColumn("book_revenue", "Ingreso Libros"),
     ExcelColumn("course_revenue", "Ingreso Cursos"),
-    ExcelColumn("ganados", "Ganados"),
-    ExcelColumn("perdidos", "Perdidos"),
-    ExcelColumn("mantenidos", "Mantenidos"),
-    ExcelColumn("books_courses_ganados", "L+C Ganados"),
-    ExcelColumn("books_courses_perdidos", "L+C Perdidos"),
-    ExcelColumn("books_courses_mantenidos", "L+C Mantenidos"),
     ExcelColumn("uncategorized_revenue", "Ingreso Sin Categorizar"),
     ExcelColumn("total_revenue", "Ingreso Total"),
     ExcelColumn("allocated_revenue", "Ingreso Asignado"),
@@ -317,16 +312,22 @@ async def fetch_summary_status_counts(
         comparison_rows,
         current_bc_rows,
         comparison_bc_rows,
+        current_exam_rows,
+        comparison_exam_rows,
     ) = await asyncio.gather(
         fetch_school_presence_rows(current_filters),
         fetch_school_presence_rows(comparison_filters),
         fetch_books_courses_presence_rows(current_filters),
         fetch_books_courses_presence_rows(comparison_filters),
+        fetch_exams_presence_rows(current_filters),
+        fetch_exams_presence_rows(comparison_filters),
     )
     current_by_seller: dict[int, set[int]] = defaultdict(set)
     comparison_by_seller: dict[int, set[int]] = defaultdict(set)
     current_bc_by_seller: dict[int, set[int]] = defaultdict(set)
     comparison_bc_by_seller: dict[int, set[int]] = defaultdict(set)
+    current_exam_by_seller: dict[int, set[int]] = defaultdict(set)
+    comparison_exam_by_seller: dict[int, set[int]] = defaultdict(set)
     for row in current_rows:
         current_by_seller[int(row.seller_id)].add(int(row.lead_id))
     for row in comparison_rows:
@@ -335,6 +336,10 @@ async def fetch_summary_status_counts(
         current_bc_by_seller[int(row.seller_id)].add(int(row.lead_id))
     for row in comparison_bc_rows:
         comparison_bc_by_seller[int(row.seller_id)].add(int(row.lead_id))
+    for row in current_exam_rows:
+        current_exam_by_seller[int(row.seller_id)].add(int(row.lead_id))
+    for row in comparison_exam_rows:
+        comparison_exam_by_seller[int(row.seller_id)].add(int(row.lead_id))
     return {
         seller_id: {
             "ganado": len(
@@ -357,6 +362,18 @@ async def fetch_summary_status_counts(
             "bc_mantenido": len(
                 current_bc_by_seller.get(seller_id, set())
                 & comparison_bc_by_seller.get(seller_id, set())
+            ),
+            "exams_ganado": len(
+                current_exam_by_seller.get(seller_id, set())
+                - comparison_exam_by_seller.get(seller_id, set())
+            ),
+            "exams_perdido": len(
+                comparison_exam_by_seller.get(seller_id, set())
+                - current_exam_by_seller.get(seller_id, set())
+            ),
+            "exams_mantenido": len(
+                current_exam_by_seller.get(seller_id, set())
+                & comparison_exam_by_seller.get(seller_id, set())
             ),
         }
         for seller_id in seller_ids
@@ -397,6 +414,9 @@ def build_asesor_report_base(
                 books_courses_ganados=int(status_counts.get(sid, {}).get("bc_ganado", 0)),
                 books_courses_perdidos=int(status_counts.get(sid, {}).get("bc_perdido", 0)),
                 books_courses_mantenidos=int(status_counts.get(sid, {}).get("bc_mantenido", 0)),
+                exams_ganados=int(status_counts.get(sid, {}).get("exams_ganado", 0)),
+                exams_perdidos=int(status_counts.get(sid, {}).get("exams_perdido", 0)),
+                exams_mantenidos=int(status_counts.get(sid, {}).get("exams_mantenido", 0)),
                 expected_cost=expected_cost,
                 profit_margin=float(getattr(row, "profit_margin", 0) or 0),
             )
@@ -882,9 +902,6 @@ def build_asesor_export_worksheets(
         "Ganados",
         "Perdidos",
         "Mantenidos",
-        "L+C Ganados",
-        "L+C Perdidos",
-        "L+C Mantenidos",
     }
     summary_columns = [
         c
@@ -942,49 +959,130 @@ def build_asesor_export_worksheets(
     if report.comparison:
         comp_by_seller = {r.seller_name: r for r in report.comparison.data.rows}
         comparison_rows = []
+
+        def _pct(act: float, ant: float | None) -> float | None:
+            return round((act - ant) / ant * 100, 1) if ant else None
+
         for row in report.current.rows:
             comp = comp_by_seller.get(row.seller_name)
-
-            def _pct(act: float, ant: float) -> float | None:
-                return round((act - ant) / ant * 100, 1) if ant else None
-
-            comparison_rows.append(
-                {
-                    "seller_name": row.seller_name,
-                    "ganados_act": row.ganados,
-                    "ganados_ant": comp.ganados if comp else None,
-                    "ganados_pct": _pct(row.ganados, comp.ganados) if comp else None,
-                    "perdidos_act": row.perdidos,
-                    "perdidos_ant": comp.perdidos if comp else None,
-                    "perdidos_pct": _pct(row.perdidos, comp.perdidos) if comp else None,
-                    "uncategorized_act": row.uncategorized_revenue,
-                    "uncategorized_ant": comp.uncategorized_revenue if comp else None,
-                    "uncategorized_pct": _pct(row.uncategorized_revenue, comp.uncategorized_revenue)
-                    if comp
-                    else None,
-                    "revenue_act": row.total_revenue,
-                    "revenue_ant": comp.total_revenue if comp else None,
-                    "revenue_pct": _pct(row.total_revenue, comp.total_revenue) if comp else None,
-                }
+            r: dict = {"seller_name": row.seller_name}
+            # Exam category counts
+            for cat in EXAM_CATEGORY_ORDER:
+                act_val = int(row.exam_breakdown.get(cat, 0) or 0)
+                ant_val = int(comp.exam_breakdown.get(cat, 0) or 0) if comp else None
+                r[f"{cat}_act"] = act_val
+                r[f"{cat}_ant"] = ant_val
+                r[f"{cat}_pct"] = _pct(act_val, ant_val) if ant_val is not None else None
+            # Books and Courses counts
+            r["books_act"] = row.total_books
+            r["books_ant"] = comp.total_books if comp else None
+            r["books_pct"] = _pct(row.total_books, comp.total_books if comp else None)
+            r["courses_act"] = row.total_courses
+            r["courses_ant"] = comp.total_courses if comp else None
+            r["courses_pct"] = _pct(row.total_courses, comp.total_courses if comp else None)
+            # Revenues
+            r["exam_rev_act"] = row.exam_revenue
+            r["exam_rev_ant"] = comp.exam_revenue if comp else None
+            r["exam_rev_pct"] = _pct(row.exam_revenue, comp.exam_revenue if comp else None)
+            r["book_rev_act"] = row.book_revenue
+            r["book_rev_ant"] = comp.book_revenue if comp else None
+            r["book_rev_pct"] = _pct(row.book_revenue, comp.book_revenue if comp else None)
+            r["course_rev_act"] = row.course_revenue
+            r["course_rev_ant"] = comp.course_revenue if comp else None
+            r["course_rev_pct"] = _pct(row.course_revenue, comp.course_revenue if comp else None)
+            r["uncategorized_act"] = row.uncategorized_revenue
+            r["uncategorized_ant"] = comp.uncategorized_revenue if comp else None
+            r["uncategorized_pct"] = _pct(
+                row.uncategorized_revenue, comp.uncategorized_revenue if comp else None
             )
+            r["revenue_act"] = row.total_revenue
+            r["revenue_ant"] = comp.total_revenue if comp else None
+            r["revenue_pct"] = _pct(row.total_revenue, comp.total_revenue if comp else None)
+            r["allocated_act"] = row.allocated_revenue
+            r["allocated_ant"] = comp.allocated_revenue if comp else None
+            r["allocated_pct"] = _pct(
+                row.allocated_revenue, comp.allocated_revenue if comp else None
+            )
+            r["expected_act"] = row.expected_revenue
+            r["expected_ant"] = comp.expected_revenue if comp else None
+            r["expected_pct"] = _pct(row.expected_revenue, comp.expected_revenue if comp else None)
+            r["cost_act"] = row.expected_cost
+            r["cost_ant"] = comp.expected_cost if comp else None
+            r["cost_pct"] = _pct(row.expected_cost, comp.expected_cost if comp else None)
+            r["margin_act"] = row.profit_margin
+            r["margin_ant"] = comp.profit_margin if comp else None
+            r["margin_pct"] = round(row.profit_margin - comp.profit_margin, 1) if comp else None
+            # Status columns — single value (inherently a comparison result)
+            r["bc_ganados"] = row.books_courses_ganados
+            r["bc_perdidos"] = row.books_courses_perdidos
+            r["bc_mantenidos"] = row.books_courses_mantenidos
+            r["exams_ganados"] = row.exams_ganados
+            r["exams_perdidos"] = row.exams_perdidos
+            r["exams_mantenidos"] = row.exams_mantenidos
+            r["ganados"] = row.ganados
+            r["perdidos"] = row.perdidos
+            r["mantenidos"] = row.mantenidos
+            comparison_rows.append(r)
+
+        comparison_columns = [ExcelColumn("seller_name", "Asesor")]
+        for _cat in EXAM_CATEGORY_ORDER:
+            comparison_columns.extend(
+                [
+                    ExcelColumn(f"{_cat}_act", f"{_cat} (Act.)"),
+                    ExcelColumn(f"{_cat}_ant", f"{_cat} (Ant.)"),
+                    ExcelColumn(f"{_cat}_pct", f"{_cat} Δ%"),
+                ]
+            )
+        comparison_columns.extend(
+            [
+                ExcelColumn("books_act", "Libros (Act.)"),
+                ExcelColumn("books_ant", "Libros (Ant.)"),
+                ExcelColumn("books_pct", "Libros Δ%"),
+                ExcelColumn("courses_act", "Cursos (Act.)"),
+                ExcelColumn("courses_ant", "Cursos (Ant.)"),
+                ExcelColumn("courses_pct", "Cursos Δ%"),
+                ExcelColumn("exam_rev_act", "Ing. Exámenes (Act.)"),
+                ExcelColumn("exam_rev_ant", "Ing. Exámenes (Ant.)"),
+                ExcelColumn("exam_rev_pct", "Ing. Exámenes Δ%"),
+                ExcelColumn("book_rev_act", "Ing. Libros (Act.)"),
+                ExcelColumn("book_rev_ant", "Ing. Libros (Ant.)"),
+                ExcelColumn("book_rev_pct", "Ing. Libros Δ%"),
+                ExcelColumn("course_rev_act", "Ing. Cursos (Act.)"),
+                ExcelColumn("course_rev_ant", "Ing. Cursos (Ant.)"),
+                ExcelColumn("course_rev_pct", "Ing. Cursos Δ%"),
+                ExcelColumn("uncategorized_act", "Sin Cat. (Act.)"),
+                ExcelColumn("uncategorized_ant", "Sin Cat. (Ant.)"),
+                ExcelColumn("uncategorized_pct", "Sin Cat. Δ%"),
+                ExcelColumn("revenue_act", "Valor Total (Act.)"),
+                ExcelColumn("revenue_ant", "Valor Total (Ant.)"),
+                ExcelColumn("revenue_pct", "Valor Total Δ%"),
+                ExcelColumn("allocated_act", "Ing. Asignado (Act.)"),
+                ExcelColumn("allocated_ant", "Ing. Asignado (Ant.)"),
+                ExcelColumn("allocated_pct", "Ing. Asignado Δ%"),
+                ExcelColumn("expected_act", "Ing. Esperado (Act.)"),
+                ExcelColumn("expected_ant", "Ing. Esperado (Ant.)"),
+                ExcelColumn("expected_pct", "Ing. Esperado Δ%"),
+                ExcelColumn("cost_act", "Costo Esp. (Act.)"),
+                ExcelColumn("cost_ant", "Costo Esp. (Ant.)"),
+                ExcelColumn("cost_pct", "Costo Esp. Δ%"),
+                ExcelColumn("margin_act", "Margen % (Act.)"),
+                ExcelColumn("margin_ant", "Margen % (Ant.)"),
+                ExcelColumn("margin_pct", "Margen % Δ%"),
+                ExcelColumn("bc_ganados", "L+C Ganados"),
+                ExcelColumn("bc_perdidos", "L+C Perdidos"),
+                ExcelColumn("bc_mantenidos", "L+C Mantenidos"),
+                ExcelColumn("exams_ganados", "Exámenes Ganados"),
+                ExcelColumn("exams_perdidos", "Exámenes Perdidos"),
+                ExcelColumn("exams_mantenidos", "Exámenes Mantenidos"),
+                ExcelColumn("ganados", "Colegios Ganados"),
+                ExcelColumn("perdidos", "Colegios Perdidos"),
+                ExcelColumn("mantenidos", "Colegios Mantenidos"),
+            ]
+        )
         specs.append(
             ExcelWorksheetSpec(
                 name="Comparación",
-                columns=[
-                    ExcelColumn("seller_name", "Asesor"),
-                    ExcelColumn("ganados_act", "Ganados (Act.)"),
-                    ExcelColumn("ganados_ant", "Ganados (Ant.)"),
-                    ExcelColumn("ganados_pct", "Ganados Δ%"),
-                    ExcelColumn("perdidos_act", "Perdidos (Act.)"),
-                    ExcelColumn("perdidos_ant", "Perdidos (Ant.)"),
-                    ExcelColumn("perdidos_pct", "Perdidos Δ%"),
-                    ExcelColumn("uncategorized_act", "Sin Cat. (Act.)"),
-                    ExcelColumn("uncategorized_ant", "Sin Cat. (Ant.)"),
-                    ExcelColumn("uncategorized_pct", "Sin Cat. Δ%"),
-                    ExcelColumn("revenue_act", "Valor Total (Act.)"),
-                    ExcelColumn("revenue_ant", "Valor Total (Ant.)"),
-                    ExcelColumn("revenue_pct", "Valor Total Δ%"),
-                ],
+                columns=comparison_columns,
                 rows=comparison_rows,
                 note=f"Período comparativo: {report.comparison.meta.date_from} – {report.comparison.meta.date_to}",
             )
@@ -1050,10 +1148,11 @@ async def build_por_asesor_pdf_payload(
         else (0.0 if has_comparison else None)
     )
 
-    def _kw(curr: float, prev: float | None, fmt=None) -> dict:
+    def _kw(curr: float, prev: float | None, fmt=None, *, subtract: bool = False) -> dict:
         if prev is None:
             return {}
-        g, gp = format_growth(percent_change(curr, prev))
+        delta = (curr - prev) if subtract else percent_change(curr, prev)
+        g, gp = format_growth(delta)
         result: dict = {"growth": g or "N/A", "growth_positive": gp}
         if fmt is not None:
             result["comparison_value"] = fmt(prev)
@@ -1141,9 +1240,9 @@ async def build_por_asesor_pdf_payload(
 
     status_kpis = (
         [
-            PDFKpiItem(label="Ganados", value=format_integer(total_ganados)),
-            PDFKpiItem(label="Perdidos", value=format_integer(total_perdidos)),
-            PDFKpiItem(label="Mantenidos", value=format_integer(total_mantenidos)),
+            PDFKpiItem(label="Colegios Ganados", value=format_integer(total_ganados)),
+            PDFKpiItem(label="Colegios Perdidos", value=format_integer(total_perdidos)),
+            PDFKpiItem(label="Colegios Mantenidos", value=format_integer(total_mantenidos)),
         ]
         if has_comparison
         else []
@@ -1152,7 +1251,7 @@ async def build_por_asesor_pdf_payload(
     table_headers = ["Asesor", "Cambridge", "IELTS", "MET", "Otros", "Libros", "Cursos"]
     table_widths = [4, 2, 2, 2, 2, 2, 2]
     if has_comparison:
-        table_headers += ["Ganados", "Perdidos", "Mantenidos"]
+        table_headers += ["Col. Ganados", "Col. Perdidos", "Col. Mantenidos"]
         table_widths += [2, 2, 2]
     table_headers += [
         "Sin Categorizar",
@@ -1214,7 +1313,7 @@ async def build_por_asesor_pdf_payload(
             PDFKpiItem(
                 label="Margen de Utilidad",
                 value=format_percent(total_margin),
-                **_kw(total_margin, comp_total_margin, format_percent),
+                **_kw(total_margin, comp_total_margin, format_percent, subtract=True),
             ),
         ],
         table=PDFTable(
@@ -1241,10 +1340,11 @@ async def build_asesor_detail_pdf_payload(
     comp_detail = response.comparison.data if response.comparison else None
     comp_meta = response.comparison.meta if response.comparison else None
 
-    def _kw(curr: float, prev: float | None, fmt=None) -> dict:
+    def _kw(curr: float, prev: float | None, fmt=None, *, subtract: bool = False) -> dict:
         if prev is None:
             return {}
-        g, gp = format_growth(percent_change(curr, prev))
+        delta = (curr - prev) if subtract else percent_change(curr, prev)
+        g, gp = format_growth(delta)
         result: dict = {"growth": g or "N/A", "growth_positive": gp}
         if fmt is not None:
             result["comparison_value"] = fmt(prev)
@@ -1430,6 +1530,7 @@ async def build_asesor_detail_pdf_payload(
                     detail.profit_margin,
                     comp_detail.profit_margin if comp_detail else None,
                     format_percent,
+                    subtract=True,
                 ),
             ),
         ],

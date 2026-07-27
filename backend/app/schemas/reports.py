@@ -138,6 +138,9 @@ class AsesorRow(BaseModel):
     books_courses_ganados: int = 0
     books_courses_perdidos: int = 0
     books_courses_mantenidos: int = 0
+    exams_ganados: int = 0
+    exams_perdidos: int = 0
+    exams_mantenidos: int = 0
     allocated_revenue: float = 0.0
     expected_revenue: float = 0.0
     expected_cost: float = 0.0

@@ -252,15 +252,23 @@ def _total_sales_kpi_deltas(
             current.unknown_site_expected_revenue,
             comparison.unknown_site_expected_revenue,
         ),
-        "profit_margin": (current.profit_margin, comparison.profit_margin),
     }
-    return {
+    deltas = {
         key: MetricDelta(
             comparison_value=float(comparison_value),
             pct_change=percent_change(current_value, comparison_value),
         )
         for key, (current_value, comparison_value) in values.items()
     }
+    # profit_margin is already a percentage — use subtraction, not relative change
+    comp_margin = comparison.profit_margin
+    deltas["profit_margin"] = MetricDelta(
+        comparison_value=float(comp_margin),
+        pct_change=round(float(current.profit_margin) - float(comp_margin), 4)
+        if comp_margin is not None
+        else None,
+    )
+    return deltas
 
 
 async def get_total_sales_data(

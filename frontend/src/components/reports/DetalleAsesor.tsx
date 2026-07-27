@@ -320,7 +320,15 @@ export default function DetalleAsesor({ sellerId, sellerName, open, onOpenChange
                                 <SummaryInfoCard
                                     label="Margen de Utilidad"
                                     value={`${detail.profit_margin.toFixed(1)}%`}
-                                    showComparison={false}
+                                    comparisonValue={
+                                        comparisonDetail ? `${comparisonDetail.profit_margin.toFixed(1)}%` : undefined
+                                    }
+                                    comparisonPct={
+                                        showComparison && comparisonDetail != null
+                                            ? detail.profit_margin - comparisonDetail.profit_margin
+                                            : undefined
+                                    }
+                                    showComparison={showComparison}
                                 />
                             </div>
 

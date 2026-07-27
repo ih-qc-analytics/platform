@@ -168,6 +168,15 @@ export default function PorAsesor() {
                                             </TableHeadCell>
                                             {showComparisonValues && (
                                                 <>
+                                                    <TableHeadCell className="min-w-28 whitespace-nowrap text-center">
+                                                        Col. Ganados
+                                                    </TableHeadCell>
+                                                    <TableHeadCell className="min-w-28 whitespace-nowrap text-center">
+                                                        Col. Perdidos
+                                                    </TableHeadCell>
+                                                    <TableHeadCell className="min-w-28 whitespace-nowrap text-center">
+                                                        Col. Mantenidos
+                                                    </TableHeadCell>
                                                     <TableHeadCell className="min-w-24 whitespace-nowrap text-center">
                                                         E. Ganados
                                                     </TableHeadCell>
@@ -314,6 +323,21 @@ export default function PorAsesor() {
                                                                 showComparison={false}
                                                             />
                                                             <TableBadgeCell
+                                                                value={row.exams_ganados}
+                                                                tone="success"
+                                                                showComparison={false}
+                                                            />
+                                                            <TableBadgeCell
+                                                                value={row.exams_perdidos}
+                                                                tone="danger"
+                                                                showComparison={false}
+                                                            />
+                                                            <TableBadgeCell
+                                                                value={row.exams_mantenidos}
+                                                                tone="info"
+                                                                showComparison={false}
+                                                            />
+                                                            <TableBadgeCell
                                                                 value={row.books_courses_ganados}
                                                                 tone="success"
                                                                 showComparison={false}
@@ -372,6 +396,7 @@ export default function PorAsesor() {
                                                         format={(v) => `${v.toFixed(1)}%`}
                                                         align="right"
                                                         showComparison={showComparisonValues}
+                                                        useSubtraction
                                                     />
                                                     <TableBodyCell className="w-12 text-right text-slate-400">
                                                         <ChevronRight className="ml-auto size-5" />
@@ -518,6 +543,7 @@ function TableMetricCell({
     align = "center",
     emphasize = false,
     showComparison,
+    useSubtraction = false,
 }: {
     value: number
     previousValue?: number
@@ -525,8 +551,13 @@ function TableMetricCell({
     align?: "left" | "center" | "right"
     emphasize?: boolean
     showComparison: boolean
+    useSubtraction?: boolean
 }) {
-    const comparison = getPercentChange(value, previousValue)
+    const comparison = useSubtraction
+        ? previousValue !== undefined && previousValue !== null
+            ? value - previousValue
+            : null
+        : getPercentChange(value, previousValue)
     const alignmentClassName =
         align === "right"
             ? "items-end text-right"

@@ -362,6 +362,22 @@ async def fetch_books_courses_presence_rows(
         return (await session.execute(text(query), params)).fetchall()
 
 
+async def fetch_exams_presence_rows(
+    filters: AsesorFilters,
+    *,
+    seller_id: int | None = None,
+) -> list:
+    where, params = _line_where(filters, seller_id=seller_id, require_product_breakdown=True)
+    query = f"""
+        SELECT DISTINCT seller_id, lead_id
+        FROM report_line_items
+        WHERE product_type = 'exam'
+          AND {where}
+    """
+    async with ReportingSessionLocal() as session:
+        return (await session.execute(text(query), params)).fetchall()
+
+
 async def fetch_school_allocated_revenue_metric_rows(
     filters: AsesorFilters,
     *,
@@ -412,21 +428,29 @@ async def fetch_detail_exam_breakdown_rows(
     # Quantities from line_items (filtered by first_payment_date);
     # revenue from allocations (filtered by payment_date).
     # Use alias="rli" so WHERE conditions are fully qualified — avoids ambiguity in the JOIN.
+    # Pre-aggregate allocations by cart_product_id to prevent row multiplication when
+    # a single line item has multiple allocation rows (e.g. partial payments).
     line_where, line_params = _line_where(
         filters, seller_id=seller_id, require_product_breakdown=True, alias="rli"
     )
     alloc_where, alloc_params = _alloc_where(filters, seller_id=seller_id)
     alloc_amount = alloc_amount_column(base_currency)
     query = f"""
+        WITH alloc_by_product AS (
+            SELECT
+                rpa.cart_product_id,
+                COALESCE(SUM(rpa.{alloc_amount}), 0) AS revenue
+            FROM report_payment_allocations rpa
+            WHERE {alloc_where}
+            GROUP BY rpa.cart_product_id
+        )
         SELECT
             rli.exam_category,
-            SUM(rli.quantity) AS exams,
-            COUNT(DISTINCT rli.lead_id) AS schools,
-            COALESCE(SUM(rpa.{alloc_amount}), 0) AS revenue
+            COALESCE(SUM(rli.quantity), 0) AS exams,
+            COUNT(DISTINCT rli.lead_id)    AS schools,
+            COALESCE(SUM(abp.revenue), 0)  AS revenue
         FROM report_line_items rli
-        LEFT JOIN report_payment_allocations rpa
-               ON rpa.cart_product_id = rli.cart_product_id
-              AND {alloc_where}
+        LEFT JOIN alloc_by_product abp ON abp.cart_product_id = rli.cart_product_id
         WHERE {line_where}
           AND rli.product_type = 'exam'
         GROUP BY rli.exam_category
