@@ -39,6 +39,10 @@ migrate-status:
 exchange-rate-backfill:
 	$(PYTHON) tools/backfill_exchange_rates.py
 
+backfill-dev-db:
+	supabase status > /dev/null 2>&1 || supabase start
+	$(PYTHON) tools/backfill_dev_db.py
+
 lint:
 	$(RUFF) check .
 
