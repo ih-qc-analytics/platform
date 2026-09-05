@@ -56,6 +56,7 @@ from app.etl.shared import (
     log_etl_run,
     prefetch_rates,
     resolve_business_status,
+    to_source_time,
 )
 
 logger = logging.getLogger(__name__)
@@ -223,6 +224,11 @@ DELETED_CARTS_QUERY = """
 
 
 async def _extract_all(since: datetime) -> tuple[list, list, list[int], list[int]]:
+    # `since` arrives on the app's clock; the columns it is compared against are
+    # timezone-naive DATETIME(6) on the source server's clock. Translate once here,
+    # the single point where the window bound crosses into source-DB queries.
+    since = await to_source_time(since)
+
     async def _fetch_mappings(query: str, params: dict) -> list[dict]:
         async with SessionLocal() as source:
             result = await source.execute(text(query), params)

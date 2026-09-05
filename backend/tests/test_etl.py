@@ -26,6 +26,8 @@ from app.etl.shared import (
     extract_dimensions,
     get_incremental_since,
     get_rate,
+    get_source_clock_offset,
+    to_source_time,
     resolve_business_status,
 )
 from app.etl.upsert import run_upsert
@@ -861,3 +863,47 @@ async def test_incremental_since_counts_startup_backfill_as_a_sync(
 
     now = datetime(2026, 9, 5, 12, 0, 0)
     assert await get_incremental_since(now=now) == last_success - SYNC_OVERLAP
+
+
+# ─────────────────────────────────────────────────────────────
+# Source-clock alignment
+# ─────────────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_source_clock_offset_is_a_valid_utc_offset():
+    """Measured live from the source server, so assert the invariant rather than a
+    value: real UTC offsets are whole quarter-hours within +/-14h."""
+    offset = await get_source_clock_offset()
+    seconds = offset.total_seconds()
+    assert seconds % 900 == 0
+    assert abs(seconds) <= 14 * 3600
+
+
+@pytest.mark.asyncio
+async def test_to_source_time_shifts_the_bound_onto_the_source_clock():
+    """The production failure: app on UTC, source on UTC-6, so an app-derived
+    bound landed ~6h in the future and `updatedAt > :since` matched nothing."""
+    app_bound = datetime(2026, 9, 5, 16, 33, 34)  # UTC, as the container sees it
+    shifted = await to_source_time(app_bound, offset=timedelta(hours=6))
+    assert shifted == datetime(2026, 9, 5, 10, 33, 34)  # source-local
+
+
+@pytest.mark.asyncio
+async def test_to_source_time_is_a_noop_when_clocks_agree():
+    moment = datetime(2026, 9, 5, 12, 0, 0)
+    assert await to_source_time(moment, offset=timedelta(0)) == moment
+
+
+@pytest.mark.asyncio
+async def test_extract_all_applies_the_source_clock_offset(monkeypatch):
+    """Regression guard: the bound must be translated before it reaches SQL."""
+    seen: dict = {}
+
+    async def fake_to_source_time(moment):
+        seen["bound"] = moment - timedelta(hours=6)
+        return seen["bound"]
+
+    monkeypatch.setattr("app.etl.upsert.to_source_time", fake_to_source_time)
+    await run_upsert(since=datetime(2026, 9, 5, 16, 33, 34), job_name=ETLJobName.UPSERT)
+    assert seen["bound"] == datetime(2026, 9, 5, 10, 33, 34)

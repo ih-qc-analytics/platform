@@ -35,6 +35,34 @@ LATEST_SYNC_QUERY = text("""
 """).bindparams(bindparam("job_names", expanding=True))
 
 
+SOURCE_CLOCK_OFFSET_QUERY = text(
+    "SELECT TIMESTAMPDIFF(SECOND, NOW(), UTC_TIMESTAMP()) AS offset_seconds"
+)
+
+
+async def get_source_clock_offset() -> timedelta:
+    """How far the source server's wall clock sits behind the app's.
+
+    The windowed columns (payment.updatedAt, cart.deletedAt, ...) are DATETIME(6):
+    no timezone, written in the source server's local time. The app runs in UTC, so
+    a Python-derived bound is compared against values on a different clock. In
+    production the source is UTC-6, which put every incremental window ~6 hours in
+    the future — `updatedAt > :since` matched nothing, and every scheduled run
+    reported 0 rows while the data quietly went stale.
+
+    Measured per run rather than configured, so a DST shift on the source host is
+    picked up on the next pass instead of silently reopening the same gap.
+    """
+    async with SessionLocal() as source:
+        row = (await source.execute(SOURCE_CLOCK_OFFSET_QUERY)).one()
+    return timedelta(seconds=int(row.offset_seconds))
+
+
+async def to_source_time(moment: datetime, offset: timedelta | None = None) -> datetime:
+    """Translate an app-clock timestamp into the source server's local clock."""
+    return moment - (offset if offset is not None else await get_source_clock_offset())
+
+
 async def get_incremental_since(now: datetime | None = None) -> datetime:
     """Resume the payment upsert from the last successful sync.
 
