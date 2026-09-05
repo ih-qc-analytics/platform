@@ -3,15 +3,12 @@ from datetime import datetime, timedelta
 from sqlalchemy import bindparam, text
 
 from app.enums import ETLJobName
+from app.etl.shared import PAYMENT_SYNC_JOB_NAMES
 from app.reporting.database import ReportingSessionLocal
 from app.etl.upsert import run_upsert
 
 STARTUP_BACKFILL_FLOOR = datetime(2023, 1, 1, 0, 0, 0)
 STARTUP_LOOKBACK = timedelta(hours=3)
-PAYMENT_SYNC_JOB_NAMES = (
-    ETLJobName.STARTUP_BACKFILL.value,
-    ETLJobName.UPSERT.value,
-)
 
 
 async def get_startup_backfill_since(now: datetime | None = None) -> datetime | None:

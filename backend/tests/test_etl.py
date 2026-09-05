@@ -18,9 +18,13 @@ from app.etl.startup_backfill import (
     run_startup_backfill_if_needed,
 )
 from app.etl.shared import (
+    SYNC_FALLBACK,
+    SYNC_MAX_CATCHUP,
+    SYNC_OVERLAP,
     calculate_business_status,
     convert_currency,
     extract_dimensions,
+    get_incremental_since,
     get_rate,
     resolve_business_status,
 )
@@ -779,3 +783,81 @@ async def test_run_startup_backfill_if_needed_calls_run_upsert_with_startup_job_
     await run_startup_backfill_if_needed(now=datetime(2026, 5, 21, 12, 0, 0))
 
     assert calls == [(STARTUP_BACKFILL_FLOOR, ETLJobName.STARTUP_BACKFILL)]
+
+
+# ─────────────────────────────────────────────────────────────
+# Incremental sync watermark
+# ─────────────────────────────────────────────────────────────
+
+
+async def _log_run(session_factory, job_name: str, status: str, run_at: datetime) -> None:
+    async with session_factory() as session:
+        async with session.begin():
+            await session.execute(
+                text("""
+                    INSERT INTO etl_meta (job_name, run_at, rows_processed, status, duration_seconds)
+                    VALUES (:job_name, :run_at, 0, :status, 0)
+                """),
+                {"job_name": job_name, "run_at": run_at, "status": status},
+            )
+
+
+@pytest.mark.asyncio
+async def test_incremental_since_falls_back_when_no_successful_run(
+    reporting_session_factory, clean_reporting_db
+):
+    bind_test_reporting_database(reporting_session_factory)
+    now = datetime(2026, 9, 5, 12, 0, 0)
+    assert await get_incremental_since(now=now) == now - SYNC_FALLBACK
+
+
+@pytest.mark.asyncio
+async def test_incremental_since_resumes_from_last_success_with_overlap(
+    reporting_session_factory, clean_reporting_db
+):
+    """run_at is stamped at completion, so resume before it or mid-run updates are lost."""
+    bind_test_reporting_database(reporting_session_factory)
+    last_success = datetime(2026, 9, 5, 9, 12, 18)
+    await _log_run(reporting_session_factory, "upsert", "success", last_success)
+
+    now = datetime(2026, 9, 5, 12, 12, 15)
+    assert await get_incremental_since(now=now) == last_success - SYNC_OVERLAP
+
+
+@pytest.mark.asyncio
+async def test_incremental_since_ignores_failed_runs(reporting_session_factory, clean_reporting_db):
+    """The regression guard: a failed run must not advance the watermark, or its
+    window is skipped forever."""
+    bind_test_reporting_database(reporting_session_factory)
+    last_success = datetime(2026, 9, 5, 0, 12, 18)
+    await _log_run(reporting_session_factory, "upsert", "success", last_success)
+    await _log_run(reporting_session_factory, "upsert", "failed", datetime(2026, 9, 5, 3, 12, 17))
+
+    now = datetime(2026, 9, 5, 6, 12, 15)
+    since = await get_incremental_since(now=now)
+    assert since == last_success - SYNC_OVERLAP
+    # The 03:12 window that failed is still covered by the next run.
+    assert since < datetime(2026, 9, 5, 3, 12, 17)
+
+
+@pytest.mark.asyncio
+async def test_incremental_since_caps_catchup_after_long_outage(
+    reporting_session_factory, clean_reporting_db
+):
+    bind_test_reporting_database(reporting_session_factory)
+    await _log_run(reporting_session_factory, "upsert", "success", datetime(2025, 1, 1, 0, 0, 0))
+
+    now = datetime(2026, 9, 5, 12, 0, 0)
+    assert await get_incremental_since(now=now) == now - SYNC_MAX_CATCHUP
+
+
+@pytest.mark.asyncio
+async def test_incremental_since_counts_startup_backfill_as_a_sync(
+    reporting_session_factory, clean_reporting_db
+):
+    bind_test_reporting_database(reporting_session_factory)
+    last_success = datetime(2026, 9, 5, 9, 0, 0)
+    await _log_run(reporting_session_factory, "startup_backfill", "success", last_success)
+
+    now = datetime(2026, 9, 5, 12, 0, 0)
+    assert await get_incremental_since(now=now) == last_success - SYNC_OVERLAP

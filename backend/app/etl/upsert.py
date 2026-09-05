@@ -38,7 +38,7 @@ ETL upsert pipeline: MySQL → report_payments, report_line_items, report_paymen
 
 import asyncio
 import logging
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
 
 from sqlalchemy import bindparam, text
 
@@ -52,6 +52,7 @@ from app.etl.shared import (
     coerce_to_date,
     convert_currency,
     extract_dimensions,
+    get_incremental_since,
     log_etl_run,
     prefetch_rates,
     resolve_business_status,
@@ -654,8 +655,11 @@ async def run_upsert(
     *, since: datetime | None = None, job_name: ETLJobName = ETLJobName.UPSERT
 ) -> dict:
     start = datetime.now()
-    since = since or (datetime.now() - timedelta(hours=3))
     try:
+        # Resume from the last successful sync so a failed run's window is retried,
+        # rather than skipped forever by a fixed now-3h lookback.
+        if since is None:
+            since = await get_incremental_since()
         (
             payment_rows_raw,
             line_item_rows_raw,

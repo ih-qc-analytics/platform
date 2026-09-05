@@ -1,4 +1,4 @@
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 import logging
 
 from sqlalchemy import bindparam, text
@@ -10,6 +10,50 @@ from app.enums import BusinessStatus, ETLJobName, PaymentStatus
 from app.reporting.database import ReportingSessionLocal
 
 logger = logging.getLogger(__name__)
+
+# Job names that advance the payment sync watermark. Both write the same rows,
+# so either one's success marks how far report_payments has been brought up to date.
+PAYMENT_SYNC_JOB_NAMES = ("startup_backfill", "upsert")
+
+# etl_meta.run_at is stamped at completion, so resume slightly before it — anything
+# updated while the previous run was executing would otherwise be skipped. Overlap
+# is free: every write is an upsert keyed on the source ID.
+SYNC_OVERLAP = timedelta(minutes=15)
+# Used when etl_meta has no successful run yet (fresh DB, or every run so far failed).
+SYNC_FALLBACK = timedelta(hours=3)
+# Ceiling on catch-up after a long outage. The extract path builds unpaginated IN
+# lists over every affected cart, so an unbounded window can exhaust memory.
+SYNC_MAX_CATCHUP = timedelta(days=30)
+
+LATEST_SYNC_QUERY = text("""
+    SELECT run_at
+    FROM etl_meta
+    WHERE status = :status
+    AND job_name IN :job_names
+    ORDER BY run_at DESC
+    LIMIT 1
+""").bindparams(bindparam("job_names", expanding=True))
+
+
+async def get_incremental_since(now: datetime | None = None) -> datetime:
+    """Resume the payment upsert from the last successful sync.
+
+    Previously the recurring job always used `now - 3h`, matching the scheduler
+    interval. Any failed run therefore left a permanent 3-hour hole: the next run
+    looked back only 3h from *itself*, never revisiting the window it missed.
+    """
+    current_time = now or datetime.now()
+    async with ReportingSessionLocal() as session:
+        result = await session.execute(
+            LATEST_SYNC_QUERY,
+            {"status": "success", "job_names": list(PAYMENT_SYNC_JOB_NAMES)},
+        )
+        latest_success = result.scalar_one_or_none()
+
+    if latest_success is None:
+        return current_time - SYNC_FALLBACK
+    return max(latest_success - SYNC_OVERLAP, current_time - SYNC_MAX_CATCHUP)
+
 
 SITE_CURRENCY = {
     "mexico": "MXN",
