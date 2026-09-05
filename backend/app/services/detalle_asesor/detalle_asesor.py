@@ -21,6 +21,8 @@ DETALLE_EXAM_NAME_ORDER = [*EXAM_NAME_ORDER, "Otros"]
 DETALLE_EXPORT_COLUMNS = [
     ExcelColumn("seller_name", "Asesor"),
     ExcelColumn("school_name", "Colegio"),
+    ExcelColumn("site", "País"),
+    ExcelColumn("state_name", "Estado"),
     ExcelColumn("exam_date", "Fecha de Examen"),
     *[ExcelColumn(name, name) for name in DETALLE_EXAM_NAME_ORDER],
     ExcelColumn("total", "Total"),
@@ -108,6 +110,8 @@ def _row_from_record(idx: int, row) -> DetalleRow:
         id=idx,
         seller_name=row["seller_name"],
         school_name=row["school_name"] or "",
+        site=row["site"] or "",
+        state_name=row["state_name"] or "",
         exam_date=str(row["exam_date"]) if row["exam_date"] else "",
         exam_type="",
         exam_counts=exam_counts,
@@ -160,6 +164,8 @@ async def _fetch_current_base(filters: DetalleFilters) -> DetalleReportBase:
                 seller_name,
                 school_name,
                 first_payment_date::text AS exam_date,
+                MIN(site) AS site,
+                MIN(state_name) AS state_name,
                 {exam_cols_sql},
                 COALESCE(SUM(quantity), 0) AS quantity
             FROM report_line_items
@@ -255,6 +261,8 @@ def build_detalle_export_worksheets(report: DetalleReportResponse) -> list[Excel
         export_row = {
             "seller_name": row.seller_name,
             "school_name": row.school_name,
+            "site": row.site,
+            "state_name": row.state_name,
             "exam_date": row.exam_date,
             "total": row.total,
         }

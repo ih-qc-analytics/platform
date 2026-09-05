@@ -235,6 +235,9 @@ class DetalleRow(BaseModel):
     exam_type: str
     exam_counts: dict[str, int]
     total: int
+    # Display-only geo dimensions, defaulted so existing constructors stay valid.
+    site: str = ""
+    state_name: str = ""
 
 
 class DetalleReportBase(BaseModel):
