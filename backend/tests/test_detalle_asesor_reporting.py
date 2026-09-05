@@ -146,6 +146,51 @@ async def test_total_equals_sum_of_exam_counts(reporting_session_factory, clean_
     assert row.total == sum(row.exam_counts.values())
 
 
+@pytest.mark.asyncio
+async def test_geo_columns_do_not_split_groups(reporting_session_factory, clean_reporting_db):
+    """País/Estado ride along as display columns — they must never split a group.
+
+    Fails loudly if anyone adds site/state_name to the SQL GROUP BY.
+    """
+    _bind(reporting_session_factory)
+    await _insert(
+        reporting_session_factory,
+        make_row(
+            cart_product_id=1,
+            exam_canonical_name="A2 Key",
+            quantity=3,
+            site="colombia",
+            state_name="Antioquia",
+        ),
+        make_row(
+            cart_product_id=2,
+            exam_canonical_name="B2 First",
+            quantity=7,
+            site="mexico",
+            state_name="CDMX",
+        ),
+    )
+    result = await get_detalle_data(_filters())
+    assert len(result.current.rows) == 1
+    row = result.current.rows[0]
+    assert row.total == 10
+    assert row.site == "colombia"
+    assert row.state_name == "Antioquia"
+
+
+@pytest.mark.asyncio
+async def test_geo_columns_blank_when_null(reporting_session_factory, clean_reporting_db):
+    _bind(reporting_session_factory)
+    await _insert(
+        reporting_session_factory,
+        make_row(cart_product_id=1, site=None, state_name=None),
+    )
+    result = await get_detalle_data(_filters())
+    row = result.current.rows[0]
+    assert row.site == ""
+    assert row.state_name == ""
+
+
 # ─────────────────────────────────────────────────────────────
 # Search
 # ─────────────────────────────────────────────────────────────
