@@ -21,14 +21,20 @@ def get_async_url() -> str:
 try:
     engine = create_async_engine(
         get_async_url(),
-        # Validate on checkout. pool_recycle alone only helps because the ETL jobs
-        # run 3h apart — every connection is older than the recycle window and gets
-        # rebuilt. The one exception is the upsert that runs 12 minutes after the
-        # dimensional refresh: it reuses a connection young enough to survive
-        # recycling but already dropped while idle, and fails with "Lost connection
-        # to MySQL server during query". Same cause as intermittent 503s on login.
-        pool_pre_ping=True,
-        pool_recycle=3600,
+        # Discard connections older than 10 minutes at checkout, so a connection
+        # dropped while idle is never reused. The failure this prevents: the upsert
+        # that runs ~12 minutes after the dimensional refresh reuses a connection
+        # the network path already killed, and dies with "Lost connection to MySQL
+        # server during query" — same cause as intermittent 503s on /auth/login.
+        #
+        # Do NOT switch this to pool_pre_ping. It looks like the right tool and it
+        # is not usable on aiomysql: SQLAlchemy's pymysql dialect picks its ping
+        # call by inspecting PyMySQL's signature, and from PyMySQL 1.2.0 (where
+        # `reconnect` defaults to False) it calls `ping()` with no arguments, while
+        # the async adapter declares `ping(self, reconnect)` with no default. Every
+        # pooled checkout then raises TypeError and all ETL jobs die. PyMySQL is
+        # pinned in requirements.txt for the same reason.
+        pool_recycle=600,
     )
     SessionLocal = async_sessionmaker(bind=engine, class_=AsyncSession)
 except ValueError:

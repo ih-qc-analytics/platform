@@ -6,6 +6,10 @@ uvicorn[standard]==0.30.0
 sqlalchemy[asyncio]==2.0.36
 asyncpg==0.30.0
 aiomysql==0.2.0
+# Pinned: arrives transitively via aiomysql, and 1.2.0 changed Connection.ping's
+# `reconnect` default, which silently changes how SQLAlchemy pings MySQL. Left
+# unpinned it resolved to 1.1.2 locally and 1.2.0 in the image — see app/database.py.
+PyMySQL==1.1.2
 pydantic==2.9.0
 pydantic-settings==2.5.0
 python-jose[cryptography]==3.3.0
