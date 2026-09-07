@@ -123,6 +123,7 @@ The frontend dev server proxies API requests to `http://localhost:8000` via `VIT
 | [docs/architecture.md](docs/architecture.md) | System design, data flow, ETL pipeline, DB schema, currency handling, deployment |
 | [docs/backend.md](docs/backend.md) | Routers, service layer, auth, exports, adding a new report, Makefile reference, testing |
 | [docs/frontend.md](docs/frontend.md) | Routes, components, data fetching, filters, comparison mode, API client, adding a new report |
+| [docs/manual/Manual_de_usuario_QC_Analytics_v1.0.pdf](docs/manual/Manual_de_usuario_QC_Analytics_v1.0.pdf) | End-user manual (Spanish, PDF) — for the people who use the reports, not for developers |
 
 Interactive API reference (auto-generated): [`http://localhost:8000/docs`](http://localhost:8000/docs) when the backend is running.
 
